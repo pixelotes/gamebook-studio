@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 
-// Point to the worker script from a CDN
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
 // Token Palette Data
@@ -52,6 +51,12 @@ const CHARACTER_TEMPLATES = {
       { name: 'ac', label: 'Armor Class', type: 'number', default: 10 },
       { name: 'hp', label: 'Hit Points', type: 'number', default: 8 },
       { name: 'maxHp', label: 'Max HP', type: 'number', default: 8 }
+    ]
+  },
+  custom: {
+    name: 'Custom',
+    fields: [
+      { name: 'name', label: 'Character Name', type: 'text', default: 'New Character' }
     ]
   }
 };
@@ -413,6 +418,19 @@ class DiceParser {
   }
 }
 
+const CollapsibleSection = ({ title, children, isOpen, onToggle }) => (
+  <div className="border-b border-gray-200">
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between p-4 text-left font-semibold"
+    >
+      {title}
+      {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+    </button>
+    {isOpen && <div className="p-4 pt-0">{children}</div>}
+  </div>
+);
+
 const GamebookApp = () => {
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -432,6 +450,17 @@ const GamebookApp = () => {
   const [showTokenPalette, setShowTokenPalette] = useState(false);
   const [selectedTokenShape, setSelectedTokenShape] = useState('circle');
   const [selectedTokenColor, setSelectedTokenColor] = useState('#ff6b6b');
+
+  const [openSections, setOpenSections] = useState({
+    pdf: true,
+    tools: true,
+    dice: true,
+    session: true,
+  });
+
+  const toggleSection = (section) => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
   
   const pdfCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
@@ -464,7 +493,7 @@ const GamebookApp = () => {
       const url = URL.createObjectURL(file);
       
       try {
-        const pdf = await pdfjsLib.getDocument(url).promise; // Real PDF.js
+        const pdf = await pdfjsLib.getDocument(url).promise;
         setPdfDoc(pdf);
         setTotalPages(pdf.numPages);
         setCurrentPage(1);
@@ -475,10 +504,9 @@ const GamebookApp = () => {
     }
   };
 
-  // Render PDF page
   const renderPdfPage = useCallback(async () => {
     if (!pdfDoc || !pdfCanvasRef.current) return;
-
+  
     try {
       const page = await pdfDoc.getPage(currentPage);
       const viewport = page.getViewport({ scale: scale });
@@ -489,6 +517,13 @@ const GamebookApp = () => {
       canvas.height = viewport.height;
       canvas.width = viewport.width;
       
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport
+      };
+  
+      await page.render(renderContext).promise;
+  
       if (overlayCanvasRef.current) {
         overlayCanvasRef.current.width = viewport.width;
         overlayCanvasRef.current.height = viewport.height;
@@ -496,18 +531,11 @@ const GamebookApp = () => {
           fabricCanvas.current.render();
         }
       }
-
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport
-      };
-
-      await page.render(renderContext).promise;
     } catch (error) {
       console.error('Error rendering page:', error);
     }
   }, [pdfDoc, currentPage, scale]);
-
+  
   useEffect(() => {
     renderPdfPage();
   }, [renderPdfPage]);
@@ -534,7 +562,9 @@ const GamebookApp = () => {
     const newChar = {
       id: Date.now(),
       template: selectedTemplate,
-      data: {}
+      data: {
+        customFields: []
+      }
     };
 
     template.fields.forEach(field => {
@@ -551,6 +581,39 @@ const GamebookApp = () => {
         data: { ...char.data, [field]: value }
       } : char
     ));
+  };
+  
+  const updateCustomField = (charId, fieldId, fieldProp, value) => {
+    setCharacters(characters.map(char => {
+      if (char.id === charId) {
+        const updatedFields = char.data.customFields.map(field => 
+          field.id === fieldId ? { ...field, [fieldProp]: value } : field
+        );
+        return { ...char, data: { ...char.data, customFields: updatedFields } };
+      }
+      return char;
+    }));
+  };
+
+  const addCustomField = (charId) => {
+    setCharacters(characters.map(char => {
+      if (char.id === charId) {
+        const newField = { id: Date.now(), name: 'New Stat', value: 0 };
+        const customFields = char.data.customFields || [];
+        return { ...char, data: { ...char.data, customFields: [...customFields, newField] } };
+      }
+      return char;
+    }));
+  };
+  
+  const removeCustomField = (charId, fieldId) => {
+    setCharacters(characters.map(char => {
+      if (char.id === charId) {
+        const updatedFields = char.data.customFields.filter(field => field.id !== fieldId);
+        return { ...char, data: { ...char.data, customFields: updatedFields } };
+      }
+      return char;
+    }));
   };
 
   const removeCharacter = (id) => {
@@ -617,7 +680,7 @@ const GamebookApp = () => {
         </div>
 
         {/* File Upload */}
-        <div className="p-4 border-b border-gray-200">
+        <CollapsibleSection title="Load PDF" isOpen={openSections.pdf} onToggle={() => toggleSection('pdf')}>
           <button
             onClick={() => fileInputRef.current?.click()}
             className="w-full flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
@@ -638,12 +701,11 @@ const GamebookApp = () => {
               {pdfFile.name}
             </p>
           )}
-        </div>
+        </CollapsibleSection>
 
         {/* Tools & Token Palette */}
-        <div className="p-4 border-b border-gray-200">
+        <CollapsibleSection title="Drawing Tools" isOpen={openSections.tools} onToggle={() => toggleSection('tools')}>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Drawing Tools</h3>
             <div className="flex gap-1">
               <button
                 onClick={() => setShowTokenPalette(!showTokenPalette)}
@@ -808,183 +870,216 @@ const GamebookApp = () => {
               </div>
             </div>
           )}
-        </div>
+        </CollapsibleSection>
+        
+        <CollapsibleSection title="Game Session" isOpen={openSections.session} onToggle={() => toggleSection('session')}>
+          {/* Tab Navigation */}
+          <div className="flex border-b border-gray-200">
+            {[
+              { id: 'sheets', icon: Users, label: 'Characters' },
+              { id: 'notes', icon: StickyNote, label: 'Notes' },
+              { id: 'counters', icon: Settings, label: 'Counters' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 flex items-center justify-center gap-1 py-2 px-3 text-sm transition-colors ${
+                  activeTab === tab.id 
+                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <tab.icon size={14} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-        {/* Tab Navigation */}
-        <div className="flex border-b border-gray-200">
-          {[
-            { id: 'sheets', icon: Users, label: 'Characters' },
-            { id: 'notes', icon: StickyNote, label: 'Notes' },
-            { id: 'counters', icon: Settings, label: 'Counters' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-1 py-2 px-3 text-sm transition-colors ${
-                activeTab === tab.id 
-                  ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <tab.icon size={14} />
-              {tab.label}
-            </button>
-          ))}
-        </div>
+          {/* Tab Content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {activeTab === 'sheets' && (
+              <div>
+                {/* Template Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Character Template
+                  </label>
+                  <select
+                    value={selectedTemplate}
+                    onChange={(e) => setSelectedTemplate(e.target.value)}
+                    className="w-full p-2 border border-gray-200 rounded-lg text-sm"
+                  >
+                    {Object.entries(CHARACTER_TEMPLATES).map(([key, template]) => (
+                      <option key={key} value={key}>{template.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-        {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {activeTab === 'sheets' && (
-            <div>
-              {/* Template Selection */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Character Template
-                </label>
-                <select
-                  value={selectedTemplate}
-                  onChange={(e) => setSelectedTemplate(e.target.value)}
-                  className="w-full p-2 border border-gray-200 rounded-lg text-sm"
-                >
-                  {Object.entries(CHARACTER_TEMPLATES).map(([key, template]) => (
-                    <option key={key} value={key}>{template.name}</option>
-                  ))}
-                </select>
+                {/* Add Character Button */}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold">Character Sheets</h3>
+                  <button
+                    onClick={addCharacter}
+                    className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                  >
+                    <Plus size={14} />
+                    Add
+                  </button>
+                </div>
+                
+                {/* Character List */}
+                {characters.map(char => {
+                  const template = CHARACTER_TEMPLATES[char.template];
+                  return (
+                    <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <input
+                          type="text"
+                          value={char.data.name || 'Unnamed Character'}
+                          onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
+                          className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2"
+                        />
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => removeCharacter(char.id)}
+                            className="text-red-500 hover:text-red-700 p-1"
+                            title="Remove character"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500 mb-2">Template: {template.name}</div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        {template.fields.slice(1).map(field => (
+                          <div key={field.name} className="flex items-center justify-between">
+                            <span className="text-xs font-medium">{field.label}:</span>
+                            <input
+                              type={field.type}
+                              value={char.data[field.name] || field.default}
+                              onChange={(e) => updateCharacter(char.id, field.name, field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
+                              className="w-16 p-1 border border-gray-200 rounded text-center text-xs"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {char.template === 'custom' && (
+                        <div className="mt-4">
+                          {char.data.customFields && char.data.customFields.map(field => (
+                            <div key={field.id} className="flex items-center gap-2 mb-2">
+                              <input
+                                type="text"
+                                value={field.name}
+                                onChange={(e) => updateCustomField(char.id, field.id, 'name', e.target.value)}
+                                className="flex-1 p-1 border border-gray-200 rounded text-xs"
+                              />
+                              <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value - 1)} className="w-6 h-6 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center">
+                                <Minus size={12} />
+                              </button>
+                              <input
+                                type="number"
+                                value={field.value}
+                                onChange={(e) => updateCustomField(char.id, field.id, 'value', parseInt(e.target.value) || 0)}
+                                className="w-12 p-1 border border-gray-200 rounded text-center text-xs"
+                              />
+                              <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value + 1)} className="w-6 h-6 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center">
+                                <Plus size={12} />
+                              </button>
+                              <button onClick={() => removeCustomField(char.id, field.id)} className="text-red-500 hover:text-red-700">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ))}
+                          <button onClick={() => addCustomField(char.id)} className="mt-2 flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">
+                            <Plus size={14} />
+                            Add Stat
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                
+                {characters.length === 0 && (
+                  <p className="text-gray-500 text-center py-8">No characters created yet.</p>
+                )}
               </div>
+            )}
 
-              {/* Add Character Button */}
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Character Sheets</h3>
-                <button
-                  onClick={addCharacter}
-                  className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                >
-                  <Plus size={14} />
-                  Add
-                </button>
+            {activeTab === 'notes' && (
+              <div>
+                <h3 className="font-semibold mb-3">Game Notes</h3>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add your game notes here...&#10;&#10;• Track story progress&#10;• Note important clues&#10;• Record decisions made"
+                  className="w-full h-64 p-3 border border-gray-200 rounded-lg resize-none text-sm"
+                />
               </div>
-              
-              {/* Character List */}
-              {characters.map(char => {
-                const template = CHARACTER_TEMPLATES[char.template];
-                return (
-                  <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
+            )}
+
+            {activeTab === 'counters' && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold">Counters</h3>
+                  <button
+                    onClick={addCounter}
+                    className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                  >
+                    <Plus size={14} />
+                    Add
+                  </button>
+                </div>
+
+                {counters.map(counter => (
+                  <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
                       <input
                         type="text"
-                        value={char.data.name || 'Unnamed Character'}
-                        onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
-                        className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2"
+                        value={counter.name}
+                        onChange={(e) => updateCounter(counter.id, 'name', e.target.value)}
+                        className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2"
                       />
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => removeCharacter(char.id)}
-                          className="text-red-500 hover:text-red-700 p-1"
-                          title="Remove character"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => removeCounter(counter.id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                    
-                    <div className="text-xs text-gray-500 mb-2">Template: {template.name}</div>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      {template.fields.slice(1).map(field => (
-                        <div key={field.name} className="flex items-center justify-between">
-                          <span className="text-xs font-medium">{field.label}:</span>
-                          <input
-                            type={field.type}
-                            value={char.data[field.name] || field.default}
-                            onChange={(e) => updateCharacter(char.id, field.name, field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
-                            className="w-16 p-1 border border-gray-200 rounded text-center text-xs"
-                          />
-                        </div>
-                      ))}
+
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) - 1)}
+                        className="w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="text-xl font-bold" style={{ color: counter.color }}>
+                        {counter.value}
+                      </span>
+                      <button
+                        onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) + 1)}
+                        className="w-8 h-8 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center"
+                      >
+                        <Plus size={14} />
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-              
-              {characters.length === 0 && (
-                <p className="text-gray-500 text-center py-8">No characters created yet.</p>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'notes' && (
-            <div>
-              <h3 className="font-semibold mb-3">Game Notes</h3>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add your game notes here...&#10;&#10;• Track story progress&#10;• Note important clues&#10;• Record decisions made"
-                className="w-full h-64 p-3 border border-gray-200 rounded-lg resize-none text-sm"
-              />
-            </div>
-          )}
-
-          {activeTab === 'counters' && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Counters</h3>
-                <button
-                  onClick={addCounter}
-                  className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                >
-                  <Plus size={14} />
-                  Add
-                </button>
+                ))}
+                
+                {counters.length === 0 && (
+                  <p className="text-gray-500 text-center py-8">No counters created yet.</p>
+                )}
               </div>
-
-              {counters.map(counter => (
-                <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <input
-                      type="text"
-                      value={counter.name}
-                      onChange={(e) => updateCounter(counter.id, 'name', e.target.value)}
-                      className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2"
-                    />
-                    <button
-                      onClick={() => removeCounter(counter.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <button
-                      onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) - 1)}
-                      className="w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center"
-                    >
-                      <Minus size={14} />
-                    </button>
-                    <span className="text-xl font-bold" style={{ color: counter.color }}>
-                      {counter.value}
-                    </span>
-                    <button
-                      onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) + 1)}
-                      className="w-8 h-8 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center"
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-              
-              {counters.length === 0 && (
-                <p className="text-gray-500 text-center py-8">No counters created yet.</p>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </CollapsibleSection>
 
         {/* Enhanced Dice Section */}
-        <div className="p-4 border-t border-gray-200">
-          <h3 className="font-semibold mb-3">Advanced Dice Roller</h3>
-          
+        <CollapsibleSection title="Advanced Dice Roller" isOpen={openSections.dice} onToggle={() => toggleSection('dice')}>
           {/* Dice Expression Input */}
           <div className="mb-3">
             <div className="flex gap-2">
@@ -1052,7 +1147,7 @@ const GamebookApp = () => {
               )}
             </div>
           )}
-        </div>
+        </CollapsibleSection>
       </div>
 
       {/* Main Content Area */}
