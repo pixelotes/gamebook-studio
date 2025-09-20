@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser } from 'lucide-react';
+import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -66,13 +66,7 @@ class MockFabricCanvas {
   constructor(canvasElement) {
     this.canvas = canvasElement;
     this.ctx = canvasElement.getContext('2d');
-    this.pageLayers = {
-      1: [
-        { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
-        { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
-        { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
-      ]
-    };
+    this.pageLayers = {};
     this.currentPage = 1;
     this.activeLayer = 'tokens';
     this.isDrawing = false;
@@ -88,7 +82,7 @@ class MockFabricCanvas {
   }
   
   get layers() {
-    return this.pageLayers[this.currentPage];
+    return this.pageLayers[this.currentPage] || [];
   }
 
   setupEvents() {
@@ -98,6 +92,10 @@ class MockFabricCanvas {
     this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
   }
   
+  loadPageLayers(pageLayers) {
+    this.pageLayers = pageLayers;
+  }
+
   setCurrentPage(pageNum) {
     if (!this.pageLayers[pageNum]) {
       this.pageLayers[pageNum] = [
@@ -107,18 +105,6 @@ class MockFabricCanvas {
       ];
     }
     this.currentPage = pageNum;
-    this.render();
-  }
-
-  reset() {
-    this.pageLayers = {
-      1: [
-        { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
-        { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
-        { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
-      ]
-    };
-    this.currentPage = 1;
     this.render();
   }
 
@@ -502,11 +488,8 @@ const CollapsibleSection = ({ title, children, isOpen, onToggle }) => (
 );
 
 const GamebookApp = () => {
-  const [, setPdfFile] = useState(null);
-  const [pdfDoc, setPdfDoc] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const [scale, setScale] = useState(1);
+  const [pdfs, setPdfs] = useState([]);
+  const [activePdfId, setActivePdfId] = useState(null);
   const [activeTab, setActiveTab] = useState('sheets');
   const [characters, setCharacters] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState('basic');
@@ -521,6 +504,8 @@ const GamebookApp = () => {
   const [selectedTokenShape, setSelectedTokenShape] = useState('circle');
   const [selectedTokenColor, setSelectedTokenColor] = useState('#ff6b6b');
   const [tokenSize, setTokenSize] = useState(20);
+  const [sessionToRestore, setSessionToRestore] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [openSections, setOpenSections] = useState({
     tools: true,
@@ -535,7 +520,10 @@ const GamebookApp = () => {
   const pdfCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
+  const sessionFileInputRef = useRef(null);
   const fabricCanvas = useRef(null);
+  
+  const activePdf = pdfs.find(p => p.id === activePdfId);
 
   // Initialize Fabric canvas
   useEffect(() => {
@@ -559,31 +547,143 @@ const GamebookApp = () => {
 
   // Handle PDF file upload
   const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (file && file.type === 'application/pdf') {
-      setCharacters([]);
-      setNotes('');
-      setCounters([]);
-      setPdfFile(file);
-      const url = URL.createObjectURL(file);
-      
-      try {
-        const pdf = await pdfjsLib.getDocument(url).promise;
-        setPdfDoc(pdf);
-        setTotalPages(pdf.numPages);
-        setCurrentPage(1);
-        if (fabricCanvas.current) {
-          fabricCanvas.current.reset();
+    const files = event.target.files;
+    if (files.length === 0) return;
+  
+    const newPdfsData = [];
+    for (const file of files) {
+      if (file.type !== 'application/pdf') continue;
+  
+      // Prevent duplicates
+      if (pdfs.some(p => p.fileName === file.name)) {
+        console.warn(`Skipping duplicate file: ${file.name}`);
+        continue;
+      }
+  
+      // Check if we are restoring a session
+      if (sessionToRestore) {
+        const matchingPdfInSession = sessionToRestore.pdfs.find(p => p.fileName === file.name);
+        if (matchingPdfInSession) {
+          try {
+            const url = URL.createObjectURL(file);
+            const pdfDoc = await pdfjsLib.getDocument(url).promise;
+            newPdfsData.push({ ...matchingPdfInSession, file, pdfDoc });
+          } catch (error) {
+            console.error('Error loading PDF for session restore:', file.name, error);
+          }
         }
-      } catch (error) {
-        console.error('Error loading PDF:', error);
-        alert('Error loading PDF file');
+      } else {
+        // Normal file load
+        try {
+          const url = URL.createObjectURL(file);
+          const pdfDoc = await pdfjsLib.getDocument(url).promise;
+          newPdfsData.push({
+            id: Date.now() + file.name,
+            fileName: file.name,
+            file,
+            pdfDoc,
+            totalPages: pdfDoc.numPages,
+            currentPage: 1,
+            scale: 1,
+            pageLayers: {},
+          });
+        } catch (error) {
+          console.error('Error loading PDF:', file.name, error);
+        }
+      }
+    }
+  
+    if (sessionToRestore) {
+      if (newPdfsData.length === sessionToRestore.pdfs.length) {
+        setPdfs(newPdfsData);
+        setActivePdfId(sessionToRestore.activePdfId);
+        setCharacters(sessionToRestore.characters);
+        setNotes(sessionToRestore.notes);
+        setCounters(sessionToRestore.counters);
+        setSessionToRestore(null); // Clear session restore state
+      } else {
+        alert('Could not restore session. Please select all the correct PDF files.');
+        setSessionToRestore(null);
+      }
+    } else {
+      if (newPdfsData.length > 0) {
+        setPdfs(prevPdfs => [...prevPdfs, ...newPdfsData]);
+        setActivePdfId(newPdfsData[0].id);
+      }
+    }
+  };
+  
+  const handleSaveSession = () => {
+    const sessionData = {
+      pdfs: pdfs.map(p => ({
+        id: p.id,
+        fileName: p.fileName,
+        currentPage: p.currentPage,
+        scale: p.scale,
+        pageLayers: p.pageLayers,
+      })),
+      activePdfId,
+      characters,
+      notes,
+      counters,
+    };
+  
+    const jsonString = JSON.stringify(sessionData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'gamebook-session.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  
+  const handleLoadSession = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type === 'application/json') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const sessionData = JSON.parse(e.target.result);
+          setSessionToRestore(sessionData);
+          alert(`Session loaded. Please select the following PDF files: ${sessionData.pdfs.map(p => p.fileName).join(', ')}`);
+          fileInputRef.current.click();
+        } catch (error) {
+          console.error('Error parsing session file:', error);
+          alert('Could not load session file. It may be corrupt.');
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleNewSession = () => {
+    setPdfs([]);
+    setActivePdfId(null);
+    setCharacters([]);
+    setNotes('');
+    setCounters([]);
+  };
+
+  const closePdf = (pdfId) => {
+    const newPdfs = pdfs.filter(p => p.id !== pdfId);
+    setPdfs(newPdfs);
+  
+    if (activePdfId === pdfId) {
+      if (newPdfs.length > 0) {
+        setActivePdfId(newPdfs[0].id);
+      } else {
+        setActivePdfId(null);
       }
     }
   };
 
   const renderPdfPage = useCallback(async () => {
-    if (!pdfDoc || !pdfCanvasRef.current) return;
+    if (!activePdf || !pdfCanvasRef.current) return;
+  
+    const { pdfDoc, currentPage, scale, pageLayers } = activePdf;
   
     try {
       const page = await pdfDoc.getPage(currentPage);
@@ -606,6 +706,7 @@ const GamebookApp = () => {
         overlayCanvasRef.current.width = viewport.width;
         overlayCanvasRef.current.height = viewport.height;
         if (fabricCanvas.current) {
+          fabricCanvas.current.loadPageLayers(pageLayers);
           fabricCanvas.current.setScale(scale);
           fabricCanvas.current.setCurrentPage(currentPage);
         }
@@ -613,24 +714,34 @@ const GamebookApp = () => {
     } catch (error) {
       console.error('Error rendering page:', error);
     }
-  }, [pdfDoc, currentPage, scale]);
+  }, [activePdf]);
   
   useEffect(() => {
     renderPdfPage();
   }, [renderPdfPage]);
+  
+  const updateActivePdf = (updates) => {
+    setPdfs(pdfs.map(p => p.id === activePdfId ? { ...p, ...updates } : p));
+  };
 
   // Navigation functions
   const goToPage = (pageNum) => {
-    if (pageNum >= 1 && pageNum <= totalPages) {
-      setCurrentPage(pageNum);
-      if (fabricCanvas.current) {
-        fabricCanvas.current.setCurrentPage(pageNum);
-      }
+    if (activePdf && pageNum >= 1 && pageNum <= activePdf.totalPages) {
+      updateActivePdf({ currentPage: pageNum });
     }
   };
 
-  const zoomIn = () => setScale(prev => Math.min(prev + 0.25, 3));
-  const zoomOut = () => setScale(prev => Math.max(prev - 0.25, 0.5));
+  const zoomIn = () => {
+    if (activePdf) {
+      updateActivePdf({ scale: Math.min(activePdf.scale + 0.25, 3) });
+    }
+  };
+  
+  const zoomOut = () => {
+    if (activePdf) {
+      updateActivePdf({ scale: Math.max(activePdf.scale - 0.25, 0.5) });
+    }
+  };
 
   // Dice rolling
   const rollDiceExpression = () => {
@@ -1227,21 +1338,21 @@ const GamebookApp = () => {
         <div className="bg-white border-b border-gray-200 p-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             {/* PDF Navigation */}
-            {pdfDoc && (
+            {activePdf && (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage <= 1}
+                  onClick={() => goToPage(activePdf.currentPage - 1)}
+                  disabled={activePdf.currentPage <= 1}
                   className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft size={16} />
                 </button>
                 <span className="text-sm font-medium">
-                  {currentPage} / {totalPages}
+                  {activePdf.currentPage} / {activePdf.totalPages}
                 </span>
                 <button
-                  onClick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage >= totalPages}
+                  onClick={() => goToPage(activePdf.currentPage + 1)}
+                  disabled={activePdf.currentPage >= activePdf.totalPages}
                   className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronRight size={16} />
@@ -1250,7 +1361,7 @@ const GamebookApp = () => {
             )}
 
             {/* Zoom Controls */}
-            {pdfDoc && (
+            {activePdf && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={zoomOut}
@@ -1260,7 +1371,7 @@ const GamebookApp = () => {
                   <ZoomOut size={16} />
                 </button>
                 <span className="text-sm font-medium w-12 text-center">
-                  {Math.round(scale * 100)}%
+                  {Math.round(activePdf.scale * 100)}%
                 </span>
                 <button
                   onClick={zoomIn}
@@ -1302,38 +1413,107 @@ const GamebookApp = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="relative">
             <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="p-2 rounded hover:bg-gray-100"
             >
-              <Upload size={14} />
-              Load PDF
+              <Menu size={16} />
             </button>
+            {menuOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20">
+                <button
+                  onClick={() => {
+                    handleNewSession();
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <FilePlus size={14} /> New Session
+                </button>
+                <button
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Upload size={14} /> Load PDFs
+                </button>
+                <button
+                  onClick={() => {
+                    sessionFileInputRef.current?.click();
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Upload size={14} /> Load Session
+                </button>
+                <button
+                  onClick={() => {
+                    handleSaveSession();
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Save size={14} /> Save Session
+                </button>
+                <button
+                  onClick={() => {
+                    fabricCanvas.current?.clear();
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <RotateCcw size={14} /> Clear Page Annotations
+                </button>
+              </div>
+            )}
             <input
               ref={fileInputRef}
               type="file"
               accept=".pdf"
               onChange={handleFileUpload}
               className="hidden"
+              multiple
             />
-            <button className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm">
-              <Save size={14} />
-              Save Session
-            </button>
-            <button 
-              onClick={() => fabricCanvas.current?.clear()}
-              className="flex items-center gap-1 px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
-            >
-              <RotateCcw size={14} />
-              Clear All
-            </button>
+            <input
+              ref={sessionFileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleLoadSession}
+              className="hidden"
+            />
           </div>
+        </div>
+        
+        {/* PDF Tabs */}
+        <div className="bg-gray-200 flex items-center">
+          {pdfs.map(pdf => (
+            <div
+              key={pdf.id}
+              onClick={() => setActivePdfId(pdf.id)}
+              className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
+                pdf.id === activePdfId ? 'bg-white' : 'bg-gray-200 hover:bg-gray-300'
+              }`}
+            >
+              <span className="text-sm">{pdf.file.name}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closePdf(pdf.id);
+                }}
+                className="p-1 rounded-full hover:bg-red-500 hover:text-white"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
         </div>
 
         {/* PDF Viewer / Canvas Area */}
         <div className="flex-1 bg-gray-50 relative overflow-auto p-4">
-          {pdfDoc ? (
+          {activePdf ? (
             <div className="relative inline-block mx-auto">
               <canvas
                 ref={pdfCanvasRef}
