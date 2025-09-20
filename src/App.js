@@ -63,9 +63,10 @@ const CHARACTER_TEMPLATES = {
 
 // Enhanced Mock Fabric.js Canvas
 class MockFabricCanvas {
-  constructor(canvasElement) {
+  constructor(canvasElement, onUpdate) {
     this.canvas = canvasElement;
     this.ctx = canvasElement.getContext('2d');
+    this.onUpdate = onUpdate;
     this.pageLayers = {};
     this.currentPage = 1;
     this.activeLayer = 'tokens';
@@ -78,6 +79,7 @@ class MockFabricCanvas {
     this.selectedToken = null;
     this.tokenSize = 20;
     this.scale = 1;
+    this.startPos = null;
     this.setupEvents();
   }
   
@@ -129,6 +131,21 @@ class MockFabricCanvas {
     } else if (this.tool === 'eraser') {
       this.removeObjectAt(x, y);
       return;
+    } else if (this.tool === 'rectangle' || this.tool === 'draw') {
+      this.isDrawing = true;
+      this.startPos = { x: x / this.scale, y: y / this.scale };
+    } else if (this.tool === 'text') {
+      const text = prompt('Enter text:');
+      if (text) {
+        this.addObject('text', {
+          type: 'text',
+          x: x / this.scale,
+          y: y / this.scale,
+          text: text,
+          color: this.selectedColor,
+          id: Date.now()
+        });
+      }
     }
 
     const activeLayerObj = this.layers.find(l => l.id === this.activeLayer);
@@ -145,13 +162,11 @@ class MockFabricCanvas {
         strokeColor: this.selectedToken.color === '#ffffff' ? '#000000' : '#ffffff',
         id: Date.now()
       });
-    } else if (this.tool === 'draw') {
-      this.isDrawing = true;
-      this.startPath(x / this.scale, y / this.scale);
     }
   }
 
   handleMouseMove(e) {
+    if (!this.isDrawing) return;
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -162,16 +177,43 @@ class MockFabricCanvas {
       this.render();
     } else if (this.isDrawing && this.tool === 'draw') {
       this.continuePath(x / this.scale, y / this.scale);
+    } else if (this.isDrawing && this.tool === 'rectangle' && this.startPos) {
+      this.render();
+      const currentX = x / this.scale;
+      const currentY = y / this.scale;
+      this.ctx.strokeStyle = this.selectedColor;
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(this.startPos.x, this.startPos.y, currentX - this.startPos.x, currentY - this.startPos.y);
     }
   }
 
-  handleMouseUp() {
+  handleMouseUp(e) {
+    if (this.isDrawing) {
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      if (this.tool === 'rectangle' && this.startPos) {
+        this.addObject('drawings', {
+          type: 'rectangle',
+          x: this.startPos.x,
+          y: this.startPos.y,
+          width: x / this.scale - this.startPos.x,
+          height: y / this.scale - this.startPos.y,
+          color: this.selectedColor,
+          id: Date.now()
+        });
+      }
+      this.onUpdate(this.pageLayers);
+    }
+    this.isDrawing = false;
     this.isDragging = false;
     this.dragTarget = null;
-    this.isDrawing = false;
+    this.startPos = null;
   }
 
   handleDoubleClick(e) {
+    e.preventDefault();
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -207,6 +249,12 @@ class MockFabricCanvas {
           const distance = Math.sqrt((x - obj.x * this.scale) ** 2 + (y - obj.y * this.scale) ** 2);
           return distance > obj.size * this.scale;
         }
+        if (obj.type === 'rectangle') {
+          return !(x / this.scale >= obj.x && x / this.scale <= obj.x + obj.width && y / this.scale >= obj.y && y / this.scale <= obj.y + obj.height);
+        }
+        if (obj.type === 'text') {
+          return !(x / this.scale > obj.x && x / this.scale < obj.x + this.ctx.measureText(obj.text).width && y / this.scale > obj.y - 20 && y / this.scale < obj.y);
+        }
         // Basic check for drawings; more complex logic might be needed for precise drawing removal
         if (obj.type === 'path') {
           return !obj.points.some(p => {
@@ -217,6 +265,7 @@ class MockFabricCanvas {
         return true;
       });
     }
+    this.onUpdate(this.pageLayers);
     this.render();
   }
 
@@ -224,6 +273,7 @@ class MockFabricCanvas {
     const tokensLayer = this.layers.find(l => l.id === 'tokens');
     if (tokensLayer) {
       tokensLayer.objects = tokensLayer.objects.filter(obj => obj.id !== tokenId);
+      this.onUpdate(this.pageLayers);
       this.render();
     }
   }
@@ -241,6 +291,7 @@ class MockFabricCanvas {
     const layer = this.layers.find(l => l.id === layerId);
     if (layer) {
       layer.objects.push(obj);
+      this.onUpdate(this.pageLayers);
       this.render();
     }
   }
@@ -269,6 +320,7 @@ class MockFabricCanvas {
     const layer = this.layers.find(l => l.id === layerId);
     if (layer) {
       layer.visible = !layer.visible;
+      this.onUpdate(this.pageLayers);
       this.render();
     }
   }
@@ -277,6 +329,7 @@ class MockFabricCanvas {
     const layer = this.layers.find(l => l.id === layerId);
     if (layer) {
       layer.objects = [];
+      this.onUpdate(this.pageLayers);
       this.render();
     }
   }
@@ -285,6 +338,7 @@ class MockFabricCanvas {
     this.layers.forEach(layer => {
       layer.objects = [];
     });
+    this.onUpdate(this.pageLayers);
     this.render();
   }
 
@@ -327,6 +381,14 @@ class MockFabricCanvas {
             }
           }
           this.ctx.stroke();
+        } else if (obj.type === 'rectangle') {
+          this.ctx.strokeStyle = obj.color;
+          this.ctx.lineWidth = 2;
+          this.ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
+        } else if (obj.type === 'text') {
+          this.ctx.fillStyle = obj.color;
+          this.ctx.font = '16px Arial';
+          this.ctx.fillText(obj.text, obj.x, obj.y);
         }
         
         this.ctx.restore();
@@ -513,6 +575,8 @@ const GamebookApp = () => {
     session: true,
   });
 
+  const [topBarDropdown, setTopBarDropdown] = useState(null);
+
   const toggleSection = (section) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
@@ -525,18 +589,23 @@ const GamebookApp = () => {
   
   const activePdf = pdfs.find(p => p.id === activePdfId);
 
+  const updateActivePdf = useCallback((updates) => {
+    setPdfs(prevPdfs => 
+      prevPdfs.map(p => p.id === activePdfId ? { ...p, ...updates } : p)
+    );
+  }, [activePdfId]);
+
   // Initialize Fabric canvas
   useEffect(() => {
     if (overlayCanvasRef.current && !fabricCanvas.current) {
-      fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current);
+      fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current, (pageLayers) => {
+        updateActivePdf({ pageLayers });
+      });
+    }
+    if (fabricCanvas.current) {
       fabricCanvas.current.setTokenSize(tokenSize);
     }
-    if (activePdf && fabricCanvas.current) {
-      fabricCanvas.current.loadPageLayers(activePdf.pageLayers);
-      fabricCanvas.current.setScale(activePdf.scale);
-      fabricCanvas.current.setCurrentPage(activePdf.currentPage);
-    }
-  }, [activePdf, tokenSize]);
+  }, [tokenSize, updateActivePdf]);
 
   // Update tool and color when changed
   useEffect(() => {
@@ -552,33 +621,43 @@ const GamebookApp = () => {
 
   // Handle PDF file upload
   const handleFileUpload = async (event) => {
-    const files = event.target.files;
+    const files = Array.from(event.target.files);
     if (files.length === 0) return;
   
     const newPdfsData = [];
-    for (const file of files) {
-      if (file.type !== 'application/pdf') continue;
   
-      // Prevent duplicates
-      if (pdfs.some(p => p.fileName === file.name)) {
-        console.warn(`Skipping duplicate file: ${file.name}`);
-        continue;
-      }
-  
-      // Check if we are restoring a session
-      if (sessionToRestore) {
-        const matchingPdfInSession = sessionToRestore.pdfs.find(p => p.fileName === file.name);
-        if (matchingPdfInSession) {
+    if (sessionToRestore) {
+      // Restore session logic
+      for (const sessionPdf of sessionToRestore.pdfs) {
+        const matchingFile = files.find(f => f.name === sessionPdf.fileName);
+        if (matchingFile) {
           try {
-            const url = URL.createObjectURL(file);
+            const url = URL.createObjectURL(matchingFile);
             const pdfDoc = await pdfjsLib.getDocument(url).promise;
-            newPdfsData.push({ ...matchingPdfInSession, file, pdfDoc });
+            newPdfsData.push({ ...sessionPdf, file: matchingFile, pdfDoc });
           } catch (error) {
-            console.error('Error loading PDF for session restore:', file.name, error);
+            console.error('Error loading PDF for session restore:', matchingFile.name, error);
           }
         }
+      }
+  
+      if (newPdfsData.length === sessionToRestore.pdfs.length) {
+        setPdfs(newPdfsData);
+        setActivePdfId(sessionToRestore.activePdfId);
+        setCharacters(sessionToRestore.characters);
+        setNotes(sessionToRestore.notes);
+        setCounters(sessionToRestore.counters);
       } else {
-        // Normal file load
+        alert('Could not restore session. Please select all the correct PDF files.');
+      }
+      setSessionToRestore(null); // Clear session restore state
+    } else {
+      // Normal file load logic
+      for (const file of files) {
+        if (file.type !== 'application/pdf' || pdfs.some(p => p.fileName === file.name)) {
+          if (pdfs.some(p => p.fileName === file.name)) console.warn(`Skipping duplicate file: ${file.name}`);
+          continue;
+        }
         try {
           const url = URL.createObjectURL(file);
           const pdfDoc = await pdfjsLib.getDocument(url).promise;
@@ -596,24 +675,12 @@ const GamebookApp = () => {
           console.error('Error loading PDF:', file.name, error);
         }
       }
-    }
   
-    if (sessionToRestore) {
-      if (newPdfsData.length === sessionToRestore.pdfs.length) {
-        setPdfs(newPdfsData);
-        setActivePdfId(sessionToRestore.activePdfId);
-        setCharacters(sessionToRestore.characters);
-        setNotes(sessionToRestore.notes);
-        setCounters(sessionToRestore.counters);
-        setSessionToRestore(null); // Clear session restore state
-      } else {
-        alert('Could not restore session. Please select all the correct PDF files.');
-        setSessionToRestore(null);
-      }
-    } else {
       if (newPdfsData.length > 0) {
         setPdfs(prevPdfs => [...prevPdfs, ...newPdfsData]);
-        setActivePdfId(newPdfsData[0].id);
+        if (!activePdfId) {
+          setActivePdfId(newPdfsData[0].id);
+        }
       }
     }
   };
@@ -686,7 +753,17 @@ const GamebookApp = () => {
   };
 
   const renderPdfPage = useCallback(async () => {
-    if (!activePdf || !pdfCanvasRef.current) return;
+    if (!activePdf || !pdfCanvasRef.current) {
+      if (pdfCanvasRef.current) {
+        const ctx = pdfCanvasRef.current.getContext('2d');
+        ctx.clearRect(0, 0, pdfCanvasRef.current.width, pdfCanvasRef.current.height);
+      }
+      if (overlayCanvasRef.current) {
+        const ctx = overlayCanvasRef.current.getContext('2d');
+        ctx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height);
+      }
+      return;
+    }
   
     const { pdfDoc, currentPage, scale, pageLayers } = activePdf;
   
@@ -724,10 +801,6 @@ const GamebookApp = () => {
   useEffect(() => {
     renderPdfPage();
   }, [renderPdfPage]);
-  
-  const updateActivePdf = (updates) => {
-    setPdfs(pdfs.map(p => p.id === activePdfId ? { ...p, ...updates } : p));
-  };
 
   // Navigation functions
   const goToPage = (pageNum) => {
@@ -1346,181 +1419,274 @@ const GamebookApp = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
-        {/* Toolbar */}
-        <div className="bg-white border-b border-gray-200 p-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            {/* PDF Navigation */}
-            {activePdf && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => goToPage(activePdf.currentPage - 1)}
-                  disabled={activePdf.currentPage <= 1}
-                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="text-sm font-medium">
-                  {activePdf.currentPage} / {activePdf.totalPages}
-                </span>
-                <button
-                  onClick={() => goToPage(activePdf.currentPage + 1)}
-                  disabled={activePdf.currentPage >= activePdf.totalPages}
-                  className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
-
-            {/* Zoom Controls */}
-            {activePdf && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={zoomOut}
-                  className="p-1 rounded hover:bg-gray-100"
-                  title="Zoom out"
-                >
-                  <ZoomOut size={16} />
-                </button>
-                <span className="text-sm font-medium w-12 text-center">
-                  {Math.round(activePdf.scale * 100)}%
-                </span>
-                <button
-                  onClick={zoomIn}
-                  className="p-1 rounded hover:bg-gray-100"
-                  title="Zoom in"
-                >
-                  <ZoomIn size={16} />
-                </button>
-              </div>
-            )}
-
-            <div className="h-6 w-px bg-gray-300"></div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Tool:</span>
-              <span className="font-medium capitalize text-sm">{selectedTool}</span>
-              {selectedTool === 'token' ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-lg" style={{ color: selectedTokenColor }}>
-                    {TOKEN_SHAPES[selectedTokenShape]?.icon}
+        <div className="sticky top-0 z-10">
+          {/* Toolbar */}
+          <div className="bg-white border-b border-gray-200 p-3 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* PDF Navigation */}
+              {activePdf && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => goToPage(activePdf.currentPage - 1)}
+                    disabled={activePdf.currentPage <= 1}
+                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="text-sm font-medium">
+                    {activePdf.currentPage} / {activePdf.totalPages}
                   </span>
-                  <span className="text-xs text-gray-500">
-                    {TOKEN_SHAPES[selectedTokenShape]?.name}
-                  </span>
+                  <button
+                    onClick={() => goToPage(activePdf.currentPage + 1)}
+                    disabled={activePdf.currentPage >= activePdf.totalPages}
+                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
                 </div>
-              ) : (
-                <div 
-                  className="w-4 h-4 rounded border border-gray-300"
-                  style={{ backgroundColor: selectedColor }}
-                  title={`Color: ${selectedColor}`}
-                />
               )}
+  
+              {/* Zoom Controls */}
+              {activePdf && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={zoomOut}
+                    className="p-1 rounded hover:bg-gray-100"
+                    title="Zoom out"
+                  >
+                    <ZoomOut size={16} />
+                  </button>
+                  <span className="text-sm font-medium w-12 text-center">
+                    {Math.round(activePdf.scale * 100)}%
+                  </span>
+                  <button
+                    onClick={zoomIn}
+                    className="p-1 rounded hover:bg-gray-100"
+                    title="Zoom in"
+                  >
+                    <ZoomIn size={16} />
+                  </button>
+                </div>
+              )}
+  
+              <div className="h-6 w-px bg-gray-300"></div>
+  
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Tool:</span>
+                <div className="relative">
+                  <button
+                    onClick={() => setTopBarDropdown(topBarDropdown === 'tool' ? null : 'tool')}
+                    className="font-medium capitalize text-sm flex items-center gap-1"
+                  >
+                    {selectedTool} <ChevronDown size={12} />
+                  </button>
+                  {topBarDropdown === 'tool' && (
+                    <div className="absolute left-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20">
+                      {tools.map(tool => (
+                        <button
+                          key={tool.id}
+                          onClick={() => {
+                            setSelectedTool(tool.id);
+                            setTopBarDropdown(null);
+                          }}
+                          className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <tool.icon size={14} /> {tool.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+  
+                {selectedTool === 'token' ? (
+                  <>
+                    <div className="relative">
+                      <button
+                        onClick={() => setTopBarDropdown(topBarDropdown === 'shape' ? null : 'shape')}
+                        className="flex items-center gap-1"
+                      >
+                        <span className="text-lg" style={{ color: selectedTokenColor }}>
+                          {TOKEN_SHAPES[selectedTokenShape]?.icon}
+                        </span>
+                        <ChevronDown size={12} />
+                      </button>
+                      {topBarDropdown === 'shape' && (
+                        <div className="absolute left-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 grid grid-cols-3 gap-1 p-2">
+                          {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                setSelectedTokenShape(key);
+                                setTopBarDropdown(null);
+                              }}
+                              className={`p-2 rounded border text-lg flex items-center justify-center transition-colors ${
+                                selectedTokenShape === key ? 'bg-blue-500 text-white' : 'bg-gray-100'
+                              }`}
+                            >
+                              {shape.icon}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <button
+                        onClick={() => setTopBarDropdown(topBarDropdown === 'token-color' ? null : 'token-color')}
+                        className="w-5 h-5 rounded border border-gray-300"
+                        style={{ backgroundColor: selectedTokenColor }}
+                      />
+                      {topBarDropdown === 'token-color' && (
+                        <div className="absolute left-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 grid grid-cols-5 gap-1 p-2">
+                          {TOKEN_COLORS.map(color => (
+                            <button
+                              key={color.value}
+                              onClick={() => {
+                                setSelectedTokenColor(color.value);
+                                setTopBarDropdown(null);
+                              }}
+                              className="w-6 h-6 rounded border-2"
+                              style={{ backgroundColor: color.value }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      type="range"
+                      min="5"
+                      max="50"
+                      value={tokenSize}
+                      onChange={(e) => setTokenSize(parseInt(e.target.value))}
+                      className="w-20"
+                    />
+                  </>
+                ) : (
+                  !['select', 'eraser'].includes(selectedTool) && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setTopBarDropdown(topBarDropdown === 'draw-color' ? null : 'draw-color')}
+                        className="w-5 h-5 rounded border border-gray-300"
+                        style={{ backgroundColor: selectedColor }}
+                      />
+                      {topBarDropdown === 'draw-color' && (
+                        <div className="absolute left-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 grid grid-cols-5 gap-1 p-2">
+                          {colors.map(color => (
+                            <button
+                              key={color}
+                              onClick={() => {
+                                setSelectedColor(color);
+                                setTopBarDropdown(null);
+                              }}
+                              className="w-6 h-6 rounded border-2"
+                              style={{ backgroundColor: color }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
             </div>
-
-            {fabricCanvas.current && (
-              <div className="text-sm text-gray-600">
-                Layer: <span className="font-medium">{fabricCanvas.current.layers.find(l => l.id === fabricCanvas.current.activeLayer)?.name}</span>
-              </div>
-            )}
           </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="p-2 rounded hover:bg-gray-100"
-            >
-              <Menu size={16} />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20">
+          
+          {/* PDF Tabs */}
+          <div className="bg-gray-200 flex items-center">
+            {pdfs.map(pdf => (
+              <div
+                key={pdf.id}
+                onClick={() => setActivePdfId(pdf.id)}
+                className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
+                  pdf.id === activePdfId ? 'bg-white' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                <span className="text-sm">{truncateFileName(pdf.file.name)}</span>
                 <button
-                  onClick={() => {
-                    handleNewSession();
-                    setMenuOpen(false);
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closePdf(pdf.id);
                   }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="p-1 rounded-full hover:bg-red-500 hover:text-white"
                 >
-                  <FilePlus size={14} /> New Session
-                </button>
-                <button
-                  onClick={() => {
-                    fileInputRef.current?.click();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <Upload size={14} /> Load PDFs
-                </button>
-                <button
-                  onClick={() => {
-                    sessionFileInputRef.current?.click();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <Upload size={14} /> Load Session
-                </button>
-                <button
-                  onClick={() => {
-                    handleSaveSession();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <Save size={14} /> Save Session
-                </button>
-                <button
-                  onClick={() => {
-                    fabricCanvas.current?.clear();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <RotateCcw size={14} /> Clear Page Annotations
+                  <X size={12} />
                 </button>
               </div>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handleFileUpload}
-              className="hidden"
-              multiple
-            />
-            <input
-              ref={sessionFileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleLoadSession}
-              className="hidden"
-            />
+            ))}
           </div>
         </div>
-        
-        {/* PDF Tabs */}
-        <div className="bg-gray-200 flex items-center">
-          {pdfs.map(pdf => (
-            <div
-              key={pdf.id}
-              onClick={() => setActivePdfId(pdf.id)}
-              className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
-                pdf.id === activePdfId ? 'bg-white' : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-            >
-              <span className="text-sm">{truncateFileName(pdf.file.name)}</span>
+
+        {/* Hamburger Menu */}
+        <div className="fixed top-4 right-4 z-20">
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="p-2 rounded bg-white shadow-lg hover:bg-gray-100"
+          >
+            <Menu size={16} />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closePdf(pdf.id);
+                onClick={() => {
+                  handleNewSession();
+                  setMenuOpen(false);
                 }}
-                className="p-1 rounded-full hover:bg-red-500 hover:text-white"
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               >
-                <X size={12} />
+                <FilePlus size={14} /> New Session
+              </button>
+              <button
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setMenuOpen(false);
+                }}
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Upload size={14} /> Load PDFs
+              </button>
+              <button
+                onClick={() => {
+                  sessionFileInputRef.current?.click();
+                  setMenuOpen(false);
+                }}
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Upload size={14} /> Load Session
+              </button>
+              <button
+                onClick={() => {
+                  handleSaveSession();
+                  setMenuOpen(false);
+                }}
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Save size={14} /> Save Session
+              </button>
+              <button
+                onClick={() => {
+                  fabricCanvas.current?.clear();
+                  setMenuOpen(false);
+                }}
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <RotateCcw size={14} /> Clear Page Annotations
               </button>
             </div>
-          ))}
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            onChange={handleFileUpload}
+            className="hidden"
+            multiple
+          />
+          <input
+            ref={sessionFileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleLoadSession}
+            className="hidden"
+          />
         </div>
 
         {/* PDF Viewer / Canvas Area */}
@@ -1536,7 +1702,7 @@ const GamebookApp = () => {
                 ref={overlayCanvasRef}
                 className="absolute top-0 left-0 pointer-events-auto rounded"
                 style={{ 
-                  zIndex: 10,
+                  zIndex: 1,
                   cursor: selectedTool === 'select' ? 'default' : 'crosshair'
                 }}
               />
