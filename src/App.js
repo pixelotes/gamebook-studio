@@ -531,7 +531,12 @@ const GamebookApp = () => {
       fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current);
       fabricCanvas.current.setTokenSize(tokenSize);
     }
-  }, [tokenSize]);
+    if (activePdf && fabricCanvas.current) {
+      fabricCanvas.current.loadPageLayers(activePdf.pageLayers);
+      fabricCanvas.current.setScale(activePdf.scale);
+      fabricCanvas.current.setCurrentPage(activePdf.currentPage);
+    }
+  }, [activePdf, tokenSize]);
 
   // Update tool and color when changed
   useEffect(() => {
@@ -703,7 +708,7 @@ const GamebookApp = () => {
       await page.render(renderContext).promise;
   
       if (overlayCanvasRef.current) {
-        overlayCanvasRef.current.width = viewport.width;
+        overlayCanvasRef.current.width = viewport.height;
         overlayCanvasRef.current.height = viewport.height;
         if (fabricCanvas.current) {
           fabricCanvas.current.loadPageLayers(pageLayers);
@@ -850,6 +855,13 @@ const GamebookApp = () => {
     if (fabricCanvas.current) {
       fabricCanvas.current.setActiveLayer(layerId);
     }
+  };
+  
+  const truncateFileName = (name) => {
+    if (name.length > 27) {
+      return name.substring(0, 25) + '...';
+    }
+    return name;
   };
 
   const tools = [
@@ -1497,7 +1509,7 @@ const GamebookApp = () => {
                 pdf.id === activePdfId ? 'bg-white' : 'bg-gray-200 hover:bg-gray-300'
               }`}
             >
-              <span className="text-sm">{pdf.file.name}</span>
+              <span className="text-sm">{truncateFileName(pdf.file.name)}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
