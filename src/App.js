@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -79,6 +79,8 @@ class MockFabricCanvas {
     this.tool = 'select';
     this.selectedColor = '#ff6b6b';
     this.selectedToken = null;
+    this.tokenSize = 20;
+    this.scale = 1;
     this.setupEvents();
   }
 
@@ -87,6 +89,11 @@ class MockFabricCanvas {
     this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
     this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
+  }
+  
+  setScale(scale) {
+    this.scale = scale;
+    this.render();
   }
 
   handleMouseDown(e) {
@@ -99,9 +106,12 @@ class MockFabricCanvas {
       if (clickedToken) {
         this.isDragging = true;
         this.dragTarget = clickedToken;
-        this.dragOffset = { x: x - clickedToken.x, y: y - clickedToken.y };
+        this.dragOffset = { x: x - clickedToken.x * this.scale, y: y - clickedToken.y * this.scale };
         return;
       }
+    } else if (this.tool === 'eraser') {
+      this.removeObjectAt(x, y);
+      return;
     }
 
     const activeLayerObj = this.layers.find(l => l.id === this.activeLayer);
@@ -111,16 +121,16 @@ class MockFabricCanvas {
       this.addObject('tokens', {
         type: 'gameToken',
         shape: this.selectedToken.shape,
-        x: x,
-        y: y,
-        size: 20,
+        x: x / this.scale,
+        y: y / this.scale,
+        size: this.tokenSize,
         color: this.selectedToken.color,
         strokeColor: this.selectedToken.color === '#ffffff' ? '#000000' : '#ffffff',
         id: Date.now()
       });
     } else if (this.tool === 'draw') {
       this.isDrawing = true;
-      this.startPath(x, y);
+      this.startPath(x / this.scale, y / this.scale);
     }
   }
 
@@ -130,11 +140,11 @@ class MockFabricCanvas {
     const y = e.clientY - rect.top;
 
     if (this.isDragging && this.dragTarget) {
-      this.dragTarget.x = x - this.dragOffset.x;
-      this.dragTarget.y = y - this.dragOffset.y;
+      this.dragTarget.x = (x - this.dragOffset.x) / this.scale;
+      this.dragTarget.y = (y - this.dragOffset.y) / this.scale;
       this.render();
     } else if (this.isDrawing && this.tool === 'draw') {
-      this.continuePath(x, y);
+      this.continuePath(x / this.scale, y / this.scale);
     }
   }
 
@@ -162,13 +172,35 @@ class MockFabricCanvas {
     for (let i = tokensLayer.objects.length - 1; i >= 0; i--) {
       const token = tokensLayer.objects[i];
       if (token.type === 'gameToken') {
-        const distance = Math.sqrt((x - token.x) ** 2 + (y - token.y) ** 2);
-        if (distance <= token.size) {
+        const distance = Math.sqrt((x - token.x * this.scale) ** 2 + (y - token.y * this.scale) ** 2);
+        if (distance <= token.size * this.scale) {
           return token;
         }
       }
     }
     return null;
+  }
+  
+  removeObjectAt(x, y) {
+    for (const layer of this.layers) {
+      if (!layer.visible || layer.locked) continue;
+
+      layer.objects = layer.objects.filter(obj => {
+        if (obj.type === 'gameToken') {
+          const distance = Math.sqrt((x - obj.x * this.scale) ** 2 + (y - obj.y * this.scale) ** 2);
+          return distance > obj.size * this.scale;
+        }
+        // Basic check for drawings; more complex logic might be needed for precise drawing removal
+        if (obj.type === 'path') {
+          return !obj.points.some(p => {
+            const distance = Math.sqrt((x - p.x * this.scale) ** 2 + (y - p.y * this.scale) ** 2);
+            return distance < 10; // 10px tolerance for drawings
+          });
+        }
+        return true;
+      });
+    }
+    this.render();
   }
 
   removeToken(tokenId) {
@@ -183,6 +215,10 @@ class MockFabricCanvas {
     this.selectedToken = { shape: shape, color: color };
     this.setTool('token');
   }
+  
+  setTokenSize(size) {
+    this.tokenSize = size;
+  }
 
   addObject(layerId, obj) {
     const layer = this.layers.find(l => l.id === layerId);
@@ -195,7 +231,7 @@ class MockFabricCanvas {
   startPath(x, y) {
     this.addObject('drawings', {
       type: 'path',
-      points: [{ x: x, y: y }],
+      points: [{ x, y }],
       color: this.selectedColor,
       id: Date.now()
     });
@@ -206,7 +242,7 @@ class MockFabricCanvas {
     if (drawingsLayer && drawingsLayer.objects.length > 0) {
       const lastObj = drawingsLayer.objects[drawingsLayer.objects.length - 1];
       if (lastObj && lastObj.type === 'path') {
-        lastObj.points.push({ x: x, y: y });
+        lastObj.points.push({ x, y });
         this.render();
       }
     }
@@ -249,6 +285,8 @@ class MockFabricCanvas {
 
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.save();
+    this.ctx.scale(this.scale, this.scale);
     
     this.layers.forEach(layer => {
       if (!layer.visible) return;
@@ -277,6 +315,7 @@ class MockFabricCanvas {
         this.ctx.restore();
       });
     });
+    this.ctx.restore();
   }
 
   renderGameToken(token) {
@@ -432,7 +471,7 @@ const CollapsibleSection = ({ title, children, isOpen, onToggle }) => (
 );
 
 const GamebookApp = () => {
-  const [pdfFile, setPdfFile] = useState(null);
+  const [, setPdfFile] = useState(null);
   const [pdfDoc, setPdfDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
@@ -450,9 +489,9 @@ const GamebookApp = () => {
   const [showTokenPalette, setShowTokenPalette] = useState(false);
   const [selectedTokenShape, setSelectedTokenShape] = useState('circle');
   const [selectedTokenColor, setSelectedTokenColor] = useState('#ff6b6b');
+  const [tokenSize, setTokenSize] = useState(20);
 
   const [openSections, setOpenSections] = useState({
-    pdf: true,
     tools: true,
     dice: true,
     session: true,
@@ -471,8 +510,9 @@ const GamebookApp = () => {
   useEffect(() => {
     if (overlayCanvasRef.current && !fabricCanvas.current) {
       fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current);
+      fabricCanvas.current.setTokenSize(tokenSize);
     }
-  }, []);
+  }, [tokenSize]);
 
   // Update tool and color when changed
   useEffect(() => {
@@ -481,9 +521,10 @@ const GamebookApp = () => {
       fabricCanvas.current.setColor(selectedColor);
       if (selectedTool === 'token') {
         fabricCanvas.current.setSelectedToken(selectedTokenShape, selectedTokenColor);
+        fabricCanvas.current.setTokenSize(tokenSize);
       }
     }
-  }, [selectedTool, selectedColor, selectedTokenShape, selectedTokenColor]);
+  }, [selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, tokenSize]);
 
   // Handle PDF file upload
   const handleFileUpload = async (event) => {
@@ -528,7 +569,7 @@ const GamebookApp = () => {
         overlayCanvasRef.current.width = viewport.width;
         overlayCanvasRef.current.height = viewport.height;
         if (fabricCanvas.current) {
-          fabricCanvas.current.render();
+          fabricCanvas.current.setScale(scale);
         }
       }
     } catch (error) {
@@ -664,7 +705,8 @@ const GamebookApp = () => {
     { id: 'token', icon: Circle, label: 'Token' },
     { id: 'rectangle', icon: Square, label: 'Rectangle' },
     { id: 'text', icon: Type, label: 'Text' },
-    { id: 'draw', icon: Pen, label: 'Draw' }
+    { id: 'draw', icon: Pen, label: 'Draw' },
+    { id: 'eraser', icon: Eraser, label: 'Eraser' },
   ];
 
   const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff', '#333333'];
@@ -678,30 +720,6 @@ const GamebookApp = () => {
           <h1 className="text-xl font-bold text-gray-800">Gamebook Studio</h1>
           <p className="text-sm text-gray-600">Digital tabletop companion</p>
         </div>
-
-        {/* File Upload */}
-        <CollapsibleSection title="Load PDF" isOpen={openSections.pdf} onToggle={() => toggleSection('pdf')}>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            <Upload size={16} />
-            Load PDF
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          {pdfFile && (
-            <p className="mt-2 text-sm text-green-600 flex items-center gap-1">
-              <FileText size={14} />
-              {pdfFile.name}
-            </p>
-          )}
-        </CollapsibleSection>
 
         {/* Tools & Token Palette */}
         <CollapsibleSection title="Drawing Tools" isOpen={openSections.tools} onToggle={() => toggleSection('tools')}>
@@ -796,6 +814,18 @@ const GamebookApp = () => {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="mt-3">
+                <p className="text-xs font-medium text-gray-600 mb-2">Size</p>
+                <input
+                  type="range"
+                  min="5"
+                  max="50"
+                  value={tokenSize}
+                  onChange={(e) => setTokenSize(parseInt(e.target.value))}
+                  className="w-full"
+                />
               </div>
 
               <div className="mt-3 p-2 bg-white rounded border border-green-200">
@@ -1232,7 +1262,21 @@ const GamebookApp = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+            >
+              <Upload size={14} />
+              Load PDF
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <button className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm">
               <Save size={14} />
               Save Session
             </button>
