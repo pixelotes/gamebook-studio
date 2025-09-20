@@ -66,11 +66,14 @@ class MockFabricCanvas {
   constructor(canvasElement) {
     this.canvas = canvasElement;
     this.ctx = canvasElement.getContext('2d');
-    this.layers = [
-      { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
-      { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
-      { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
-    ];
+    this.pageLayers = {
+      1: [
+        { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
+        { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
+        { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
+      ]
+    };
+    this.currentPage = 1;
     this.activeLayer = 'tokens';
     this.isDrawing = false;
     this.isDragging = false;
@@ -83,6 +86,10 @@ class MockFabricCanvas {
     this.scale = 1;
     this.setupEvents();
   }
+  
+  get layers() {
+    return this.pageLayers[this.currentPage];
+  }
 
   setupEvents() {
     this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
@@ -91,6 +98,30 @@ class MockFabricCanvas {
     this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
   }
   
+  setCurrentPage(pageNum) {
+    if (!this.pageLayers[pageNum]) {
+      this.pageLayers[pageNum] = [
+        { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
+        { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
+        { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
+      ];
+    }
+    this.currentPage = pageNum;
+    this.render();
+  }
+
+  reset() {
+    this.pageLayers = {
+      1: [
+        { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
+        { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
+        { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
+      ]
+    };
+    this.currentPage = 1;
+    this.render();
+  }
+
   setScale(scale) {
     this.scale = scale;
     this.render();
@@ -530,6 +561,9 @@ const GamebookApp = () => {
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (file && file.type === 'application/pdf') {
+      setCharacters([]);
+      setNotes('');
+      setCounters([]);
       setPdfFile(file);
       const url = URL.createObjectURL(file);
       
@@ -538,6 +572,9 @@ const GamebookApp = () => {
         setPdfDoc(pdf);
         setTotalPages(pdf.numPages);
         setCurrentPage(1);
+        if (fabricCanvas.current) {
+          fabricCanvas.current.reset();
+        }
       } catch (error) {
         console.error('Error loading PDF:', error);
         alert('Error loading PDF file');
@@ -570,6 +607,7 @@ const GamebookApp = () => {
         overlayCanvasRef.current.height = viewport.height;
         if (fabricCanvas.current) {
           fabricCanvas.current.setScale(scale);
+          fabricCanvas.current.setCurrentPage(currentPage);
         }
       }
     } catch (error) {
@@ -585,6 +623,9 @@ const GamebookApp = () => {
   const goToPage = (pageNum) => {
     if (pageNum >= 1 && pageNum <= totalPages) {
       setCurrentPage(pageNum);
+      if (fabricCanvas.current) {
+        fabricCanvas.current.setCurrentPage(pageNum);
+      }
     }
   };
 
