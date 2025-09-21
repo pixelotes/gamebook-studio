@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus } from 'lucide-react';
+import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus, PanelLeft, PanelRight } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -69,7 +69,6 @@ class MockFabricCanvas {
     this.onUpdate = onUpdate;
     this.pageLayers = {};
     this.currentPage = 1;
-    this.activeLayer = 'tokens';
     this.isDrawing = false;
     this.isDragging = false;
     this.dragTarget = null;
@@ -83,7 +82,7 @@ class MockFabricCanvas {
     this.setupEvents();
   }
   
-  get layers() {
+  get layer() {
     return this.pageLayers[this.currentPage] || [];
   }
 
@@ -95,16 +94,12 @@ class MockFabricCanvas {
   }
   
   loadPageLayers(pageLayers) {
-    this.pageLayers = pageLayers;
+    this.pageLayers = JSON.parse(JSON.stringify(pageLayers || {}));
   }
 
   setCurrentPage(pageNum) {
     if (!this.pageLayers[pageNum]) {
-      this.pageLayers[pageNum] = [
-        { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
-        { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
-        { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
-      ];
+      this.pageLayers[pageNum] = [];
     }
     this.currentPage = pageNum;
     this.render();
@@ -116,57 +111,55 @@ class MockFabricCanvas {
   }
 
   handleMouseDown(e) {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    if (this.tool === 'select') {
-      const clickedToken = this.findTokenAt(x, y);
-      if (clickedToken) {
-        this.isDragging = true;
-        this.dragTarget = clickedToken;
-        this.dragOffset = { x: x - clickedToken.x * this.scale, y: y - clickedToken.y * this.scale };
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+    
+      if (this.tool === 'select') {
+        const clickedObject = this.findObjectAt(x, y);
+        if (clickedObject) {
+          this.isDragging = true;
+          this.dragTarget = clickedObject;
+          this.dragOffset = { x: x - clickedObject.x * this.scale, y: y - clickedObject.y * this.scale };
+          return;
+        }
+      } else if (this.tool === 'eraser') {
+        this.removeObjectAt(x, y);
         return;
-      }
-    } else if (this.tool === 'eraser') {
-      this.removeObjectAt(x, y);
-      return;
-    } else if (this.tool === 'rectangle' || this.tool === 'draw') {
-      this.isDrawing = true;
-      this.startPos = { x: x / this.scale, y: y / this.scale };
-    } else if (this.tool === 'text') {
-      const text = prompt('Enter text:');
-      if (text) {
-        this.addObject('text', {
-          type: 'text',
+      } else if (this.tool === 'rectangle') {
+        this.isDrawing = true;
+        this.startPos = { x: x / this.scale, y: y / this.scale };
+      } else if (this.tool === 'draw') {
+        this.isDrawing = true;
+        this.startPos = { x: x / this.scale, y: y / this.scale };
+        this.startPath(x / this.scale, y / this.scale);
+      } else if (this.tool === 'text') {
+        const text = prompt('Enter text:');
+        if (text) {
+          this.addObject({
+            type: 'text',
+            x: x / this.scale,
+            y: y / this.scale,
+            text: text,
+            color: this.selectedColor,
+            id: Date.now()
+          });
+        }
+      } else if (this.tool === 'token' && this.selectedToken) {
+        this.addObject({
+          type: 'gameToken',
+          shape: this.selectedToken.shape,
           x: x / this.scale,
           y: y / this.scale,
-          text: text,
-          color: this.selectedColor,
+          size: this.tokenSize,
+          color: this.selectedToken.color,
+          strokeColor: this.selectedToken.color === '#ffffff' ? '#000000' : '#ffffff',
           id: Date.now()
         });
       }
     }
 
-    const activeLayerObj = this.layers.find(l => l.id === this.activeLayer);
-    if (!activeLayerObj || activeLayerObj.locked) return;
-
-    if (this.tool === 'token' && this.selectedToken) {
-      this.addObject('tokens', {
-        type: 'gameToken',
-        shape: this.selectedToken.shape,
-        x: x / this.scale,
-        y: y / this.scale,
-        size: this.tokenSize,
-        color: this.selectedToken.color,
-        strokeColor: this.selectedToken.color === '#ffffff' ? '#000000' : '#ffffff',
-        id: Date.now()
-      });
-    }
-  }
-
   handleMouseMove(e) {
-    if (!this.isDrawing) return;
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -174,6 +167,7 @@ class MockFabricCanvas {
     if (this.isDragging && this.dragTarget) {
       this.dragTarget.x = (x - this.dragOffset.x) / this.scale;
       this.dragTarget.y = (y - this.dragOffset.y) / this.scale;
+      this.onUpdate(this.pageLayers);
       this.render();
     } else if (this.isDrawing && this.tool === 'draw') {
       this.continuePath(x / this.scale, y / this.scale);
@@ -194,7 +188,7 @@ class MockFabricCanvas {
       const y = e.clientY - rect.top;
 
       if (this.tool === 'rectangle' && this.startPos) {
-        this.addObject('drawings', {
+        this.addObject({
           type: 'rectangle',
           x: this.startPos.x,
           y: this.startPos.y,
@@ -203,37 +197,35 @@ class MockFabricCanvas {
           color: this.selectedColor,
           id: Date.now()
         });
+      } else if (this.tool === 'draw') {
+        this.onUpdate(this.pageLayers);
       }
-      this.onUpdate(this.pageLayers);
     }
     this.isDrawing = false;
     this.isDragging = false;
     this.dragTarget = null;
     this.startPos = null;
   }
-
+  
   handleDoubleClick(e) {
     e.preventDefault();
-    const rect = this.canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const clickedToken = this.findTokenAt(x, y);
-    if (clickedToken) {
-      this.removeToken(clickedToken.id);
-    }
   }
 
-  findTokenAt(x, y) {
-    const tokensLayer = this.layers.find(l => l.id === 'tokens');
-    if (!tokensLayer || !tokensLayer.visible) return null;
-
-    for (let i = tokensLayer.objects.length - 1; i >= 0; i--) {
-      const token = tokensLayer.objects[i];
-      if (token.type === 'gameToken') {
-        const distance = Math.sqrt((x - token.x * this.scale) ** 2 + (y - token.y * this.scale) ** 2);
-        if (distance <= token.size * this.scale) {
-          return token;
+  findObjectAt(x, y) {
+    for (let i = this.layer.length - 1; i >= 0; i--) {
+      const obj = this.layer[i];
+      if (obj.type === 'gameToken') {
+        const distance = Math.sqrt((x - obj.x * this.scale) ** 2 + (y - obj.y * this.scale) ** 2);
+        if (distance <= obj.size * this.scale) return obj;
+      } else if (obj.type === 'rectangle') {
+        if (x / this.scale >= obj.x && x / this.scale <= obj.x + obj.width && y / this.scale >= obj.y && y / this.scale <= obj.y + obj.height) return obj;
+      } else if (obj.type === 'text') {
+        const textWidth = this.ctx.measureText(obj.text).width;
+        if (x / this.scale >= obj.x && x / this.scale <= obj.x + textWidth && y / this.scale >= obj.y - 16 && y / this.scale <= obj.y) return obj;
+      } else if (obj.type === 'path') {
+        for (const point of obj.points) {
+          const distance = Math.sqrt((x - point.x * this.scale) ** 2 + (y - point.y * this.scale) ** 2);
+          if (distance < 10) return obj;
         }
       }
     }
@@ -241,63 +233,37 @@ class MockFabricCanvas {
   }
   
   removeObjectAt(x, y) {
-    for (const layer of this.layers) {
-      if (!layer.visible || layer.locked) continue;
-
-      layer.objects = layer.objects.filter(obj => {
-        if (obj.type === 'gameToken') {
-          const distance = Math.sqrt((x - obj.x * this.scale) ** 2 + (y - obj.y * this.scale) ** 2);
-          return distance > obj.size * this.scale;
-        }
-        if (obj.type === 'rectangle') {
-          return !(x / this.scale >= obj.x && x / this.scale <= obj.x + obj.width && y / this.scale >= obj.y && y / this.scale <= obj.y + obj.height);
-        }
-        if (obj.type === 'text') {
-          return !(x / this.scale > obj.x && x / this.scale < obj.x + this.ctx.measureText(obj.text).width && y / this.scale > obj.y - 20 && y / this.scale < obj.y);
-        }
-        // Basic check for drawings; more complex logic might be needed for precise drawing removal
-        if (obj.type === 'path') {
-          return !obj.points.some(p => {
-            const distance = Math.sqrt((x - p.x * this.scale) ** 2 + (y - p.y * this.scale) ** 2);
-            return distance < 10; // 10px tolerance for drawings
-          });
-        }
-        return true;
-      });
-    }
+    this.pageLayers[this.currentPage] = this.layer.filter(obj => {
+      if (obj.type === 'gameToken') {
+        const distance = Math.sqrt((x - obj.x * this.scale) ** 2 + (y - obj.y * this.scale) ** 2);
+        return distance > obj.size * this.scale;
+      }
+      if (obj.type === 'rectangle') {
+        return !(x / this.scale >= obj.x && x / this.scale <= obj.x + obj.width && y / this.scale >= obj.y && y / this.scale <= obj.y + obj.height);
+      }
+      if (obj.type === 'text') {
+        return !(x / this.scale > obj.x && x / this.scale < obj.x + this.ctx.measureText(obj.text).width && y / this.scale > obj.y - 20 && y / this.scale < obj.y);
+      }
+      if (obj.type === 'path') {
+        return !obj.points.some(p => {
+          const distance = Math.sqrt((x - p.x * this.scale) ** 2 + (y - p.y * this.scale) ** 2);
+          return distance < 10;
+        });
+      }
+      return true;
+    });
     this.onUpdate(this.pageLayers);
     this.render();
   }
 
-  removeToken(tokenId) {
-    const tokensLayer = this.layers.find(l => l.id === 'tokens');
-    if (tokensLayer) {
-      tokensLayer.objects = tokensLayer.objects.filter(obj => obj.id !== tokenId);
-      this.onUpdate(this.pageLayers);
-      this.render();
-    }
-  }
-
-  setSelectedToken(shape, color) {
-    this.selectedToken = { shape: shape, color: color };
-    this.setTool('token');
-  }
-  
-  setTokenSize(size) {
-    this.tokenSize = size;
-  }
-
-  addObject(layerId, obj) {
-    const layer = this.layers.find(l => l.id === layerId);
-    if (layer) {
-      layer.objects.push(obj);
-      this.onUpdate(this.pageLayers);
-      this.render();
-    }
+  addObject(obj) {
+    this.layer.push(obj);
+    this.onUpdate(this.pageLayers);
+    this.render();
   }
 
   startPath(x, y) {
-    this.addObject('drawings', {
+    this.addObject({
       type: 'path',
       points: [{ x, y }],
       color: this.selectedColor,
@@ -306,9 +272,8 @@ class MockFabricCanvas {
   }
 
   continuePath(x, y) {
-    const drawingsLayer = this.layers.find(l => l.id === 'drawings');
-    if (drawingsLayer && drawingsLayer.objects.length > 0) {
-      const lastObj = drawingsLayer.objects[drawingsLayer.objects.length - 1];
+    if (this.layer.length > 0) {
+      const lastObj = this.layer[this.layer.length - 1];
       if (lastObj && lastObj.type === 'path') {
         lastObj.points.push({ x, y });
         this.render();
@@ -316,28 +281,8 @@ class MockFabricCanvas {
     }
   }
 
-  toggleLayerVisibility(layerId) {
-    const layer = this.layers.find(l => l.id === layerId);
-    if (layer) {
-      layer.visible = !layer.visible;
-      this.onUpdate(this.pageLayers);
-      this.render();
-    }
-  }
-
-  clearLayer(layerId) {
-    const layer = this.layers.find(l => l.id === layerId);
-    if (layer) {
-      layer.objects = [];
-      this.onUpdate(this.pageLayers);
-      this.render();
-    }
-  }
-
   clear() {
-    this.layers.forEach(layer => {
-      layer.objects = [];
-    });
+    this.pageLayers[this.currentPage] = [];
     this.onUpdate(this.pageLayers);
     this.render();
   }
@@ -346,12 +291,16 @@ class MockFabricCanvas {
     this.tool = tool;
   }
 
-  setActiveLayer(layerId) {
-    this.activeLayer = layerId;
-  }
-
   setColor(color) {
     this.selectedColor = color;
+  }
+
+  setSelectedToken(shape, color) {
+    this.selectedToken = { shape, color };
+  }
+  
+  setTokenSize(size) {
+    this.tokenSize = size;
   }
 
   render() {
@@ -359,40 +308,36 @@ class MockFabricCanvas {
     this.ctx.save();
     this.ctx.scale(this.scale, this.scale);
     
-    this.layers.forEach(layer => {
-      if (!layer.visible) return;
+    this.layer.forEach(obj => {
+      this.ctx.save();
       
-      layer.objects.forEach(obj => {
-        this.ctx.save();
+      if (obj.type === 'gameToken') {
+        this.renderGameToken(obj);
+      } else if (obj.type === 'path') {
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = obj.color;
+        this.ctx.lineWidth = 3;
+        this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
         
-        if (obj.type === 'gameToken') {
-          this.renderGameToken(obj);
-        } else if (obj.type === 'path') {
-          this.ctx.beginPath();
-          this.ctx.strokeStyle = obj.color;
-          this.ctx.lineWidth = 3;
-          this.ctx.lineCap = 'round';
-          this.ctx.lineJoin = 'round';
-          
-          if (obj.points && obj.points.length > 1) {
-            this.ctx.moveTo(obj.points[0].x, obj.points[0].y);
-            for (let i = 1; i < obj.points.length; i++) {
-              this.ctx.lineTo(obj.points[i].x, obj.points[i].y);
-            }
+        if (obj.points && obj.points.length > 1) {
+          this.ctx.moveTo(obj.points[0].x, obj.points[0].y);
+          for (let i = 1; i < obj.points.length; i++) {
+            this.ctx.lineTo(obj.points[i].x, obj.points[i].y);
           }
-          this.ctx.stroke();
-        } else if (obj.type === 'rectangle') {
-          this.ctx.strokeStyle = obj.color;
-          this.ctx.lineWidth = 2;
-          this.ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
-        } else if (obj.type === 'text') {
-          this.ctx.fillStyle = obj.color;
-          this.ctx.font = '16px Arial';
-          this.ctx.fillText(obj.text, obj.x, obj.y);
         }
-        
-        this.ctx.restore();
-      });
+        this.ctx.stroke();
+      } else if (obj.type === 'rectangle') {
+        this.ctx.strokeStyle = obj.color;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
+      } else if (obj.type === 'text') {
+        this.ctx.fillStyle = obj.color;
+        this.ctx.font = '16px Arial';
+        this.ctx.fillText(obj.text, obj.x, obj.y);
+      }
+      
+      this.ctx.restore();
     });
     this.ctx.restore();
   }
@@ -560,17 +505,15 @@ const GamebookApp = () => {
   const [diceResult, setDiceResult] = useState(null);
   const [diceExpression, setDiceExpression] = useState('1d20');
   const [selectedTool, setSelectedTool] = useState('select');
-  const [showLayers, setShowLayers] = useState(false);
   const [selectedColor, setSelectedColor] = useState('#ff6b6b');
-  const [showTokenPalette, setShowTokenPalette] = useState(false);
   const [selectedTokenShape, setSelectedTokenShape] = useState('circle');
   const [selectedTokenColor, setSelectedTokenColor] = useState('#ff6b6b');
   const [tokenSize, setTokenSize] = useState(20);
   const [sessionToRestore, setSessionToRestore] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
 
   const [openSections, setOpenSections] = useState({
-    tools: true,
     dice: true,
     session: true,
   });
@@ -685,15 +628,31 @@ const GamebookApp = () => {
     }
   };
   
-  const handleSaveSession = () => {
-    const sessionData = {
-      pdfs: pdfs.map(p => ({
+const handleSaveSession = () => {
+    // Create an up-to-date version of the pdfs array for serialization
+    const pdfsToSave = pdfs.map(p => {
+      // If this is the currently active PDF, get the latest layers from the canvas instance
+      if (p.id === activePdfId && fabricCanvas.current) {
+        return {
+          id: p.id,
+          fileName: p.fileName,
+          currentPage: p.currentPage,
+          scale: p.scale,
+          pageLayers: fabricCanvas.current.pageLayers, // Use the canvas's current state
+        };
+      }
+      // For all other PDFs, the state in the `pdfs` array is fine
+      return {
         id: p.id,
         fileName: p.fileName,
         currentPage: p.currentPage,
         scale: p.scale,
         pageLayers: p.pageLayers,
-      })),
+      };
+    });
+
+    const sessionData = {
+      pdfs: pdfsToSave, // Use the updated array
       activePdfId,
       characters,
       notes,
@@ -910,25 +869,6 @@ const GamebookApp = () => {
   const removeCounter = (id) => {
     setCounters(counters.filter(counter => counter.id !== id));
   };
-
-  // Layer management
-  const toggleLayerVisibility = (layerId) => {
-    if (fabricCanvas.current) {
-      fabricCanvas.current.toggleLayerVisibility(layerId);
-    }
-  };
-
-  const clearLayer = (layerId) => {
-    if (fabricCanvas.current) {
-      fabricCanvas.current.clearLayer(layerId);
-    }
-  };
-
-  const setActiveLayer = (layerId) => {
-    if (fabricCanvas.current) {
-      fabricCanvas.current.setActiveLayer(layerId);
-    }
-  };
   
   const truncateFileName = (name) => {
     if (name.length > 27) {
@@ -951,470 +891,291 @@ const GamebookApp = () => {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
+      <div className={`w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col ${isSidebarVisible ? '' : 'hidden'}`}>
         {/* Header */}
         <div className="p-4 border-b border-gray-200">
           <h1 className="text-xl font-bold text-gray-800">Gamebook Studio</h1>
           <p className="text-sm text-gray-600">Digital tabletop companion</p>
         </div>
-
-        {/* Tools & Token Palette */}
-        <CollapsibleSection title="Drawing Tools" isOpen={openSections.tools} onToggle={() => toggleSection('tools')}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex gap-1">
-              <button
-                onClick={() => setShowTokenPalette(!showTokenPalette)}
-                className={`p-1 rounded ${showTokenPalette ? 'bg-green-500 text-white' : 'bg-gray-100'}`}
-                title="Toggle token palette"
-              >
-                <Circle size={16} />
-              </button>
-              <button
-                onClick={() => setShowLayers(!showLayers)}
-                className={`p-1 rounded ${showLayers ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
-                title="Toggle layers panel"
-              >
-                <Layers size={16} />
-              </button>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-5 gap-2 mb-3">
-            {tools.map(tool => (
-              <button
-                key={tool.id}
-                onClick={() => setSelectedTool(tool.id)}
-                className={`p-2 rounded-lg border transition-colors ${
-                  selectedTool === tool.id 
-                    ? 'bg-blue-500 text-white border-blue-500' 
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                }`}
-                title={tool.label}
-              >
-                <tool.icon size={16} />
-              </button>
-            ))}
-          </div>
-
-          {/* Token Palette */}
-          {showTokenPalette && (
-            <div className="mb-3 p-3 border border-green-200 rounded-lg bg-green-50">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-sm text-green-800">Game Tokens</h4>
-                <span className="text-xs text-green-600">Click to select, place on PDF</span>
-              </div>
-              
-              <div className="mb-3">
-                <p className="text-xs font-medium text-gray-600 mb-2">Shapes</p>
-                <div className="grid grid-cols-6 gap-2">
-                  {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
-                    <button
-                      key={key}
-                      onClick={() => {
-                        setSelectedTokenShape(key);
-                        setSelectedTool('token');
-                      }}
-                      className={`p-2 rounded border text-lg flex items-center justify-center transition-colors ${
-                        selectedTokenShape === key && selectedTool === 'token'
-                          ? 'bg-green-500 text-white border-green-500'
-                          : 'bg-white border-gray-200 hover:bg-gray-50'
-                      }`}
-                      title={shape.name}
-                    >
-                      {shape.icon}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-medium text-gray-600 mb-2">Colors</p>
-                <div className="grid grid-cols-5 gap-1">
-                  {TOKEN_COLORS.map(color => (
-                    <button
-                      key={color.value}
-                      onClick={() => {
-                        setSelectedTokenColor(color.value);
-                        setSelectedTool('token');
-                      }}
-                      className={`w-8 h-8 rounded border-2 transition-all ${
-                        selectedTokenColor === color.value && selectedTool === 'token'
-                          ? 'border-green-600 scale-110'
-                          : color.value === '#ffffff' 
-                            ? 'border-gray-400'
-                            : 'border-gray-300'
-                      }`}
-                      style={{ backgroundColor: color.value }}
-                      title={color.name}
-                    >
-                      {color.value === '#ffffff' && <span className="text-gray-400 text-xs">○</span>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <p className="text-xs font-medium text-gray-600 mb-2">Size</p>
-                <input
-                  type="range"
-                  min="5"
-                  max="50"
-                  value={tokenSize}
-                  onChange={(e) => setTokenSize(parseInt(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="mt-3 p-2 bg-white rounded border border-green-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-600">Preview:</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg" style={{ color: selectedTokenColor }}>
-                      {TOKEN_SHAPES[selectedTokenShape]?.icon}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {TOKEN_SHAPES[selectedTokenShape]?.name} • {TOKEN_COLORS.find(c => c.value === selectedTokenColor)?.name}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Color Palette for Drawing Tools */}
-          {!showTokenPalette && (
-            <div className="mb-3">
-              <p className="text-xs font-medium text-gray-600 mb-2">Colors</p>
-              <div className="grid grid-cols-8 gap-1">
-                {colors.map(color => (
-                  <button
-                    key={color}
-                    onClick={() => setSelectedColor(color)}
-                    className={`w-6 h-6 rounded border-2 ${
-                      selectedColor === color ? 'border-gray-800' : 'border-gray-300'
-                    }`}
-                    style={{ backgroundColor: color }}
-                    title={color}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Layers Panel */}
-          {showLayers && fabricCanvas.current && (
-            <div className="border border-gray-200 rounded-lg p-2">
-              <p className="text-xs font-medium text-gray-600 mb-2">Layers</p>
-              {fabricCanvas.current.layers.map(layer => (
-                <div key={layer.id} className="flex items-center justify-between py-1">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => toggleLayerVisibility(layer.id)}
-                      className={`p-1 rounded ${layer.visible ? 'text-blue-500' : 'text-gray-400'}`}
-                    >
-                      {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                    </button>
-                    <button
-                      onClick={() => setActiveLayer(layer.id)}
-                      className={`text-xs ${fabricCanvas.current.activeLayer === layer.id ? 'font-bold' : ''}`}
-                    >
-                      {layer.name} ({layer.objects.length})
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => clearLayer(layer.id)}
-                    className="text-red-500 hover:text-red-700 p-1"
-                    title="Clear layer"
-                  >
-                    <Trash2 size={10} />
-                  </button>
-                </div>
-              ))}
-              
-              <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-500">
-                <p>💡 <strong>Select tool:</strong> Drag tokens around</p>
-                <p>💡 <strong>Double-click:</strong> Remove tokens</p>
-              </div>
-            </div>
-          )}
-        </CollapsibleSection>
         
-        <CollapsibleSection title="Game Session" isOpen={openSections.session} onToggle={() => toggleSection('session')}>
-          {/* Tab Navigation */}
-          <div className="flex border-b border-gray-200">
-            {[
-              { id: 'sheets', icon: Users, label: 'Characters' },
-              { id: 'notes', icon: StickyNote, label: 'Notes' },
-              { id: 'counters', icon: Settings, label: 'Counters' }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-1 py-2 px-3 text-sm transition-colors ${
-                  activeTab === tab.id 
-                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
-                    : 'text-gray-600 hover:text-gray-800'
-                }`}
-              >
-                <tab.icon size={14} />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Content */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {activeTab === 'sheets' && (
-              <div>
-                {/* Template Selection */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Character Template
-                  </label>
-                  <select
-                    value={selectedTemplate}
-                    onChange={(e) => setSelectedTemplate(e.target.value)}
-                    className="w-full p-2 border border-gray-200 rounded-lg text-sm"
-                  >
-                    {Object.entries(CHARACTER_TEMPLATES).map(([key, template]) => (
-                      <option key={key} value={key}>{template.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Add Character Button */}
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold">Character Sheets</h3>
-                  <button
-                    onClick={addCharacter}
-                    className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                  >
-                    <Plus size={14} />
-                    Add
-                  </button>
-                </div>
-                
-                {/* Character List */}
-                {characters.map(char => {
-                  const template = CHARACTER_TEMPLATES[char.template];
-                  return (
-                    <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-between mb-3">
-                        <input
-                          type="text"
-                          value={char.data.name || 'Unnamed Character'}
-                          onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
-                          className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2"
-                        />
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => removeCharacter(char.id)}
-                            className="text-red-500 hover:text-red-700 p-1"
-                            title="Remove character"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="text-xs text-gray-500 mb-2">Template: {template.name}</div>
-                      
-                      <div className="grid grid-cols-2 gap-2">
-                        {template.fields.slice(1).map(field => (
-                          <div key={field.name} className="flex items-center justify-between">
-                            <span className="text-xs font-medium">{field.label}:</span>
-                            <input
-                              type={field.type}
-                              value={char.data[field.name] || field.default}
-                              onChange={(e) => updateCharacter(char.id, field.name, field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
-                              className="w-16 p-1 border border-gray-200 rounded text-center text-xs"
-                            />
+        <div className="flex-1 overflow-y-auto">
+          <CollapsibleSection title="Game Session" isOpen={openSections.session} onToggle={() => toggleSection('session')}>
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-200">
+              {[
+                { id: 'sheets', icon: Users, label: 'Characters' },
+                { id: 'notes', icon: StickyNote, label: 'Notes' },
+                { id: 'counters', icon: Settings, label: 'Counters' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 flex items-center justify-center gap-1 py-2 px-3 text-sm transition-colors ${
+                    activeTab === tab.id 
+                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  <tab.icon size={14} />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+  
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {activeTab === 'sheets' && (
+                <div>
+                  {/* Template Selection */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Character Template
+                    </label>
+                    <select
+                      value={selectedTemplate}
+                      onChange={(e) => setSelectedTemplate(e.target.value)}
+                      className="w-full p-2 border border-gray-200 rounded-lg text-sm"
+                    >
+                      {Object.entries(CHARACTER_TEMPLATES).map(([key, template]) => (
+                        <option key={key} value={key}>{template.name}</option>
+                      ))}
+                    </select>
+                  </div>
+  
+                  {/* Add Character Button */}
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold">Character Sheets</h3>
+                    <button
+                      onClick={addCharacter}
+                      className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                    >
+                      <Plus size={14} />
+                      Add
+                    </button>
+                  </div>
+                  
+                  {/* Character List */}
+                  {characters.map(char => {
+                    const template = CHARACTER_TEMPLATES[char.template];
+                    return (
+                      <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                          <input
+                            type="text"
+                            value={char.data.name || 'Unnamed Character'}
+                            onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
+                            className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2"
+                          />
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => removeCharacter(char.id)}
+                              className="text-red-500 hover:text-red-700 p-1"
+                              title="Remove character"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                      {char.template === 'custom' && (
-                        <div className="mt-4">
-                          {char.data.customFields && char.data.customFields.map(field => (
-                            <div key={field.id} className="flex items-center gap-2 mb-2">
+                        </div>
+                        
+                        <div className="text-xs text-gray-500 mb-2">Template: {template.name}</div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          {template.fields.slice(1).map(field => (
+                            <div key={field.name} className="flex items-center justify-between">
+                              <span className="text-xs font-medium">{field.label}:</span>
                               <input
-                                type="text"
-                                value={field.name}
-                                onChange={(e) => updateCustomField(char.id, field.id, 'name', e.target.value)}
-                                className="flex-1 p-1 border border-gray-200 rounded text-xs"
+                                type={field.type}
+                                value={char.data[field.name] || field.default}
+                                onChange={(e) => updateCharacter(char.id, field.name, field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
+                                className="w-16 p-1 border border-gray-200 rounded text-center text-xs"
                               />
-                              <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value - 1)} className="w-6 h-6 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center">
-                                <Minus size={12} />
-                              </button>
-                              <input
-                                type="number"
-                                value={field.value}
-                                onChange={(e) => updateCustomField(char.id, field.id, 'value', parseInt(e.target.value) || 0)}
-                                className="w-12 p-1 border border-gray-200 rounded text-center text-xs"
-                              />
-                              <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value + 1)} className="w-6 h-6 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center">
-                                <Plus size={12} />
-                              </button>
-                              <button onClick={() => removeCustomField(char.id, field.id)} className="text-red-500 hover:text-red-700">
-                                <Trash2 size={12} />
-                              </button>
                             </div>
                           ))}
-                          <button onClick={() => addCustomField(char.id)} className="mt-2 flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">
-                            <Plus size={14} />
-                            Add Stat
-                          </button>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-                
-                {characters.length === 0 && (
-                  <p className="text-gray-500 text-center py-8">No characters created yet.</p>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'notes' && (
-              <div>
-                <h3 className="font-semibold mb-3">Game Notes</h3>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add your game notes here...&#10;&#10;• Track story progress&#10;• Note important clues&#10;• Record decisions made"
-                  className="w-full h-64 p-3 border border-gray-200 rounded-lg resize-none text-sm"
-                />
-              </div>
-            )}
-
-            {activeTab === 'counters' && (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold">Counters</h3>
-                  <button
-                    onClick={addCounter}
-                    className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                  >
-                    <Plus size={14} />
-                    Add
-                  </button>
+                        {char.template === 'custom' && (
+                          <div className="mt-4">
+                            {char.data.customFields && char.data.customFields.map(field => (
+                              <div key={field.id} className="flex items-center gap-2 mb-2">
+                                <input
+                                  type="text"
+                                  value={field.name}
+                                  onChange={(e) => updateCustomField(char.id, field.id, 'name', e.target.value)}
+                                  className="flex-1 p-1 border border-gray-200 rounded text-xs"
+                                />
+                                <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value - 1)} className="w-6 h-6 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center">
+                                  <Minus size={12} />
+                                </button>
+                                <input
+                                  type="number"
+                                  value={field.value}
+                                  onChange={(e) => updateCustomField(char.id, field.id, 'value', parseInt(e.target.value) || 0)}
+                                  className="w-12 p-1 border border-gray-200 rounded text-center text-xs"
+                                />
+                                <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value + 1)} className="w-6 h-6 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center">
+                                  <Plus size={12} />
+                                </button>
+                                <button onClick={() => removeCustomField(char.id, field.id)} className="text-red-500 hover:text-red-700">
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            ))}
+                            <button onClick={() => addCustomField(char.id)} className="mt-2 flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">
+                              <Plus size={14} />
+                              Add Stat
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  
+                  {characters.length === 0 && (
+                    <p className="text-gray-500 text-center py-8">No characters created yet.</p>
+                  )}
                 </div>
-
-                {counters.map(counter => (
-                  <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <input
-                        type="text"
-                        value={counter.name}
-                        onChange={(e) => updateCounter(counter.id, 'name', e.target.value)}
-                        className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2"
-                      />
-                      <button
-                        onClick={() => removeCounter(counter.id)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <button
-                        onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) - 1)}
-                        className="w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="text-xl font-bold" style={{ color: counter.color }}>
-                        {counter.value}
-                      </span>
-                      <button
-                        onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) + 1)}
-                        className="w-8 h-8 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                
-                {counters.length === 0 && (
-                  <p className="text-gray-500 text-center py-8">No counters created yet.</p>
-                )}
-              </div>
-            )}
-          </div>
-        </CollapsibleSection>
-
-        {/* Enhanced Dice Section */}
-        <CollapsibleSection title="Advanced Dice Roller" isOpen={openSections.dice} onToggle={() => toggleSection('dice')}>
-          {/* Dice Expression Input */}
-          <div className="mb-3">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={diceExpression}
-                onChange={(e) => setDiceExpression(e.target.value)}
-                placeholder="e.g., 2d6+3, 1d20, 4d8-1"
-                className="flex-1 p-2 border border-gray-200 rounded text-sm"
-              />
-              <button
-                onClick={rollDiceExpression}
-                className="px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center gap-1"
-              >
-                <Dice1 size={14} />
-                Roll
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Dice Buttons */}
-          <div className="grid grid-cols-3 gap-1 mb-3">
-            {['1d4', '1d6', '1d8', '1d10', '1d12', '1d20'].map(dice => (
-              <button
-                key={dice}
-                onClick={() => {
-                  setDiceExpression(dice);
-                  const result = DiceParser.roll(dice);
-                  setDiceResult(result);
-                }}
-                className="py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-xs font-medium"
-              >
-                {dice}
-              </button>
-            ))}
-          </div>
-          
-          {/* Dice Result Display */}
-          {diceResult && (
-            <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-              {diceResult.error ? (
-                <div className="text-center">
-                  <div className="text-red-600 font-medium">{diceResult.error}</div>
+              )}
+  
+              {activeTab === 'notes' && (
+                <div>
+                  <h3 className="font-semibold mb-3">Game Notes</h3>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Add your game notes here...&#10;&#10;• Track story progress&#10;• Note important clues&#10;• Record decisions made"
+                    className="w-full h-64 p-3 border border-gray-200 rounded-lg resize-none text-sm"
+                  />
                 </div>
-              ) : (
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{diceResult.finalTotal}</div>
-                  <div className="text-xs text-purple-800 font-medium">{diceResult.expression}</div>
-                  <div className="text-xs text-purple-600 mt-1">
-                    {diceResult.breakdown}
+              )}
+  
+              {activeTab === 'counters' && (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold">Counters</h3>
+                    <button
+                      onClick={addCounter}
+                      className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                    >
+                      <Plus size={14} />
+                      Add
+                    </button>
                   </div>
-                  {diceResult.results.length > 1 && (
-                    <div className="flex justify-center gap-1 mt-2">
-                      {diceResult.results.map((roll, index) => (
-                        <span 
-                          key={index} 
-                          className="inline-block w-6 h-6 bg-purple-200 text-purple-800 rounded text-xs leading-6 font-bold"
+  
+                  {counters.map(counter => (
+                    <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <input
+                          type="text"
+                          value={counter.name}
+                          onChange={(e) => updateCounter(counter.id, 'name', e.target.value)}
+                          className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2"
+                        />
+                        <button
+                          onClick={() => removeCounter(counter.id)}
+                          className="text-red-500 hover:text-red-700"
                         >
-                          {roll}
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+  
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) - 1)}
+                          className="w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="text-xl font-bold" style={{ color: counter.color }}>
+                          {counter.value}
                         </span>
-                      ))}
+                        <button
+                          onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) + 1)}
+                          className="w-8 h-8 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
                     </div>
+                  ))}
+                  
+                  {counters.length === 0 && (
+                    <p className="text-gray-500 text-center py-8">No counters created yet.</p>
                   )}
                 </div>
               )}
             </div>
-          )}
-        </CollapsibleSection>
+          </CollapsibleSection>
+  
+          {/* Enhanced Dice Section */}
+          <CollapsibleSection title="Advanced Dice Roller" isOpen={openSections.dice} onToggle={() => toggleSection('dice')}>
+            {/* Dice Expression Input */}
+            <div className="mb-3">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={diceExpression}
+                  onChange={(e) => setDiceExpression(e.target.value)}
+                  placeholder="e.g., 2d6+3, 1d20, 4d8-1"
+                  className="flex-1 p-2 border border-gray-200 rounded text-sm"
+                />
+                <button
+                  onClick={rollDiceExpression}
+                  className="px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center gap-1"
+                >
+                  <Dice1 size={14} />
+                  Roll
+                </button>
+              </div>
+            </div>
+  
+            {/* Quick Dice Buttons */}
+            <div className="grid grid-cols-3 gap-1 mb-3">
+              {['1d4', '1d6', '1d8', '1d10', '1d12', '1d20'].map(dice => (
+                <button
+                  key={dice}
+                  onClick={() => {
+                    setDiceExpression(dice);
+                    const result = DiceParser.roll(dice);
+                    setDiceResult(result);
+                  }}
+                  className="py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-xs font-medium"
+                >
+                  {dice}
+                </button>
+              ))}
+            </div>
+            
+            {/* Dice Result Display */}
+            {diceResult && (
+              <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                {diceResult.error ? (
+                  <div className="text-center">
+                    <div className="text-red-600 font-medium">{diceResult.error}</div>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">{diceResult.finalTotal}</div>
+                    <div className="text-xs text-purple-800 font-medium">{diceResult.expression}</div>
+                    <div className="text-xs text-purple-600 mt-1">
+                      {diceResult.breakdown}
+                    </div>
+                    {diceResult.results.length > 1 && (
+                      <div className="flex justify-center gap-1 mt-2">
+                        {diceResult.results.map((roll, index) => (
+                          <span 
+                            key={index} 
+                            className="inline-block w-6 h-6 bg-purple-200 text-purple-800 rounded text-xs leading-6 font-bold"
+                          >
+                            {roll}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </CollapsibleSection>
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -1423,6 +1184,9 @@ const GamebookApp = () => {
           {/* Toolbar */}
           <div className="bg-white border-b border-gray-200 p-3 flex items-center justify-between">
             <div className="flex items-center gap-4">
+              <button onClick={() => setIsSidebarVisible(!isSidebarVisible)} className="p-2 rounded hover:bg-gray-100">
+                {isSidebarVisible ? <PanelLeft size={16} /> : <PanelRight size={16} />}
+              </button>
               {/* PDF Navigation */}
               {activePdf && (
                 <div className="flex items-center gap-2">
@@ -1472,12 +1236,12 @@ const GamebookApp = () => {
               <div className="h-6 w-px bg-gray-300"></div>
   
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Tool:</span>
                 <div className="relative">
                   <button
                     onClick={() => setTopBarDropdown(topBarDropdown === 'tool' ? null : 'tool')}
                     className="font-medium capitalize text-sm flex items-center gap-1"
                   >
+                    {React.createElement(tools.find(t => t.id === selectedTool).icon, { size: 14 })}
                     {selectedTool} <ChevronDown size={12} />
                   </button>
                   {topBarDropdown === 'tool' && (
@@ -1616,7 +1380,7 @@ const GamebookApp = () => {
         </div>
 
         {/* Hamburger Menu */}
-        <div className="fixed top-4 right-4 z-20">
+        <div className="fixed top-2 right-4 z-20">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
             className="p-2 rounded bg-white shadow-lg hover:bg-gray-100"
