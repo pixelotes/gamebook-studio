@@ -1399,7 +1399,7 @@ const GamebookApp = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative">
         {/* Toolbar */}
-        <div className="bg-white border-b border-gray-200 p-3 flex items-center justify-between">
+        <div className="bg-white border-b border-gray-200 px-3 py-1  flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setIsSidebarVisible(!isSidebarVisible)}
@@ -1646,7 +1646,7 @@ const GamebookApp = () => {
           </div>
         </div>
 
-        <div className="absolute top-3 right-3 z-30">
+        <div className="absolute top-2 right-3 z-30">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
             className="p-2 rounded hover:bg-gray-100 bg-white/80 backdrop-blur-sm"
