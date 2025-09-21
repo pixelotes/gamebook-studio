@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus, PanelLeft, Stamp } from 'lucide-react';
+import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus, PanelLeft, Stamp, Bookmark, Tally5 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import DiceParser from './utils/DiceParser';
+import BookmarkItem from './components/BookmarkItem';
 import FloatingDice from './components/FloatingDice';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -620,6 +621,7 @@ const GamebookApp = () => {
             currentPage: 1,
             scale: 1,
             pageLayers: {},
+            bookmarks: await pdfDoc.getOutline() || [],
           });
         } catch (error) {
           console.error('Error loading PDF:', file.name, error);
@@ -781,6 +783,21 @@ const GamebookApp = () => {
   const rollDiceExpression = () => {
     const result = DiceParser.roll(diceExpression);
     setDiceResult(result);
+  };
+
+  // Bookmark handling
+  const handleBookmarkNavigate = async (dest) => {
+    // 1. Find the currently active PDF using activePdfId
+    const activePdf = pdfs.find(p => p.id === activePdfId);
+
+    // 2. If there's no active PDF, do nothing
+    if (!activePdf) return;
+    
+    // 3. Resolve the bookmark's destination to a page index (0-based)
+    const pageIndex = await activePdf.pdfDoc.getPageIndex(dest[0]);
+    
+    // 4. Navigate to the correct page (your function is 1-based)
+    goToPage(pageIndex + 1); 
   };
 
   // Character management
@@ -1120,9 +1137,10 @@ const GamebookApp = () => {
               {/* Tab Navigation */}
               <div className="flex border-b border-gray-200">
                 {[
-                  { id: 'sheets', icon: Users, label: 'Characters' },
-                  { id: 'notes', icon: StickyNote, label: 'Notes' },
-                  { id: 'counters', icon: Settings, label: 'Counters' }
+                  { id: 'sheets', icon: Users, label: '' },
+                  { id: 'counters', icon: Tally5, label: '' },
+                  { id: 'notes', icon: StickyNote, label: '' },
+                  { id: 'bookmarks', icon: Bookmark, label: '' },             
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -1258,7 +1276,7 @@ const GamebookApp = () => {
                     <textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Add your game notes here...&#10;&#10;• Track story progress&#10;• Note important clues&#10;• Record decisions made"
+                      placeholder="Add your game notes here...&#10;• Track story progress&#10;• Note important clues&#10;• Record decisions made"
                       className="w-full h-64 p-3 border border-gray-200 rounded-lg resize-none text-sm"
                     />
                   </div>
@@ -1319,78 +1337,21 @@ const GamebookApp = () => {
                     )}
                   </div>
                 )}
-              </div>
-            </CollapsibleSection>
+                {/* Tab Content */}
 
-            {/* Enhanced Dice Section */}
-            <CollapsibleSection title="Advanced Dice Roller" isOpen={openSections.dice} onToggle={() => toggleSection('dice')}>
-              {/* Dice Expression Input */}
-              <div className="mb-3">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={diceExpression}
-                    onChange={(e) => setDiceExpression(e.target.value)}
-                    placeholder="e.g., 2d6+3, 1d20, 4d8-1"
-                    className="flex-1 p-2 border border-gray-200 rounded text-sm"
-                  />
-                  <button
-                    onClick={rollDiceExpression}
-                    className="px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center gap-1"
-                  >
-                    <Dice1 size={14} />
-                    Roll
-                  </button>
-                </div>
+                {activeTab === 'bookmarks' && (
+                  <div key={activePdf?.id}>
+                    <h3 className="font-semibold mb-3">Contents</h3>
+                    {activePdf?.bookmarks.length > 0 ? (
+                      activePdf.bookmarks.map(bookmark => (
+                        <BookmarkItem key={bookmark.title} bookmark={bookmark} onNavigate={handleBookmarkNavigate} />
+                      ))
+                    ) : (
+                      <p className="text-gray-500">No bookmarks found in this PDF.</p>
+                    )}
+                  </div>
+                )}
               </div>
-
-              {/* Quick Dice Buttons */}
-              <div className="grid grid-cols-3 gap-1 mb-3">
-                {['1d4', '1d6', '1d8', '1d10', '1d12', '1d20'].map(dice => (
-                  <button
-                    key={dice}
-                    onClick={() => {
-                      setDiceExpression(dice);
-                      const result = DiceParser.roll(dice);
-                      setDiceResult(result);
-                    }}
-                    className="py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-xs font-medium"
-                  >
-                    {dice}
-                  </button>
-                ))}
-              </div>
-              
-              {/* Dice Result Display */}
-              {diceResult && (
-                <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                  {diceResult.error ? (
-                    <div className="text-center">
-                      <div className="text-red-600 font-medium">{diceResult.error}</div>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-purple-600">{diceResult.finalTotal}</div>
-                      <div className="text-xs text-purple-800 font-medium">{diceResult.expression}</div>
-                      <div className="text-xs text-purple-600 mt-1">
-                        {diceResult.breakdown}
-                      </div>
-                      {diceResult.results.length > 1 && (
-                        <div className="flex justify-center gap-1 mt-2">
-                          {diceResult.results.map((roll, index) => (
-                            <span 
-                              key={index} 
-                              className="inline-block w-6 h-6 bg-purple-200 text-purple-800 rounded text-xs leading-6 font-bold"
-                            >
-                              {roll}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
             </CollapsibleSection>
           </div>
         </div>
