@@ -46,6 +46,12 @@ const TOKEN_COLORS = [
 
 // Character Sheet Templates
 const CHARACTER_TEMPLATES = {
+  custom: {
+    name: 'Custom',
+    fields: [
+      { name: 'name', label: 'Character Name', type: 'text', default: 'New Character' }
+    ]
+  },
   basic: {
     name: 'Basic RPG',
     fields: [
@@ -68,12 +74,6 @@ const CHARACTER_TEMPLATES = {
       { name: 'ac', label: 'Armor Class', type: 'number', default: 10 },
       { name: 'hp', label: 'Hit Points', type: 'number', default: 8 },
       { name: 'maxHp', label: 'Max HP', type: 'number', default: 8 }
-    ]
-  },
-  custom: {
-    name: 'Custom',
-    fields: [
-      { name: 'name', label: 'Character Name', type: 'text', default: 'New Character' }
     ]
   }
 };
@@ -522,7 +522,7 @@ const GamebookApp = () => {
   const [activePdfId, setActivePdfId] = useState(null);
   const [activeTab, setActiveTab] = useState('sheets');
   const [characters, setCharacters] = useState([]);
-  const [selectedTemplate, setSelectedTemplate] = useState('basic');
+  const [selectedTemplate, setSelectedTemplate] = useState('custom');
   const [notes, setNotes] = useState('');
   const [counters, setCounters] = useState([]);
   const [diceResult, setDiceResult] = useState(null);
