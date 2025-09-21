@@ -1720,28 +1720,30 @@ const GamebookApp = () => {
         </div>
         
         {/* PDF Tabs */}
-        <div className="bg-gray-200 flex items-center">
-          {pdfs.map(pdf => (
-            <div
-              key={pdf.id}
-              onClick={() => setActivePdfId(pdf.id)}
-              className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
-                pdf.id === activePdfId ? 'bg-white' : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-            >
-              <span className="text-sm">{truncateFileName(pdf.file.name)}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closePdf(pdf.id);
-                }}
-                className="p-1 rounded-full hover:bg-red-500 hover:text-white"
+        {pdfs.length > 1 && (
+          <div className="bg-gray-200 flex items-center">
+            {pdfs.map(pdf => (
+              <div
+                key={pdf.id}
+                onClick={() => setActivePdfId(pdf.id)}
+                className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
+                  pdf.id === activePdfId ? 'bg-white' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
               >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
+                <span className="text-sm">{truncateFileName(pdf.file.name)}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closePdf(pdf.id);
+                  }}
+                  className="p-1 rounded-full hover:bg-red-500 hover:text-white"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* PDF Viewer / Canvas Area */}
         <div className="flex-1 bg-gray-50 relative overflow-auto p-4">
