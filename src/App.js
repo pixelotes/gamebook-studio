@@ -1493,26 +1493,30 @@ const GamebookApp = () => {
               <div className="relative">
                 <button
                   onClick={() => setActiveDropdown(activeDropdown === 'color' ? null : 'color')}
-                  className="w-8 h-8 rounded-md hover:bg-gray-100 border border-gray-200 flex items-center justify-center"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
                   title="Select color"
                 >
-                  <div className="w-5 h-5 rounded" style={{ backgroundColor: selectedColor }} />
+                  <div className="w-4 h-4 rounded border border-gray-400" style={{ backgroundColor: selectedColor }} />
+                  <span className="font-medium capitalize">
+                    {TOKEN_COLORS.find(c => c.value === selectedColor)?.name || 'Color'}
+                  </span>
+                  <ChevronDown size={14} className="text-gray-500" />
                 </button>
                 {activeDropdown === 'color' && (
-                  <div className="absolute top-full mt-2 p-2 bg-white rounded-md shadow-lg z-20 border border-gray-200">
-                    <div className="grid grid-cols-4 gap-1">
-                      {colors.map(color => (
-                        <button
-                          key={color}
-                          onClick={() => {
-                            setSelectedColor(color);
-                            setActiveDropdown(null);
-                          }}
-                          className={`w-7 h-7 rounded border-2 transition-transform hover:scale-110 ${selectedColor === color ? 'border-blue-500' : 'border-transparent'}`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
+                  <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                    {TOKEN_COLORS.map(color => (
+                      <button
+                        key={color.value}
+                        onClick={() => {
+                          setSelectedColor(color.value);
+                          setActiveDropdown(null);
+                        }}
+                        className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }}/>
+                        {color.name}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1525,20 +1529,25 @@ const GamebookApp = () => {
                 <div className="relative">
                   <button
                     onClick={() => setActiveDropdown(activeDropdown === 'tokenShape' ? null : 'tokenShape')}
-                    className="flex items-center justify-center w-10 h-8 rounded-md hover:bg-gray-100 border border-gray-200 text-xl"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
                     title="Select token shape"
                   >
-                    {TOKEN_SHAPES[selectedTokenShape].icon}
+                    <span className="text-lg">{TOKEN_SHAPES[selectedTokenShape].icon}</span>
+                    <span className="font-medium capitalize">{TOKEN_SHAPES[selectedTokenShape].name}</span>
+                    <ChevronDown size={14} className="text-gray-500" />
                   </button>
                   {activeDropdown === 'tokenShape' && (
-                    <div className="absolute top-full mt-2 p-2 bg-white rounded-md shadow-lg z-20 border">
-                      <div className="grid grid-cols-3 gap-1">
-                        {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
-                          <button key={key} onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); }} className={`p-2 rounded border text-xl ${selectedTokenShape === key ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}>
-                            {shape.icon}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                      {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
+                        <button 
+                          key={key} 
+                          onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); }} 
+                          className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <span className="text-lg w-5 text-center">{shape.icon}</span>
+                          {shape.name}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -1547,18 +1556,27 @@ const GamebookApp = () => {
                 <div className="relative">
                   <button
                     onClick={() => setActiveDropdown(activeDropdown === 'tokenColor' ? null : 'tokenColor')}
-                    className="w-8 h-8 rounded-md hover:bg-gray-100 border border-gray-200 flex items-center justify-center"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
                     title="Select token color"
                   >
-                    <div className="w-5 h-5 rounded" style={{ backgroundColor: selectedTokenColor }} />
+                    <div className="w-4 h-4 rounded border border-gray-400" style={{ backgroundColor: selectedTokenColor }} />
+                    <span className="font-medium capitalize">
+                      {TOKEN_COLORS.find(c => c.value === selectedTokenColor)?.name}
+                    </span>
+                    <ChevronDown size={14} className="text-gray-500" />
                   </button>
                   {activeDropdown === 'tokenColor' && (
-                    <div className="absolute top-full mt-2 p-2 bg-white rounded-md shadow-lg z-20 border">
-                      <div className="grid grid-cols-5 gap-1">
-                        {TOKEN_COLORS.map(color => (
-                          <button key={color.value} onClick={() => { setSelectedTokenColor(color.value); setActiveDropdown(null); }} className={`w-7 h-7 rounded border-2 ${selectedTokenColor === color.value ? 'border-blue-500' : 'border-gray-300'}`} style={{ backgroundColor: color.value }} />
-                        ))}
-                      </div>
+                    <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                      {TOKEN_COLORS.map(color => (
+                        <button 
+                          key={color.value} 
+                          onClick={() => { setSelectedTokenColor(color.value); setActiveDropdown(null); }}
+                          className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }} />
+                          {color.name}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
