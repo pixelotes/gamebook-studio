@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus, PanelLeft } from 'lucide-react';
+import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus, PanelLeft, Stamp } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import DiceParser from './utils/DiceParser';
 import FloatingDice from './components/FloatingDice';
@@ -13,7 +13,21 @@ const TOKEN_SHAPES = {
   triangle: { name: 'Triangle', icon: '▲' },
   diamond: { name: 'Diamond', icon: '♦' },
   heart: { name: 'Heart', icon: '♥' },
-  star: { name: 'Star', icon: '★' }
+  star: { name: 'Star', icon: '★' },
+  check: { name: 'Check', icon: '✔' },
+  cross: { name: 'Cross', icon: '✘' },
+  skull: { name: 'Skull', icon: '☠' },
+  shield: { name: 'Shield', icon: '⛨' },
+  arrow: { name: 'Arrow', icon: '→' },
+  coin: { name: 'Coin', icon: '◎' },
+  meeple: { name: 'Meeple', icon: '👤' },
+  house: { name: 'House', icon: '⌂' },
+  dice1: { name: 'Dice 1', icon: '⚀' },
+  dice2: { name: 'Dice 2', icon: '⚁' },
+  dice3: { name: 'Dice 3', icon: '⚂' },
+  dice4: { name: 'Dice 4', icon: '⚃' },
+  dice5: { name: 'Dice 5', icon: '⚄' },
+  dice6: { name: 'Dice 6', icon: '⚅' }
 };
 
 const TOKEN_COLORS = [
@@ -423,6 +437,25 @@ class MockFabricCanvas {
       this.renderHeart(x, y, size);
     } else if (shape === 'star') {
       this.renderStar(x, y, size);
+    } else {
+      // --- Fallback for any new icon-based shapes ---
+      const icon = TOKEN_SHAPES[shape]?.icon;
+      if (icon) {
+        // Draw a circular background for consistent clicking and style
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, size * 1.2, 0, 2 * Math.PI);
+        this.ctx.fillStyle = color;
+        this.ctx.fill();
+        this.ctx.strokeStyle = strokeColor;
+        this.ctx.stroke();
+
+        // Render the icon character in the center
+        this.ctx.fillStyle = strokeColor; // Use stroke color for high contrast
+        this.ctx.font = `${size * 1.8}px Arial`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(icon, x, y);
+      }
     }
   }
 
@@ -881,7 +914,7 @@ const GamebookApp = () => {
 
   const tools = [
     { id: 'select', icon: Move, label: 'Select' },
-    { id: 'token', icon: Circle, label: 'Token' },
+    { id: 'token', icon: Stamp, label: 'Token' },
     { id: 'rectangle', icon: Square, label: 'Rectangle' },
     { id: 'text', icon: Type, label: 'Text' },
     { id: 'draw', icon: Pen, label: 'Draw' },
@@ -1554,7 +1587,7 @@ const GamebookApp = () => {
                       <ChevronDown size={14} className="text-gray-500" />
                     </button>
                     {activeDropdown === 'tokenShape' && (
-                      <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                      <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 max-h-[70vh] overflow-y-auto">
                         {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
                           <button 
                             key={key} 
