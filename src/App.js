@@ -1415,11 +1415,6 @@ const GamebookApp = () => {
               </>
             )}
 
-            {fabricCanvas.current && (
-              <div className="text-sm text-gray-600">
-                Layer: <span className="font-medium">{fabricCanvas.current.layers.find(l => l.id === fabricCanvas.current.activeLayer)?.name}</span>
-              </div>
-            )}
           </div>
         </div>
 
