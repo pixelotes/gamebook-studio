@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus, PanelLeft } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+import DiceParser from './utils/DiceParser';
+import FloatingDice from './components/FloatingDice';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
@@ -468,57 +470,6 @@ class MockFabricCanvas {
   }
 }
 
-// Advanced Dice Parser
-class DiceParser {
-  static parse(expression) {
-    const cleanExpr = expression.replace(/\s/g, '').toLowerCase();
-    const match = cleanExpr.match(/^(\d+)?d(\d+)([+-]\d+)?$/);
-    
-    if (!match) {
-      const num = parseInt(cleanExpr);
-      if (!isNaN(num)) {
-        return { count: 1, sides: num, modifier: 0, valid: true };
-      }
-      return { valid: false, error: 'Invalid dice expression' };
-    }
-
-    const count = parseInt(match[1] || '1');
-    const sides = parseInt(match[2]);
-    const modifierStr = match[3] || '+0';
-    const modifier = parseInt(modifierStr);
-
-    if (count > 100 || sides > 1000 || count < 1 || sides < 2) {
-      return { valid: false, error: 'Invalid dice parameters' };
-    }
-
-    return { count: count, sides: sides, modifier: modifier, valid: true };
-  }
-
-  static roll(expression) {
-    const parsed = this.parse(expression);
-    if (!parsed.valid) {
-      return { error: parsed.error };
-    }
-
-    const results = [];
-    for (let i = 0; i < parsed.count; i++) {
-      results.push(Math.floor(Math.random() * parsed.sides) + 1);
-    }
-    
-    const diceTotal = results.reduce((sum, roll) => sum + roll, 0);
-    const finalTotal = diceTotal + parsed.modifier;
-
-    return {
-      results: results,
-      diceTotal: diceTotal,
-      modifier: parsed.modifier,
-      finalTotal: finalTotal,
-      expression: `${parsed.count}d${parsed.sides}${parsed.modifier !== 0 ? (parsed.modifier > 0 ? '+' + parsed.modifier : parsed.modifier) : ''}`,
-      breakdown: `(${results.join('+')})${parsed.modifier !== 0 ? ' ' + (parsed.modifier > 0 ? '+' : '') + parsed.modifier : ''} = ${finalTotal}`
-    };
-  }
-}
-
 const CollapsibleSection = ({ title, children, isOpen, onToggle }) => (
   <div className="border-b border-gray-200">
     <button
@@ -941,6 +892,8 @@ const GamebookApp = () => {
 
   return (
     <div className="flex h-screen bg-gray-100">
+      {/* The floating dice wisget */}
+      <FloatingDice />
       {/* Sidebar */}
       {isSidebarVisible && (
         <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
@@ -1480,7 +1433,6 @@ const GamebookApp = () => {
                 disabled={!activePdf}
               >
                 <Layers size={16} />
-                <span>Layers</span>
                 <ChevronDown size={14} className="text-gray-500" />
               </button>
               {activeDropdown === 'layers' && fabricCanvas.current && (
@@ -1561,13 +1513,10 @@ const GamebookApp = () => {
                 <div className="relative">
                   <button
                     onClick={() => setActiveDropdown(activeDropdown === 'color' ? null : 'color')}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm"
                     title="Select color"
                   >
-                    <div className="w-4 h-4 rounded border border-gray-400" style={{ backgroundColor: selectedColor }} />
-                    <span className="font-medium capitalize">
-                      {TOKEN_COLORS.find(c => c.value === selectedColor)?.name || 'Color'}
-                    </span>
+                    <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: selectedColor }} />
                     <ChevronDown size={14} className="text-gray-500" />
                   </button>
                   {activeDropdown === 'color' && (
@@ -1624,13 +1573,10 @@ const GamebookApp = () => {
                   <div className="relative">
                     <button
                       onClick={() => setActiveDropdown(activeDropdown === 'tokenColor' ? null : 'tokenColor')}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm"
                       title="Select token color"
                     >
-                      <div className="w-4 h-4 rounded border border-gray-400" style={{ backgroundColor: selectedTokenColor }} />
-                      <span className="font-medium capitalize">
-                        {TOKEN_COLORS.find(c => c.value === selectedTokenColor)?.name}
-                      </span>
+                      <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: selectedTokenColor }} />
                       <ChevronDown size={14} className="text-gray-500" />
                     </button>
                     {activeDropdown === 'tokenColor' && (
