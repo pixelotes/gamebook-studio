@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus } from 'lucide-react';
+import { Upload, FileText, Dice1, Plus, Minus, RotateCcw, Save, Users, StickyNote, Settings, Move, Square, Circle, Type, Pen, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Layers, Eye, EyeOff, Trash2, ChevronDown, ChevronUp, Eraser, X, Menu, FilePlus, PanelLeft } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -184,28 +184,29 @@ class MockFabricCanvas {
 
   handleMouseUp(e) {
     if (this.isDrawing && this.tool === 'rectangle') {
-      const rect = this.canvas.getBoundingClientRect();
-      const endX = (e.clientX - rect.left) / this.scale;
-      const endY = (e.clientY - rect.top) / this.scale;
+        const rect = this.canvas.getBoundingClientRect();
+        const endX = (e.clientX - rect.left) / this.scale;
+        const endY = (e.clientY - rect.top) / this.scale;
 
-      const x = Math.min(this.startPos.x, endX);
-      const y = Math.min(this.startPos.y, endY);
-      const width = Math.abs(this.startPos.x - endX);
-      const height = Math.abs(this.startPos.y - endY);
+        const x = Math.min(this.startPos.x, endX);
+        const y = Math.min(this.startPos.y, endY);
+        const width = Math.abs(this.startPos.x - endX);
+        const height = Math.abs(this.startPos.y - endY);
 
-      if (width > 2 && height > 2) { // Prevents creating tiny accidental rectangles
-        this.addObject('drawings', {
-          type: 'rectangle',
-          x, y, width, height,
-          color: this.selectedColor,
-          id: Date.now()
-        });
-      }
+        if (width > 2 && height > 2) { 
+            this.addObject('drawings', {
+                type: 'rectangle',
+                x, y, width, height,
+                color: this.selectedColor,
+                id: Date.now()
+            });
+        }
     }
 
-    this.isDrawing = false;
+    this.isDragging = false;
     this.dragTarget = null;
-    this.startPos = null; // Reset start position
+    this.isDrawing = false;
+    this.startPos = null;
   }
 
   handleDoubleClick(e) {
@@ -244,11 +245,10 @@ class MockFabricCanvas {
           const distance = Math.sqrt((x - obj.x * this.scale) ** 2 + (y - obj.y * this.scale) ** 2);
           return distance > obj.size * this.scale;
         }
-        // Basic check for drawings; more complex logic might be needed for precise drawing removal
         if (obj.type === 'path') {
           return !obj.points.some(p => {
             const distance = Math.sqrt((x - p.x * this.scale) ** 2 + (y - p.y * this.scale) ** 2);
-            return distance < 10; // 10px tolerance for drawings
+            return distance < 10;
           });
         }
         return true;
@@ -365,13 +365,13 @@ class MockFabricCanvas {
           }
           this.ctx.stroke();
         } else if (obj.type === 'rectangle') {
-          this.ctx.strokeStyle = obj.color;
-          this.ctx.lineWidth = 3;
-          this.ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
+            this.ctx.strokeStyle = obj.color;
+            this.ctx.lineWidth = 3;
+            this.ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
         } else if (obj.type === 'text') {
-          this.ctx.fillStyle = obj.color;
-          this.ctx.font = obj.font || '16px Arial';
-          this.ctx.fillText(obj.content, obj.x, obj.y);
+            this.ctx.fillStyle = obj.color;
+            this.ctx.font = obj.font || '16px Arial';
+            this.ctx.fillText(obj.content, obj.x, obj.y);
         }
         
         this.ctx.restore();
@@ -551,6 +551,8 @@ const GamebookApp = () => {
   const [tokenSize, setTokenSize] = useState(20);
   const [sessionToRestore, setSessionToRestore] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState(null);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
 
   const [openSections, setOpenSections] = useState({
     tools: true,
@@ -604,13 +606,11 @@ const GamebookApp = () => {
     for (const file of files) {
       if (file.type !== 'application/pdf') continue;
   
-      // Prevent duplicates
       if (pdfs.some(p => p.fileName === file.name)) {
         console.warn(`Skipping duplicate file: ${file.name}`);
         continue;
       }
   
-      // Check if we are restoring a session
       if (sessionToRestore) {
         const matchingPdfInSession = sessionToRestore.pdfs.find(p => p.fileName === file.name);
         if (matchingPdfInSession) {
@@ -623,7 +623,6 @@ const GamebookApp = () => {
           }
         }
       } else {
-        // Normal file load
         try {
           const url = URL.createObjectURL(file);
           const pdfDoc = await pdfjsLib.getDocument(url).promise;
@@ -650,7 +649,7 @@ const GamebookApp = () => {
         setCharacters(sessionToRestore.characters);
         setNotes(sessionToRestore.notes);
         setCounters(sessionToRestore.counters);
-        setSessionToRestore(null); // Clear session restore state
+        setSessionToRestore(null); 
       } else {
         alert('Could not restore session. Please select all the correct PDF files.');
         setSessionToRestore(null);
@@ -753,7 +752,7 @@ const GamebookApp = () => {
       await page.render(renderContext).promise;
   
       if (overlayCanvasRef.current) {
-        overlayCanvasRef.current.width = viewport.height;
+        overlayCanvasRef.current.width = viewport.width;
         overlayCanvasRef.current.height = viewport.height;
         if (fabricCanvas.current) {
           fabricCanvas.current.loadPageLayers(pageLayers);
@@ -923,479 +922,490 @@ const GamebookApp = () => {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-gray-800">Gamebook Studio</h1>
-          <p className="text-sm text-gray-600">Digital tabletop companion</p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-        {/* Tools & Token Palette */}
-          <CollapsibleSection title="Drawing Tools" isOpen={openSections.tools} onToggle={() => toggleSection('tools')}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setShowTokenPalette(!showTokenPalette)}
-                  className={`p-1 rounded ${showTokenPalette ? 'bg-green-500 text-white' : 'bg-gray-100'}`}
-                  title="Toggle token palette"
-                >
-                  <Circle size={16} />
-                </button>
-                <button
-                  onClick={() => setShowLayers(!showLayers)}
-                  className={`p-1 rounded ${showLayers ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
-                  title="Toggle layers panel"
-                >
-                  <Layers size={16} />
-                </button>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-5 gap-2 mb-3">
-              {tools.map(tool => (
-                <button
-                  key={tool.id}
-                  onClick={() => setSelectedTool(tool.id)}
-                  className={`p-2 rounded-lg border transition-colors ${
-                    selectedTool === tool.id 
-                      ? 'bg-blue-500 text-white border-blue-500' 
-                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                  }`}
-                  title={tool.label}
-                >
-                  <tool.icon size={16} />
-                </button>
-              ))}
-            </div>
-
-            {/* Token Palette */}
-            {showTokenPalette && (
-              <div className="mb-3 p-3 border border-green-200 rounded-lg bg-green-50">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-medium text-sm text-green-800">Game Tokens</h4>
-                  <span className="text-xs text-green-600">Click to select, place on PDF</span>
-                </div>
-                
-                <div className="mb-3">
-                  <p className="text-xs font-medium text-gray-600 mb-2">Shapes</p>
-                  <div className="grid grid-cols-6 gap-2">
-                    {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
-                      <button
-                        key={key}
-                        onClick={() => {
-                          setSelectedTokenShape(key);
-                          setSelectedTool('token');
-                        }}
-                        className={`p-2 rounded border text-lg flex items-center justify-center transition-colors ${
-                          selectedTokenShape === key && selectedTool === 'token'
-                            ? 'bg-green-500 text-white border-green-500'
-                            : 'bg-white border-gray-200 hover:bg-gray-50'
-                        }`}
-                        title={shape.name}
-                      >
-                        {shape.icon}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-xs font-medium text-gray-600 mb-2">Colors</p>
-                  <div className="grid grid-cols-5 gap-1">
-                    {TOKEN_COLORS.map(color => (
-                      <button
-                        key={color.value}
-                        onClick={() => {
-                          setSelectedTokenColor(color.value);
-                          setSelectedTool('token');
-                        }}
-                        className={`w-8 h-8 rounded border-2 transition-all ${
-                          selectedTokenColor === color.value && selectedTool === 'token'
-                            ? 'border-green-600 scale-110'
-                            : color.value === '#ffffff' 
-                              ? 'border-gray-400'
-                              : 'border-gray-300'
-                        }`}
-                        style={{ backgroundColor: color.value }}
-                        title={color.name}
-                      >
-                        {color.value === '#ffffff' && <span className="text-gray-400 text-xs">○</span>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-xs font-medium text-gray-600 mb-2">Size</p>
-                  <input
-                    type="range"
-                    min="5"
-                    max="50"
-                    value={tokenSize}
-                    onChange={(e) => setTokenSize(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="mt-3 p-2 bg-white rounded border border-green-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-600">Preview:</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg" style={{ color: selectedTokenColor }}>
-                        {TOKEN_SHAPES[selectedTokenShape]?.icon}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {TOKEN_SHAPES[selectedTokenShape]?.name} • {TOKEN_COLORS.find(c => c.value === selectedTokenColor)?.name}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Color Palette for Drawing Tools */}
-            {!showTokenPalette && (
-              <div className="mb-3">
-                <p className="text-xs font-medium text-gray-600 mb-2">Colors</p>
-                <div className="grid grid-cols-8 gap-1">
-                  {colors.map(color => (
-                    <button
-                      key={color}
-                      onClick={() => setSelectedColor(color)}
-                      className={`w-6 h-6 rounded border-2 ${
-                        selectedColor === color ? 'border-gray-800' : 'border-gray-300'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={color}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Layers Panel */}
-            {showLayers && fabricCanvas.current && (
-              <div className="border border-gray-200 rounded-lg p-2">
-                <p className="text-xs font-medium text-gray-600 mb-2">Layers</p>
-                {fabricCanvas.current.layers.map(layer => (
-                  <div key={layer.id} className="flex items-center justify-between py-1">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => toggleLayerVisibility(layer.id)}
-                        className={`p-1 rounded ${layer.visible ? 'text-blue-500' : 'text-gray-400'}`}
-                      >
-                        {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                      </button>
-                      <button
-                        onClick={() => setActiveLayer(layer.id)}
-                        className={`text-xs ${fabricCanvas.current.activeLayer === layer.id ? 'font-bold' : ''}`}
-                      >
-                        {layer.name} ({layer.objects.length})
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => clearLayer(layer.id)}
-                      className="text-red-500 hover:text-red-700 p-1"
-                      title="Clear layer"
-                    >
-                      <Trash2 size={10} />
-                    </button>
-                  </div>
-                ))}
-                
-                <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-500">
-                  <p>💡 <strong>Select tool:</strong> Drag tokens around</p>
-                  <p>💡 <strong>Double-click:</strong> Remove tokens</p>
-                </div>
-              </div>
-            )}
-          </CollapsibleSection>
+      {isSidebarVisible && (
+        <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
+          {/* Header */}
+          <div className="p-4 border-b border-gray-200">
+            <h1 className="text-xl font-bold text-gray-800">Gamebook Studio</h1>
+            <p className="text-sm text-gray-600">Digital tabletop companion</p>
+          </div>
           
-          <CollapsibleSection title="Game Session" isOpen={openSections.session} onToggle={() => toggleSection('session')}>
-            {/* Tab Navigation */}
-            <div className="flex border-b border-gray-200">
-              {[
-                { id: 'sheets', icon: Users, label: 'Characters' },
-                { id: 'notes', icon: StickyNote, label: 'Notes' },
-                { id: 'counters', icon: Settings, label: 'Counters' }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 flex items-center justify-center gap-1 py-2 px-3 text-sm transition-colors ${
-                    activeTab === tab.id 
-                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  <tab.icon size={14} />
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex-1 overflow-y-auto">
+            {/* Tools & Token Palette */}
+            <CollapsibleSection title="Drawing Tools" isOpen={openSections.tools} onToggle={() => toggleSection('tools')}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setShowTokenPalette(!showTokenPalette)}
+                    className={`p-1 rounded ${showTokenPalette ? 'bg-green-500 text-white' : 'bg-gray-100'}`}
+                    title="Toggle token palette"
+                  >
+                    <Circle size={16} />
+                  </button>
+                  <button
+                    onClick={() => setShowLayers(!showLayers)}
+                    className={`p-1 rounded ${showLayers ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+                    title="Toggle layers panel"
+                  >
+                    <Layers size={16} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-5 gap-2 mb-3">
+                {tools.map(tool => (
+                  <button
+                    key={tool.id}
+                    onClick={() => setSelectedTool(tool.id)}
+                    className={`p-2 rounded-lg border transition-colors ${
+                      selectedTool === tool.id 
+                        ? 'bg-blue-500 text-white border-blue-500' 
+                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    }`}
+                    title={tool.label}
+                  >
+                    <tool.icon size={16} />
+                  </button>
+                ))}
+              </div>
 
-            {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto p-4">
-              {activeTab === 'sheets' && (
-                <div>
-                  {/* Template Selection */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Character Template
-                    </label>
-                    <select
-                      value={selectedTemplate}
-                      onChange={(e) => setSelectedTemplate(e.target.value)}
-                      className="w-full p-2 border border-gray-200 rounded-lg text-sm"
-                    >
-                      {Object.entries(CHARACTER_TEMPLATES).map(([key, template]) => (
-                        <option key={key} value={key}>{template.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Add Character Button */}
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold">Character Sheets</h3>
-                    <button
-                      onClick={addCharacter}
-                      className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                    >
-                      <Plus size={14} />
-                      Add
-                    </button>
+              {/* Token Palette */}
+              {showTokenPalette && (
+                <div className="mb-3 p-3 border border-green-200 rounded-lg bg-green-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-sm text-green-800">Game Tokens</h4>
+                    <span className="text-xs text-green-600">Click to select, place on PDF</span>
                   </div>
                   
-                  {/* Character List */}
-                  {characters.map(char => {
-                    const template = CHARACTER_TEMPLATES[char.template];
-                    return (
-                      <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center justify-between mb-3">
-                          <input
-                            type="text"
-                            value={char.data.name || 'Unnamed Character'}
-                            onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
-                            className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2"
-                          />
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => removeCharacter(char.id)}
-                              className="text-red-500 hover:text-red-700 p-1"
-                              title="Remove character"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                        
-                        <div className="text-xs text-gray-500 mb-2">Template: {template.name}</div>
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                          {template.fields.slice(1).map(field => (
-                            <div key={field.name} className="flex items-center justify-between">
-                              <span className="text-xs font-medium">{field.label}:</span>
-                              <input
-                                type={field.type}
-                                value={char.data[field.name] || field.default}
-                                onChange={(e) => updateCharacter(char.id, field.name, field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
-                                className="w-16 p-1 border border-gray-200 rounded text-center text-xs"
-                              />
+                  <div className="mb-3">
+                    <p className="text-xs font-medium text-gray-600 mb-2">Shapes</p>
+                    <div className="grid grid-cols-6 gap-2">
+                      {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            setSelectedTokenShape(key);
+                            setSelectedTool('token');
+                          }}
+                          className={`p-2 rounded border text-lg flex items-center justify-center transition-colors ${
+                            selectedTokenShape === key && selectedTool === 'token'
+                              ? 'bg-green-500 text-white border-green-500'
+                              : 'bg-white border-gray-200 hover:bg-gray-50'
+                          }`}
+                          title={shape.name}
+                        >
+                          {shape.icon}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-2">Colors</p>
+                    <div className="grid grid-cols-5 gap-1">
+                      {TOKEN_COLORS.map(color => (
+                        <button
+                          key={color.value}
+                          onClick={() => {
+                            setSelectedTokenColor(color.value);
+                            setSelectedTool('token');
+                          }}
+                          className={`w-8 h-8 rounded border-2 transition-all ${
+                            selectedTokenColor === color.value && selectedTool === 'token'
+                              ? 'border-green-600 scale-110'
+                              : color.value === '#ffffff' 
+                                ? 'border-gray-400'
+                                : 'border-gray-300'
+                          }`}
+                          style={{ backgroundColor: color.value }}
+                          title={color.name}
+                        >
+                          {color.value === '#ffffff' && <span className="text-gray-400 text-xs">○</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-gray-600 mb-2">Size</p>
+                    <input
+                      type="range"
+                      min="5"
+                      max="50"
+                      value={tokenSize}
+                      onChange={(e) => setTokenSize(parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div className="mt-3 p-2 bg-white rounded border border-green-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">Preview:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg" style={{ color: selectedTokenColor }}>
+                          {TOKEN_SHAPES[selectedTokenShape]?.icon}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {TOKEN_SHAPES[selectedTokenShape]?.name} • {TOKEN_COLORS.find(c => c.value === selectedTokenColor)?.name}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Color Palette for Drawing Tools */}
+              {!showTokenPalette && (
+                <div className="mb-3">
+                  <p className="text-xs font-medium text-gray-600 mb-2">Colors</p>
+                  <div className="grid grid-cols-8 gap-1">
+                    {colors.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => setSelectedColor(color)}
+                        className={`w-6 h-6 rounded border-2 ${
+                          selectedColor === color ? 'border-gray-800' : 'border-gray-300'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Layers Panel */}
+              {showLayers && fabricCanvas.current && (
+                <div className="border border-gray-200 rounded-lg p-2">
+                  <p className="text-xs font-medium text-gray-600 mb-2">Layers</p>
+                  {fabricCanvas.current.layers.map(layer => (
+                    <div key={layer.id} className="flex items-center justify-between py-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleLayerVisibility(layer.id)}
+                          className={`p-1 rounded ${layer.visible ? 'text-blue-500' : 'text-gray-400'}`}
+                        >
+                          {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                        </button>
+                        <button
+                          onClick={() => setActiveLayer(layer.id)}
+                          className={`text-xs ${fabricCanvas.current.activeLayer === layer.id ? 'font-bold' : ''}`}
+                        >
+                          {layer.name} ({layer.objects.length})
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => clearLayer(layer.id)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                        title="Clear layer"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-500">
+                    <p>💡 <strong>Select tool:</strong> Drag tokens around</p>
+                    <p>💡 <strong>Double-click:</strong> Remove tokens</p>
+                  </div>
+                </div>
+              )}
+            </CollapsibleSection>
+            
+            <CollapsibleSection title="Game Session" isOpen={openSections.session} onToggle={() => toggleSection('session')}>
+              {/* Tab Navigation */}
+              <div className="flex border-b border-gray-200">
+                {[
+                  { id: 'sheets', icon: Users, label: 'Characters' },
+                  { id: 'notes', icon: StickyNote, label: 'Notes' },
+                  { id: 'counters', icon: Settings, label: 'Counters' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-1 py-2 px-3 text-sm transition-colors ${
+                      activeTab === tab.id 
+                        ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    <tab.icon size={14} />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab Content */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {activeTab === 'sheets' && (
+                  <div>
+                    {/* Template Selection */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Character Template
+                      </label>
+                      <select
+                        value={selectedTemplate}
+                        onChange={(e) => setSelectedTemplate(e.target.value)}
+                        className="w-full p-2 border border-gray-200 rounded-lg text-sm"
+                      >
+                        {Object.entries(CHARACTER_TEMPLATES).map(([key, template]) => (
+                          <option key={key} value={key}>{template.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Add Character Button */}
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold">Character Sheets</h3>
+                      <button
+                        onClick={addCharacter}
+                        className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                      >
+                        <Plus size={14} />
+                        Add
+                      </button>
+                    </div>
+                    
+                    {/* Character List */}
+                    {characters.map(char => {
+                      const template = CHARACTER_TEMPLATES[char.template];
+                      return (
+                        <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <input
+                              type="text"
+                              value={char.data.name || 'Unnamed Character'}
+                              onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
+                              className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2"
+                            />
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => removeCharacter(char.id)}
+                                className="text-red-500 hover:text-red-700 p-1"
+                                title="Remove character"
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </div>
-                          ))}
-                        </div>
-                        {char.template === 'custom' && (
-                          <div className="mt-4">
-                            {char.data.customFields && char.data.customFields.map(field => (
-                              <div key={field.id} className="flex items-center gap-2 mb-2">
+                          </div>
+                          
+                          <div className="text-xs text-gray-500 mb-2">Template: {template.name}</div>
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                            {template.fields.slice(1).map(field => (
+                              <div key={field.name} className="flex items-center justify-between">
+                                <span className="text-xs font-medium">{field.label}:</span>
                                 <input
-                                  type="text"
-                                  value={field.name}
-                                  onChange={(e) => updateCustomField(char.id, field.id, 'name', e.target.value)}
-                                  className="flex-1 p-1 border border-gray-200 rounded text-xs"
+                                  type={field.type}
+                                  value={char.data[field.name] || field.default}
+                                  onChange={(e) => updateCharacter(char.id, field.name, field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
+                                  className="w-16 p-1 border border-gray-200 rounded text-center text-xs"
                                 />
-                                <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value - 1)} className="w-6 h-6 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center">
-                                  <Minus size={12} />
-                                </button>
-                                <input
-                                  type="number"
-                                  value={field.value}
-                                  onChange={(e) => updateCustomField(char.id, field.id, 'value', parseInt(e.target.value) || 0)}
-                                  className="w-12 p-1 border border-gray-200 rounded text-center text-xs"
-                                />
-                                <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value + 1)} className="w-6 h-6 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center">
-                                  <Plus size={12} />
-                                </button>
-                                <button onClick={() => removeCustomField(char.id, field.id)} className="text-red-500 hover:text-red-700">
-                                  <Trash2 size={12} />
-                                </button>
                               </div>
                             ))}
-                            <button onClick={() => addCustomField(char.id)} className="mt-2 flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">
-                              <Plus size={14} />
-                              Add Stat
-                            </button>
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  
-                  {characters.length === 0 && (
-                    <p className="text-gray-500 text-center py-8">No characters created yet.</p>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'notes' && (
-                <div>
-                  <h3 className="font-semibold mb-3">Game Notes</h3>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Add your game notes here...&#10;&#10;• Track story progress&#10;• Note important clues&#10;• Record decisions made"
-                    className="w-full h-64 p-3 border border-gray-200 rounded-lg resize-none text-sm"
-                  />
-                </div>
-              )}
-
-              {activeTab === 'counters' && (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold">Counters</h3>
-                    <button
-                      onClick={addCounter}
-                      className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
-                    >
-                      <Plus size={14} />
-                      Add
-                    </button>
+                          {char.template === 'custom' && (
+                            <div className="mt-4">
+                              {char.data.customFields && char.data.customFields.map(field => (
+                                <div key={field.id} className="flex items-center gap-2 mb-2">
+                                  <input
+                                    type="text"
+                                    value={field.name}
+                                    onChange={(e) => updateCustomField(char.id, field.id, 'name', e.target.value)}
+                                    className="flex-1 p-1 border border-gray-200 rounded text-xs"
+                                  />
+                                  <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value - 1)} className="w-6 h-6 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center">
+                                    <Minus size={12} />
+                                  </button>
+                                  <input
+                                    type="number"
+                                    value={field.value}
+                                    onChange={(e) => updateCustomField(char.id, field.id, 'value', parseInt(e.target.value) || 0)}
+                                    className="w-12 p-1 border border-gray-200 rounded text-center text-xs"
+                                  />
+                                  <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value + 1)} className="w-6 h-6 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center">
+                                    <Plus size={12} />
+                                  </button>
+                                  <button onClick={() => removeCustomField(char.id, field.id)} className="text-red-500 hover:text-red-700">
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              ))}
+                              <button onClick={() => addCustomField(char.id)} className="mt-2 flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">
+                                <Plus size={14} />
+                                Add Stat
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    
+                    {characters.length === 0 && (
+                      <p className="text-gray-500 text-center py-8">No characters created yet.</p>
+                    )}
                   </div>
+                )}
 
-                  {counters.map(counter => (
-                    <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <input
-                          type="text"
-                          value={counter.name}
-                          onChange={(e) => updateCounter(counter.id, 'name', e.target.value)}
-                          className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2"
-                        />
-                        <button
-                          onClick={() => removeCounter(counter.id)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <button
-                          onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) - 1)}
-                          className="w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center"
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="text-xl font-bold" style={{ color: counter.color }}>
-                          {counter.value}
-                        </span>
-                        <button
-                          onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) + 1)}
-                          className="w-8 h-8 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center"
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {counters.length === 0 && (
-                    <p className="text-gray-500 text-center py-8">No counters created yet.</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </CollapsibleSection>
-
-          {/* Enhanced Dice Section */}
-          <CollapsibleSection title="Advanced Dice Roller" isOpen={openSections.dice} onToggle={() => toggleSection('dice')}>
-            {/* Dice Expression Input */}
-            <div className="mb-3">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={diceExpression}
-                  onChange={(e) => setDiceExpression(e.target.value)}
-                  placeholder="e.g., 2d6+3, 1d20, 4d8-1"
-                  className="flex-1 p-2 border border-gray-200 rounded text-sm"
-                />
-                <button
-                  onClick={rollDiceExpression}
-                  className="px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center gap-1"
-                >
-                  <Dice1 size={14} />
-                  Roll
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Dice Buttons */}
-            <div className="grid grid-cols-3 gap-1 mb-3">
-              {['1d4', '1d6', '1d8', '1d10', '1d12', '1d20'].map(dice => (
-                <button
-                  key={dice}
-                  onClick={() => {
-                    setDiceExpression(dice);
-                    const result = DiceParser.roll(dice);
-                    setDiceResult(result);
-                  }}
-                  className="py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-xs font-medium"
-                >
-                  {dice}
-                </button>
-              ))}
-            </div>
-            
-            {/* Dice Result Display */}
-            {diceResult && (
-              <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
-                {diceResult.error ? (
-                  <div className="text-center">
-                    <div className="text-red-600 font-medium">{diceResult.error}</div>
+                {activeTab === 'notes' && (
+                  <div>
+                    <h3 className="font-semibold mb-3">Game Notes</h3>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Add your game notes here...&#10;&#10;• Track story progress&#10;• Note important clues&#10;• Record decisions made"
+                      className="w-full h-64 p-3 border border-gray-200 rounded-lg resize-none text-sm"
+                    />
                   </div>
-                ) : (
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600">{diceResult.finalTotal}</div>
-                    <div className="text-xs text-purple-800 font-medium">{diceResult.expression}</div>
-                    <div className="text-xs text-purple-600 mt-1">
-                      {diceResult.breakdown}
+                )}
+
+                {activeTab === 'counters' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold">Counters</h3>
+                      <button
+                        onClick={addCounter}
+                        className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                      >
+                        <Plus size={14} />
+                        Add
+                      </button>
                     </div>
-                    {diceResult.results.length > 1 && (
-                      <div className="flex justify-center gap-1 mt-2">
-                        {diceResult.results.map((roll, index) => (
-                          <span 
-                            key={index} 
-                            className="inline-block w-6 h-6 bg-purple-200 text-purple-800 rounded text-xs leading-6 font-bold"
+
+                    {counters.map(counter => (
+                      <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <input
+                            type="text"
+                            value={counter.name}
+                            onChange={(e) => updateCounter(counter.id, 'name', e.target.value)}
+                            className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2"
+                          />
+                          <button
+                            onClick={() => removeCounter(counter.id)}
+                            className="text-red-500 hover:text-red-700"
                           >
-                            {roll}
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <button
+                            onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) - 1)}
+                            className="w-8 h-8 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <span className="text-xl font-bold" style={{ color: counter.color }}>
+                            {counter.value}
                           </span>
-                        ))}
+                          <button
+                            onClick={() => updateCounter(counter.id, 'value', (counter.value || 0) + 1)}
+                            className="w-8 h-8 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
                       </div>
+                    ))}
+                    
+                    {counters.length === 0 && (
+                      <p className="text-gray-500 text-center py-8">No counters created yet.</p>
                     )}
                   </div>
                 )}
               </div>
-            )}
-          </CollapsibleSection>
+            </CollapsibleSection>
+
+            {/* Enhanced Dice Section */}
+            <CollapsibleSection title="Advanced Dice Roller" isOpen={openSections.dice} onToggle={() => toggleSection('dice')}>
+              {/* Dice Expression Input */}
+              <div className="mb-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={diceExpression}
+                    onChange={(e) => setDiceExpression(e.target.value)}
+                    placeholder="e.g., 2d6+3, 1d20, 4d8-1"
+                    className="flex-1 p-2 border border-gray-200 rounded text-sm"
+                  />
+                  <button
+                    onClick={rollDiceExpression}
+                    className="px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center gap-1"
+                  >
+                    <Dice1 size={14} />
+                    Roll
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Dice Buttons */}
+              <div className="grid grid-cols-3 gap-1 mb-3">
+                {['1d4', '1d6', '1d8', '1d10', '1d12', '1d20'].map(dice => (
+                  <button
+                    key={dice}
+                    onClick={() => {
+                      setDiceExpression(dice);
+                      const result = DiceParser.roll(dice);
+                      setDiceResult(result);
+                    }}
+                    className="py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-xs font-medium"
+                  >
+                    {dice}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Dice Result Display */}
+              {diceResult && (
+                <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  {diceResult.error ? (
+                    <div className="text-center">
+                      <div className="text-red-600 font-medium">{diceResult.error}</div>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">{diceResult.finalTotal}</div>
+                      <div className="text-xs text-purple-800 font-medium">{diceResult.expression}</div>
+                      <div className="text-xs text-purple-600 mt-1">
+                        {diceResult.breakdown}
+                      </div>
+                      {diceResult.results.length > 1 && (
+                        <div className="flex justify-center gap-1 mt-2">
+                          {diceResult.results.map((roll, index) => (
+                            <span 
+                              key={index} 
+                              className="inline-block w-6 h-6 bg-purple-200 text-purple-800 rounded text-xs leading-6 font-bold"
+                            >
+                              {roll}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CollapsibleSection>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col relative">
         {/* Toolbar */}
         <div className="bg-white border-b border-gray-200 p-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsSidebarVisible(!isSidebarVisible)}
+              className="p-2 rounded-md hover:bg-gray-100"
+              title={isSidebarVisible ? 'Hide Sidebar' : 'Show Sidebar'}
+            >
+              <PanelLeft size={16} />
+            </button>
+            <div className="h-6 w-px bg-gray-200"></div>
+
             {/* PDF Navigation */}
             {activePdf && (
               <div className="flex items-center gap-2">
@@ -1444,26 +1454,129 @@ const GamebookApp = () => {
 
             <div className="h-6 w-px bg-gray-300"></div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Tool:</span>
-              <span className="font-medium capitalize text-sm">{selectedTool}</span>
-              {selectedTool === 'token' ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-lg" style={{ color: selectedTokenColor }}>
-                    {TOKEN_SHAPES[selectedTokenShape]?.icon}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {TOKEN_SHAPES[selectedTokenShape]?.name}
-                  </span>
+            {/* Tool Selector Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setActiveDropdown(activeDropdown === 'tools' ? null : 'tools')}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm"
+              >
+                <span className="flex-shrink-0">
+                  {(() => {
+                    const Icon = tools.find(t => t.id === selectedTool)?.icon;
+                    return Icon ? <Icon size={16} /> : null;
+                  })()}
+                </span>
+                <span className="font-medium capitalize">{selectedTool}</span>
+                <ChevronDown size={14} className="text-gray-500" />
+              </button>
+              {activeDropdown === 'tools' && (
+                <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                  {tools.map(tool => (
+                    <button
+                      key={tool.id}
+                      onClick={() => {
+                        setSelectedTool(tool.id);
+                        setActiveDropdown(null);
+                      }}
+                      className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      <tool.icon size={16} />
+                      {tool.label}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div 
-                  className="w-4 h-4 rounded border border-gray-300"
-                  style={{ backgroundColor: selectedColor }}
-                  title={`Color: ${selectedColor}`}
-                />
               )}
             </div>
+
+            {/* Conditional Color Picker */}
+            {!['select', 'eraser', 'token'].includes(selectedTool) && (
+              <div className="relative">
+                <button
+                  onClick={() => setActiveDropdown(activeDropdown === 'color' ? null : 'color')}
+                  className="w-8 h-8 rounded-md hover:bg-gray-100 border border-gray-200 flex items-center justify-center"
+                  title="Select color"
+                >
+                  <div className="w-5 h-5 rounded" style={{ backgroundColor: selectedColor }} />
+                </button>
+                {activeDropdown === 'color' && (
+                  <div className="absolute top-full mt-2 p-2 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                    <div className="grid grid-cols-4 gap-1">
+                      {colors.map(color => (
+                        <button
+                          key={color}
+                          onClick={() => {
+                            setSelectedColor(color);
+                            setActiveDropdown(null);
+                          }}
+                          className={`w-7 h-7 rounded border-2 transition-transform hover:scale-110 ${selectedColor === color ? 'border-blue-500' : 'border-transparent'}`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Conditional Token Controls */}
+            {selectedTool === 'token' && (
+              <>
+                {/* Token Shape */}
+                <div className="relative">
+                  <button
+                    onClick={() => setActiveDropdown(activeDropdown === 'tokenShape' ? null : 'tokenShape')}
+                    className="flex items-center justify-center w-10 h-8 rounded-md hover:bg-gray-100 border border-gray-200 text-xl"
+                    title="Select token shape"
+                  >
+                    {TOKEN_SHAPES[selectedTokenShape].icon}
+                  </button>
+                  {activeDropdown === 'tokenShape' && (
+                    <div className="absolute top-full mt-2 p-2 bg-white rounded-md shadow-lg z-20 border">
+                      <div className="grid grid-cols-3 gap-1">
+                        {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
+                          <button key={key} onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); }} className={`p-2 rounded border text-xl ${selectedTokenShape === key ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}>
+                            {shape.icon}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Token Color */}
+                <div className="relative">
+                  <button
+                    onClick={() => setActiveDropdown(activeDropdown === 'tokenColor' ? null : 'tokenColor')}
+                    className="w-8 h-8 rounded-md hover:bg-gray-100 border border-gray-200 flex items-center justify-center"
+                    title="Select token color"
+                  >
+                    <div className="w-5 h-5 rounded" style={{ backgroundColor: selectedTokenColor }} />
+                  </button>
+                  {activeDropdown === 'tokenColor' && (
+                    <div className="absolute top-full mt-2 p-2 bg-white rounded-md shadow-lg z-20 border">
+                      <div className="grid grid-cols-5 gap-1">
+                        {TOKEN_COLORS.map(color => (
+                          <button key={color.value} onClick={() => { setSelectedTokenColor(color.value); setActiveDropdown(null); }} className={`w-7 h-7 rounded border-2 ${selectedTokenColor === color.value ? 'border-blue-500' : 'border-gray-300'}`} style={{ backgroundColor: color.value }} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Token Size */}
+                <div className="flex items-center gap-2">
+                  <Circle size={14} className="text-gray-500" />
+                  <input
+                    type="range"
+                    min="5"
+                    max="50"
+                    value={tokenSize}
+                    onChange={(e) => setTokenSize(parseInt(e.target.value))}
+                    className="w-24"
+                  />
+                </div>
+              </>
+            )}
 
             {fabricCanvas.current && (
               <div className="text-sm text-gray-600">
@@ -1471,79 +1584,79 @@ const GamebookApp = () => {
               </div>
             )}
           </div>
+        </div>
 
-          <div className="relative">
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="p-2 rounded hover:bg-gray-100"
-            >
-              <Menu size={16} />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20">
-                <button
-                  onClick={() => {
-                    handleNewSession();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <FilePlus size={14} /> New Session
-                </button>
-                <button
-                  onClick={() => {
-                    fileInputRef.current?.click();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <Upload size={14} /> Load PDFs
-                </button>
-                <button
-                  onClick={() => {
-                    sessionFileInputRef.current?.click();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <Upload size={14} /> Load Session
-                </button>
-                <button
-                  onClick={() => {
-                    handleSaveSession();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <Save size={14} /> Save Session
-                </button>
-                <button
-                  onClick={() => {
-                    fabricCanvas.current?.clear();
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <RotateCcw size={14} /> Clear Page Annotations
-                </button>
-              </div>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handleFileUpload}
-              className="hidden"
-              multiple
-            />
-            <input
-              ref={sessionFileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleLoadSession}
-              className="hidden"
-            />
-          </div>
+        <div className="absolute top-3 right-3 z-30">
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="p-2 rounded hover:bg-gray-100 bg-white/80 backdrop-blur-sm"
+          >
+            <Menu size={16} />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20">
+              <button
+                onClick={() => {
+                  handleNewSession();
+                  setMenuOpen(false);
+                }}
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <FilePlus size={14} /> New Session
+              </button>
+              <button
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setMenuOpen(false);
+                }}
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Upload size={14} /> Load PDFs
+              </button>
+              <button
+                onClick={() => {
+                  sessionFileInputRef.current?.click();
+                  setMenuOpen(false);
+                }}
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Upload size={14} /> Load Session
+              </button>
+              <button
+                onClick={() => {
+                  handleSaveSession();
+                  setMenuOpen(false);
+                }}
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Save size={14} /> Save Session
+              </button>
+              <button
+                onClick={() => {
+                  fabricCanvas.current?.clear();
+                  setMenuOpen(false);
+                }}
+                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <RotateCcw size={14} /> Clear Page Annotations
+              </button>
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            onChange={handleFileUpload}
+            className="hidden"
+            multiple
+          />
+          <input
+            ref={sessionFileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleLoadSession}
+            className="hidden"
+          />
         </div>
         
         {/* PDF Tabs */}
