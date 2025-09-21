@@ -149,10 +149,10 @@ class MockFabricCanvas {
     } else if (this.tool === 'draw') {
       this.isDrawing = true;
       this.startPath(x / this.scale, y / this.scale);
-    } else if (this.tool === 'rectangle') { // ADD THIS BLOCK
+    } else if (this.tool === 'rectangle') {
       this.isDrawing = true;
       this.startPos = { x: x / this.scale, y: y / this.scale };
-    } else if (this.tool === 'text') { // ADD THIS BLOCK
+    } else if (this.tool === 'text') {
       const text = prompt('Enter text:');
       if (text) {
         this.addObject('text', {
