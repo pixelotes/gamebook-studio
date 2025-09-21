@@ -78,6 +78,7 @@ class MockFabricCanvas {
     this.selectedToken = null;
     this.tokenSize = 20;
     this.scale = 1;
+    this.startPos = { x: 0, y: 0 };
     this.setupEvents();
   }
   
@@ -148,6 +149,22 @@ class MockFabricCanvas {
     } else if (this.tool === 'draw') {
       this.isDrawing = true;
       this.startPath(x / this.scale, y / this.scale);
+    } else if (this.tool === 'rectangle') { // ADD THIS BLOCK
+      this.isDrawing = true;
+      this.startPos = { x: x / this.scale, y: y / this.scale };
+    } else if (this.tool === 'text') { // ADD THIS BLOCK
+      const text = prompt('Enter text:');
+      if (text) {
+        this.addObject('text', {
+          type: 'text',
+          x: x / this.scale,
+          y: y / this.scale,
+          content: text,
+          color: this.selectedColor,
+          font: '16px Arial',
+          id: Date.now()
+        });
+      }
     }
   }
 
@@ -165,10 +182,30 @@ class MockFabricCanvas {
     }
   }
 
-  handleMouseUp() {
-    this.isDragging = false;
-    this.dragTarget = null;
+  handleMouseUp(e) {
+    if (this.isDrawing && this.tool === 'rectangle') {
+      const rect = this.canvas.getBoundingClientRect();
+      const endX = (e.clientX - rect.left) / this.scale;
+      const endY = (e.clientY - rect.top) / this.scale;
+
+      const x = Math.min(this.startPos.x, endX);
+      const y = Math.min(this.startPos.y, endY);
+      const width = Math.abs(this.startPos.x - endX);
+      const height = Math.abs(this.startPos.y - endY);
+
+      if (width > 2 && height > 2) { // Prevents creating tiny accidental rectangles
+        this.addObject('drawings', {
+          type: 'rectangle',
+          x, y, width, height,
+          color: this.selectedColor,
+          id: Date.now()
+        });
+      }
+    }
+
     this.isDrawing = false;
+    this.dragTarget = null;
+    this.startPos = null; // Reset start position
   }
 
   handleDoubleClick(e) {
@@ -327,6 +364,14 @@ class MockFabricCanvas {
             }
           }
           this.ctx.stroke();
+        } else if (obj.type === 'rectangle') {
+          this.ctx.strokeStyle = obj.color;
+          this.ctx.lineWidth = 3;
+          this.ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
+        } else if (obj.type === 'text') {
+          this.ctx.fillStyle = obj.color;
+          this.ctx.font = obj.font || '16px Arial';
+          this.ctx.fillText(obj.content, obj.x, obj.y);
         }
         
         this.ctx.restore();
