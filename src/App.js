@@ -553,6 +553,7 @@ const GamebookApp = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [layerStateKey, setLayerStateKey] = useState(0);
 
   const [openSections, setOpenSections] = useState({
     tools: true,
@@ -882,6 +883,25 @@ const GamebookApp = () => {
     setCounters(counters.filter(counter => counter.id !== id));
   };
 
+  const handleToggleVisibility = (layerId) => {
+    fabricCanvas.current?.toggleLayerVisibility(layerId);
+    setLayerStateKey(prev => prev + 1); // Force UI update
+  };
+
+  const handleSetActiveLayer = (layerId) => {
+    fabricCanvas.current?.setActiveLayer(layerId);
+    setLayerStateKey(prev => prev + 1); // Force UI update
+    setActiveDropdown(null); // Close dropdown on selection
+  };
+
+  const handleClearLayer = (layerId) => {
+    // Add a confirmation dialog for a better user experience
+    if (window.confirm('Are you sure you want to clear all items from this layer? This action cannot be undone.')) {
+      fabricCanvas.current?.clearLayer(layerId);
+      setLayerStateKey(prev => prev + 1); // Force UI update
+    }
+  };
+
   // Layer management
   const toggleLayerVisibility = (layerId) => {
     if (fabricCanvas.current) {
@@ -930,7 +950,186 @@ const GamebookApp = () => {
             <p className="text-sm text-gray-600">Digital tabletop companion</p>
           </div>
           
-          <div className="flex-1 overflow-y-auto">         
+          <div className="flex-1 overflow-y-auto">
+            {/* Tools & Token Palette - HIDDEN
+            <CollapsibleSection title="Drawing Tools" isOpen={openSections.tools} onToggle={() => toggleSection('tools')}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setShowTokenPalette(!showTokenPalette)}
+                    className={`p-1 rounded ${showTokenPalette ? 'bg-green-500 text-white' : 'bg-gray-100'}`}
+                    title="Toggle token palette"
+                  >
+                    <Circle size={16} />
+                  </button>
+                  <button
+                    onClick={() => setShowLayers(!showLayers)}
+                    className={`p-1 rounded ${showLayers ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+                    title="Toggle layers panel"
+                  >
+                    <Layers size={16} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-5 gap-2 mb-3">
+                {tools.map(tool => (
+                  <button
+                    key={tool.id}
+                    onClick={() => setSelectedTool(tool.id)}
+                    className={`p-2 rounded-lg border transition-colors ${
+                      selectedTool === tool.id 
+                        ? 'bg-blue-500 text-white border-blue-500' 
+                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    }`}
+                    title={tool.label}
+                  >
+                    <tool.icon size={16} />
+                  </button>
+                ))}
+              </div>
+
+              {showTokenPalette && (
+                <div className="mb-3 p-3 border border-green-200 rounded-lg bg-green-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-sm text-green-800">Game Tokens</h4>
+                    <span className="text-xs text-green-600">Click to select, place on PDF</span>
+                  </div>
+                  
+                  <div className="mb-3">
+                    <p className="text-xs font-medium text-gray-600 mb-2">Shapes</p>
+                    <div className="grid grid-cols-6 gap-2">
+                      {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            setSelectedTokenShape(key);
+                            setSelectedTool('token');
+                          }}
+                          className={`p-2 rounded border text-lg flex items-center justify-center transition-colors ${
+                            selectedTokenShape === key && selectedTool === 'token'
+                              ? 'bg-green-500 text-white border-green-500'
+                              : 'bg-white border-gray-200 hover:bg-gray-50'
+                          }`}
+                          title={shape.name}
+                        >
+                          {shape.icon}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-gray-600 mb-2">Colors</p>
+                    <div className="grid grid-cols-5 gap-1">
+                      {TOKEN_COLORS.map(color => (
+                        <button
+                          key={color.value}
+                          onClick={() => {
+                            setSelectedTokenColor(color.value);
+                            setSelectedTool('token');
+                          }}
+                          className={`w-8 h-8 rounded border-2 transition-all ${
+                            selectedTokenColor === color.value && selectedTool === 'token'
+                              ? 'border-green-600 scale-110'
+                              : color.value === '#ffffff' 
+                                ? 'border-gray-400'
+                                : 'border-gray-300'
+                          }`}
+                          style={{ backgroundColor: color.value }}
+                          title={color.name}
+                        >
+                          {color.value === '#ffffff' && <span className="text-gray-400 text-xs">○</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-gray-600 mb-2">Size</p>
+                    <input
+                      type="range"
+                      min="5"
+                      max="50"
+                      value={tokenSize}
+                      onChange={(e) => setTokenSize(parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  <div className="mt-3 p-2 bg-white rounded border border-green-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">Preview:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg" style={{ color: selectedTokenColor }}>
+                          {TOKEN_SHAPES[selectedTokenShape]?.icon}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {TOKEN_SHAPES[selectedTokenShape]?.name} • {TOKEN_COLORS.find(c => c.value === selectedTokenColor)?.name}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!showTokenPalette && (
+                <div className="mb-3">
+                  <p className="text-xs font-medium text-gray-600 mb-2">Colors</p>
+                  <div className="grid grid-cols-8 gap-1">
+                    {colors.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => setSelectedColor(color)}
+                        className={`w-6 h-6 rounded border-2 ${
+                          selectedColor === color ? 'border-gray-800' : 'border-gray-300'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {showLayers && fabricCanvas.current && (
+                <div className="border border-gray-200 rounded-lg p-2">
+                  <p className="text-xs font-medium text-gray-600 mb-2">Layers</p>
+                  {fabricCanvas.current.layers.map(layer => (
+                    <div key={layer.id} className="flex items-center justify-between py-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleLayerVisibility(layer.id)}
+                          className={`p-1 rounded ${layer.visible ? 'text-blue-500' : 'text-gray-400'}`}
+                        >
+                          {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                        </button>
+                        <button
+                          onClick={() => setActiveLayer(layer.id)}
+                          className={`text-xs ${fabricCanvas.current.activeLayer === layer.id ? 'font-bold' : ''}`}
+                        >
+                          {layer.name} ({layer.objects.length})
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => clearLayer(layer.id)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                        title="Clear layer"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-500">
+                    <p>💡 <strong>Select tool:</strong> Drag tokens around</p>
+                    <p>💡 <strong>Double-click:</strong> Remove tokens</p>
+                  </div>
+                </div>
+              )}
+            </CollapsibleSection>
+            */}
+            
             <CollapsibleSection title="Game Session" isOpen={openSections.session} onToggle={() => toggleSection('session')}>
               {/* Tab Navigation */}
               <div className="flex border-b border-gray-200">
@@ -1273,148 +1472,198 @@ const GamebookApp = () => {
 
             <div className="h-6 w-px bg-gray-300"></div>
 
-            {/* Tool Selector Dropdown */}
             <div className="relative">
               <button
-                onClick={() => setActiveDropdown(activeDropdown === 'tools' ? null : 'tools')}
+                onClick={() => setActiveDropdown(activeDropdown === 'layers' ? null : 'layers')}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm"
+                title="Manage Layers"
+                disabled={!activePdf}
               >
-                <span className="flex-shrink-0">
-                  {(() => {
-                    const Icon = tools.find(t => t.id === selectedTool)?.icon;
-                    return Icon ? <Icon size={16} /> : null;
-                  })()}
-                </span>
-                <span className="font-medium capitalize">{selectedTool}</span>
+                <Layers size={16} />
+                <span>Layers</span>
                 <ChevronDown size={14} className="text-gray-500" />
               </button>
-              {activeDropdown === 'tools' && (
-                <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
-                  {tools.map(tool => (
-                    <button
-                      key={tool.id}
-                      onClick={() => {
-                        setSelectedTool(tool.id);
-                        setActiveDropdown(null);
-                      }}
-                      className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                    >
-                      <tool.icon size={16} />
-                      {tool.label}
-                    </button>
+              {activeDropdown === 'layers' && fabricCanvas.current && (
+                <div className="absolute top-full mt-2 w-64 bg-white rounded-md shadow-lg z-20 border border-gray-200 p-2 space-y-1">
+                  <div className="px-2 py-1 text-xs font-bold text-gray-500 border-b -mx-2 mb-1 pb-2">
+                    Active Layer: <span className="text-blue-600">{fabricCanvas.current.layers.find(l => l.id === fabricCanvas.current.activeLayer)?.name}</span>
+                  </div>
+                  {fabricCanvas.current.layers.map(layer => (
+                    <div key={layer.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-gray-100">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleVisibility(layer.id)}
+                          className={`p-1 rounded ${layer.visible ? 'text-blue-500' : 'text-gray-400'}`}
+                          title={layer.visible ? 'Hide Layer' : 'Show Layer'}
+                        >
+                          {layer.visible ? <Eye size={16} /> : <EyeOff size={16} />}
+                        </button>
+                        <button
+                          onClick={() => handleSetActiveLayer(layer.id)}
+                          className={`text-sm text-left ${fabricCanvas.current.activeLayer === layer.id ? 'font-bold' : 'text-gray-700'}`}
+                        >
+                          {layer.name} ({layer.objects.length})
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => handleClearLayer(layer.id)}
+                        className="text-red-500 hover:text-red-700 p-1"
+                        title="Clear all objects from this layer"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Conditional Color Picker */}
-            {!['select', 'eraser', 'token'].includes(selectedTool) && (
+            <div className="h-6 w-px bg-gray-300"></div>
+
+            {/* Tool Selector, Color, and Token Controls Container */}
+            <div className="flex items-center gap-2"> 
+              {/* Tool Selector Dropdown */}
               <div className="relative">
                 <button
-                  onClick={() => setActiveDropdown(activeDropdown === 'color' ? null : 'color')}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
-                  title="Select color"
+                  onClick={() => setActiveDropdown(activeDropdown === 'tools' ? null : 'tools')}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm"
                 >
-                  <div className="w-4 h-4 rounded border border-gray-400" style={{ backgroundColor: selectedColor }} />
-                  <span className="font-medium capitalize">
-                    {TOKEN_COLORS.find(c => c.value === selectedColor)?.name || 'Color'}
+                  <span className="flex-shrink-0">
+                    {(() => {
+                      const Icon = tools.find(t => t.id === selectedTool)?.icon;
+                      return Icon ? <Icon size={16} /> : null;
+                    })()}
                   </span>
+                  <span className="font-medium capitalize">{selectedTool}</span>
                   <ChevronDown size={14} className="text-gray-500" />
                 </button>
-                {activeDropdown === 'color' && (
+                {activeDropdown === 'tools' && (
                   <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
-                    {TOKEN_COLORS.map(color => (
+                    {tools.map(tool => (
                       <button
-                        key={color.value}
+                        key={tool.id}
                         onClick={() => {
-                          setSelectedColor(color.value);
+                          setSelectedTool(tool.id);
                           setActiveDropdown(null);
                         }}
                         className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       >
-                        <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }}/>
-                        {color.name}
+                        <tool.icon size={16} />
+                        {tool.label}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
-            )}
 
-            {/* Conditional Token Controls */}
-            {selectedTool === 'token' && (
-              <>
-                {/* Token Shape */}
+              {/* Conditional Color Picker */}
+              {!['select', 'eraser', 'token'].includes(selectedTool) && (
                 <div className="relative">
                   <button
-                    onClick={() => setActiveDropdown(activeDropdown === 'tokenShape' ? null : 'tokenShape')}
+                    onClick={() => setActiveDropdown(activeDropdown === 'color' ? null : 'color')}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
-                    title="Select token shape"
+                    title="Select color"
                   >
-                    <span className="text-lg">{TOKEN_SHAPES[selectedTokenShape].icon}</span>
-                    <span className="font-medium capitalize">{TOKEN_SHAPES[selectedTokenShape].name}</span>
-                    <ChevronDown size={14} className="text-gray-500" />
-                  </button>
-                  {activeDropdown === 'tokenShape' && (
-                    <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
-                      {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
-                        <button 
-                          key={key} 
-                          onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); }} 
-                          className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          <span className="text-lg w-5 text-center">{shape.icon}</span>
-                          {shape.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Token Color */}
-                <div className="relative">
-                  <button
-                    onClick={() => setActiveDropdown(activeDropdown === 'tokenColor' ? null : 'tokenColor')}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
-                    title="Select token color"
-                  >
-                    <div className="w-4 h-4 rounded border border-gray-400" style={{ backgroundColor: selectedTokenColor }} />
+                    <div className="w-4 h-4 rounded border border-gray-400" style={{ backgroundColor: selectedColor }} />
                     <span className="font-medium capitalize">
-                      {TOKEN_COLORS.find(c => c.value === selectedTokenColor)?.name}
+                      {TOKEN_COLORS.find(c => c.value === selectedColor)?.name || 'Color'}
                     </span>
                     <ChevronDown size={14} className="text-gray-500" />
                   </button>
-                  {activeDropdown === 'tokenColor' && (
+                  {activeDropdown === 'color' && (
                     <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
                       {TOKEN_COLORS.map(color => (
-                        <button 
-                          key={color.value} 
-                          onClick={() => { setSelectedTokenColor(color.value); setActiveDropdown(null); }}
+                        <button
+                          key={color.value}
+                          onClick={() => {
+                            setSelectedColor(color.value);
+                            setActiveDropdown(null);
+                          }}
                           className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         >
-                          <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }} />
+                          <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }}/>
                           {color.name}
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
+              )}
 
-                {/* Token Size */}
-                <div className="flex items-center gap-2">
-                  <Circle size={14} className="text-gray-500" />
-                  <input
-                    type="range"
-                    min="5"
-                    max="50"
-                    value={tokenSize}
-                    onChange={(e) => setTokenSize(parseInt(e.target.value))}
-                    className="w-24"
-                  />
-                </div>
-              </>
-            )}
+              {/* Conditional Token Controls */}
+              {selectedTool === 'token' && (
+                <>
+                  {/* Token Shape */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setActiveDropdown(activeDropdown === 'tokenShape' ? null : 'tokenShape')}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
+                      title="Select token shape"
+                    >
+                      <span className="text-lg">{TOKEN_SHAPES[selectedTokenShape].icon}</span>
+                      <span className="font-medium capitalize">{TOKEN_SHAPES[selectedTokenShape].name}</span>
+                      <ChevronDown size={14} className="text-gray-500" />
+                    </button>
+                    {activeDropdown === 'tokenShape' && (
+                      <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                        {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
+                          <button 
+                            key={key} 
+                            onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); }} 
+                            className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <span className="text-lg w-5 text-center">{shape.icon}</span>
+                            {shape.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
+                  {/* Token Color */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setActiveDropdown(activeDropdown === 'tokenColor' ? null : 'tokenColor')}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between"
+                      title="Select token color"
+                    >
+                      <div className="w-4 h-4 rounded border border-gray-400" style={{ backgroundColor: selectedTokenColor }} />
+                      <span className="font-medium capitalize">
+                        {TOKEN_COLORS.find(c => c.value === selectedTokenColor)?.name}
+                      </span>
+                      <ChevronDown size={14} className="text-gray-500" />
+                    </button>
+                    {activeDropdown === 'tokenColor' && (
+                      <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                        {TOKEN_COLORS.map(color => (
+                          <button 
+                            key={color.value} 
+                            onClick={() => { setSelectedTokenColor(color.value); setActiveDropdown(null); }}
+                            className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }} />
+                            {color.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Token Size */}
+                  <div className="flex items-center gap-2">
+                    <Circle size={14} className="text-gray-500" />
+                    <input
+                      type="range"
+                      min="5"
+                      max="50"
+                      value={tokenSize}
+                      onChange={(e) => setTokenSize(parseInt(e.target.value))}
+                      className="w-24"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
