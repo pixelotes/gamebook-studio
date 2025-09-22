@@ -1,7 +1,36 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 
-const Counters = ({ counters, addCounter, updateCounter, removeCounter }) => {
+const Counters = () => {
+  const { state, dispatch } = useContext(AppContext);
+  const { counters } = state;
+
+  const addCounter = () => {
+    dispatch({ type: 'SET_STATE', payload: {
+      counters: [...counters, { 
+        id: Date.now(), 
+        name: `Counter ${counters.length + 1}`, 
+        value: 0,
+        color: '#3b82f6'
+      }]
+    }});
+  };
+
+  const updateCounter = (id, field, value) => {
+    dispatch({ type: 'SET_STATE', payload: {
+      counters: counters.map(counter => 
+        counter.id === id ? { ...counter, [field]: value } : counter
+      )
+    }});
+  };
+
+  const removeCounter = (id) => {
+    dispatch({ type: 'SET_STATE', payload: {
+      counters: counters.filter(counter => counter.id !== id)
+    }});
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">

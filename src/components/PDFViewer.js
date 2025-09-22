@@ -1,7 +1,12 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { AppContext } from '../state/appState';
 import { FileText } from 'lucide-react';
 
-const PDFViewer = ({ activePdf, pdfCanvasRef, overlayCanvasRef, selectedTool }) => {
+const PDFViewer = ({ pdfCanvasRef, overlayCanvasRef }) => {
+  // --- FIX: Destructure `activePdf` from the context root, not `state` ---
+  const { state, activePdf } = useContext(AppContext);
+  const { selectedTool } = state;
+
   return (
     <div className="flex-1 bg-gray-50 relative overflow-auto p-4">
       {activePdf ? (

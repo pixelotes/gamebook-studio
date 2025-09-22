@@ -1,8 +1,59 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
 
-const CharacterSheet = ({ characters, updateCharacter, removeCharacter, addCustomField, updateCustomField, removeCustomField }) => {
+const CharacterSheet = () => {
+  const { state, dispatch } = useContext(AppContext);
+  const { characters } = state;
+
+  const updateCharacter = (id, field, value) => {
+    dispatch({ type: 'UPDATE_CHARACTER', payload: { id, field, value } });
+  };
+
+  const removeCharacter = (id) => {
+    dispatch({ type: 'SET_STATE', payload: { characters: characters.filter(char => char.id !== id) } });
+  };
+
+  const addCustomField = (charId) => {
+    dispatch({ type: 'SET_STATE', payload: {
+      characters: characters.map(char => {
+        if (char.id === charId) {
+          const newField = { id: Date.now(), name: 'New Stat', value: 0 };
+          const customFields = char.data.customFields || [];
+          return { ...char, data: { ...char.data, customFields: [...customFields, newField] } };
+        }
+        return char;
+      })
+    }});
+  };
+
+  const updateCustomField = (charId, fieldId, fieldProp, value) => {
+    dispatch({ type: 'SET_STATE', payload: {
+      characters: characters.map(char => {
+        if (char.id === charId) {
+          const updatedFields = char.data.customFields.map(field => 
+            field.id === fieldId ? { ...field, [fieldProp]: value } : field
+          );
+          return { ...char, data: { ...char.data, customFields: updatedFields } };
+        }
+        return char;
+      })
+    }});
+  };
+
+  const removeCustomField = (charId, fieldId) => {
+    dispatch({ type: 'SET_STATE', payload: {
+      characters: characters.map(char => {
+        if (char.id === charId) {
+          const updatedFields = char.data.customFields.filter(field => field.id !== fieldId);
+          return { ...char, data: { ...char.data, customFields: updatedFields } };
+        }
+        return char;
+      })
+    }});
+  };
+
   return (
     <div>
       {characters.map(char => {

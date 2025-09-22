@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { AppContext } from '../state/appState';
 import BookmarkItem from './BookmarkItem';
 
-const Bookmarks = ({ activePdf, handleBookmarkNavigate }) => {
+const Bookmarks = () => {
+  const { activePdf, handleBookmarkNavigate } = useContext(AppContext);
+
   return (
     <div key={activePdf?.id}>
       <h3 className="font-semibold mb-3">Contents</h3>
-      {activePdf?.bookmarks.length > 0 ? (
+      {/* --- FIX: Use optional chaining to prevent crash if bookmarks is undefined --- */}
+      {activePdf?.bookmarks?.length > 0 ? (
         activePdf.bookmarks.map(bookmark => (
           <BookmarkItem key={bookmark.title} bookmark={bookmark} onNavigate={handleBookmarkNavigate} />
         ))

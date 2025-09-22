@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { AppContext } from '../state/appState';
 import { Users, Tally5, StickyNote, Bookmark, ChevronUp, ChevronDown, Plus } from 'lucide-react';
 import CharacterSheet from './CharacterSheet';
 import Notes from './Notes';
@@ -19,17 +20,21 @@ const CollapsibleSection = ({ title, children, isOpen, onToggle }) => (
   </div>
 );
 
-const Sidebar = (props) => {
-  const {
-    activeTab, setActiveTab,
-    characters, addCharacter, updateCharacter, removeCharacter,
-    addCustomField, updateCustomField, removeCustomField,
-    notes, setNotes,
-    counters, addCounter, updateCounter, removeCounter,
-    activePdf, handleBookmarkNavigate,
-    selectedTemplate, setSelectedTemplate,
-    openSections, toggleSection
-  } = props;
+const Sidebar = () => {
+  const { state, dispatch, activePdf } = useContext(AppContext);
+  const { activeTab, selectedTemplate, openSections } = state;
+
+  const setActiveTab = (tabId) => {
+    dispatch({ type: 'SET_STATE', payload: { activeTab: tabId } });
+  };
+
+  const setSelectedTemplate = (template) => {
+    dispatch({ type: 'SET_STATE', payload: { selectedTemplate: template } });
+  };
+
+  const toggleSection = (section) => {
+    dispatch({ type: 'SET_STATE', payload: { openSections: { ...openSections, [section]: !openSections[section] } } });
+  };
 
   return (
     <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
@@ -82,37 +87,22 @@ const Sidebar = (props) => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold">Character Sheets</h3>
                   <button
-                    onClick={addCharacter}
+                    onClick={() => dispatch({ type: 'ADD_CHARACTER' })}
                     className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
                   >
                     <Plus size={14} />
                     Add
                   </button>
                 </div>
-                <CharacterSheet 
-                  characters={characters}
-                  updateCharacter={updateCharacter}
-                  removeCharacter={removeCharacter}
-                  addCustomField={addCustomField}
-                  updateCustomField={updateCustomField}
-                  removeCustomField={removeCustomField}
-                />
+                <CharacterSheet />
               </div>
             )}
-            {activeTab === 'notes' && <Notes notes={notes} setNotes={setNotes} />}
+            {activeTab === 'notes' && <Notes />}
             {activeTab === 'counters' && (
-              <Counters 
-                counters={counters}
-                addCounter={addCounter}
-                updateCounter={updateCounter}
-                removeCounter={removeCounter}
-              />
+              <Counters />
             )}
             {activeTab === 'bookmarks' && (
-              <Bookmarks 
-                activePdf={activePdf}
-                handleBookmarkNavigate={handleBookmarkNavigate}
-              />
+              <Bookmarks />
             )}
           </div>
         </CollapsibleSection>

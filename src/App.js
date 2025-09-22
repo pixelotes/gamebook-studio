@@ -1,12 +1,12 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useReducer, useRef, useEffect, useCallback } from 'react';
 import { Upload, RotateCcw, Save, Menu, FilePlus, X } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import FloatingDice from './components/FloatingDice';
 import Sidebar from './components/Sidebar';
 import Toolbar from './components/Toolbar';
 import PDFViewer from './components/PDFViewer';
+import { AppContext, initialState, reducer } from './state/appState';
 import { TOKEN_SHAPES } from './data/Shapes';
-import { CHARACTER_TEMPLATES } from './data/Templates';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
@@ -434,32 +434,13 @@ class MockFabricCanvas {
 }
 
 const GamebookApp = () => {
-  const [pdfs, setPdfs] = useState([]);
-  const [activePdfId, setActivePdfId] = useState(null);
-  const [activeTab, setActiveTab] = useState('sheets');
-  const [characters, setCharacters] = useState([]);
-  const [selectedTemplate, setSelectedTemplate] = useState('custom');
-  const [notes, setNotes] = useState('');
-  const [counters, setCounters] = useState([]);
-  const [selectedTool, setSelectedTool] = useState('select');
-  const [selectedColor, setSelectedColor] = useState('#ff6b6b');
-  const [selectedTokenShape, setSelectedTokenShape] = useState('circle');
-  const [selectedTokenColor, setSelectedTokenColor] = useState('#ff6b6b');
-  const [tokenSize, setTokenSize] = useState(20);
-  const [sessionToRestore, setSessionToRestore] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [activeDropdown, setActiveDropdown] = useState(null);
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
-  const [layerStateKey, setLayerStateKey] = useState(0);
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const {
+    pdfs, activePdfId, characters, notes, counters, selectedTool, selectedColor,
+    selectedTokenShape, selectedTokenColor, tokenSize, sessionToRestore,
+    isSidebarVisible, menuOpen
+  } = state;
 
-  const [openSections, setOpenSections] = useState({
-    session: true,
-  });
-
-  const toggleSection = (section) => {
-    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
-  };
-  
   const pdfCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -467,161 +448,6 @@ const GamebookApp = () => {
   const fabricCanvas = useRef(null);
   
   const activePdf = pdfs.find(p => p.id === activePdfId);
-
-  useEffect(() => {
-    if (overlayCanvasRef.current && !fabricCanvas.current) {
-      fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current);
-      fabricCanvas.current.setTokenSize(tokenSize);
-    }
-    if (activePdf && fabricCanvas.current) {
-      fabricCanvas.current.loadPageLayers(activePdf.pageLayers);
-      fabricCanvas.current.setScale(activePdf.scale);
-      fabricCanvas.current.setCurrentPage(activePdf.currentPage);
-    }
-  }, [activePdf, tokenSize]);
-
-  useEffect(() => {
-    if (fabricCanvas.current) {
-      fabricCanvas.current.setTool(selectedTool);
-      fabricCanvas.current.setColor(selectedColor);
-      if (selectedTool === 'token') {
-        fabricCanvas.current.setSelectedToken(selectedTokenShape, selectedTokenColor);
-        fabricCanvas.current.setTokenSize(tokenSize);
-      }
-    }
-  }, [selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, tokenSize]);
-
-  const handleFileUpload = async (event) => {
-    const files = event.target.files;
-    if (files.length === 0) return;
-  
-    const newPdfsData = [];
-    for (const file of files) {
-      if (file.type !== 'application/pdf') continue;
-  
-      if (pdfs.some(p => p.fileName === file.name)) {
-        console.warn(`Skipping duplicate file: ${file.name}`);
-        continue;
-      }
-  
-      if (sessionToRestore) {
-        const matchingPdfInSession = sessionToRestore.pdfs.find(p => p.fileName === file.name);
-        if (matchingPdfInSession) {
-          try {
-            const url = URL.createObjectURL(file);
-            const pdfDoc = await pdfjsLib.getDocument(url).promise;
-            newPdfsData.push({ ...matchingPdfInSession, file, pdfDoc });
-          } catch (error) {
-            console.error('Error loading PDF for session restore:', file.name, error);
-          }
-        }
-      } else {
-        try {
-          const url = URL.createObjectURL(file);
-          const pdfDoc = await pdfjsLib.getDocument(url).promise;
-          newPdfsData.push({
-            id: Date.now() + file.name,
-            fileName: file.name,
-            file,
-            pdfDoc,
-            totalPages: pdfDoc.numPages,
-            currentPage: 1,
-            scale: 1,
-            pageLayers: {},
-            bookmarks: await pdfDoc.getOutline() || [],
-          });
-        } catch (error) {
-          console.error('Error loading PDF:', file.name, error);
-        }
-      }
-    }
-  
-    if (sessionToRestore) {
-      if (newPdfsData.length === sessionToRestore.pdfs.length) {
-        setPdfs(newPdfsData);
-        setActivePdfId(sessionToRestore.activePdfId);
-        setCharacters(sessionToRestore.characters);
-        setNotes(sessionToRestore.notes);
-        setCounters(sessionToRestore.counters);
-        setSessionToRestore(null); 
-      } else {
-        alert('Could not restore session. Please select all the correct PDF files.');
-        setSessionToRestore(null);
-      }
-    } else {
-      if (newPdfsData.length > 0) {
-        setPdfs(prevPdfs => [...prevPdfs, ...newPdfsData]);
-        setActivePdfId(newPdfsData[0].id);
-      }
-    }
-  };
-  
-  const handleSaveSession = () => {
-    const sessionData = {
-      pdfs: pdfs.map(p => ({
-        id: p.id,
-        fileName: p.fileName,
-        currentPage: p.currentPage,
-        scale: p.scale,
-        pageLayers: p.pageLayers,
-      })),
-      activePdfId,
-      characters,
-      notes,
-      counters,
-    };
-  
-    const jsonString = JSON.stringify(sessionData, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'gamebook-session.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-  
-  const handleLoadSession = (event) => {
-    const file = event.target.files[0];
-    if (file && file.type === 'application/json') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const sessionData = JSON.parse(e.target.result);
-          setSessionToRestore(sessionData);
-          alert(`Session loaded. Please select the following PDF files: ${sessionData.pdfs.map(p => p.fileName).join(', ')}`);
-          fileInputRef.current.click();
-        } catch (error) {
-          console.error('Error parsing session file:', error);
-          alert('Could not load session file. It may be corrupt.');
-        }
-      };
-      reader.readAsText(file);
-    }
-  };
-
-  const handleNewSession = () => {
-    setPdfs([]);
-    setActivePdfId(null);
-    setCharacters([]);
-    setNotes('');
-    setCounters([]);
-  };
-
-  const closePdf = (pdfId) => {
-    const newPdfs = pdfs.filter(p => p.id !== pdfId);
-    setPdfs(newPdfs);
-  
-    if (activePdfId === pdfId) {
-      if (newPdfs.length > 0) {
-        setActivePdfId(newPdfs[0].id);
-      } else {
-        setActivePdfId(null);
-      }
-    }
-  };
 
   const renderPdfPage = useCallback(async () => {
     if (!activePdf || !pdfCanvasRef.current) return;
@@ -660,11 +486,172 @@ const GamebookApp = () => {
   }, [activePdf]);
   
   useEffect(() => {
+    if (overlayCanvasRef.current && !fabricCanvas.current) {
+      fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current);
+    }
+    if (fabricCanvas.current) {
+      fabricCanvas.current.setTokenSize(tokenSize);
+      fabricCanvas.current.setTool(selectedTool);
+      fabricCanvas.current.setColor(selectedColor);
+      if (selectedTool === 'token') {
+        fabricCanvas.current.setSelectedToken(selectedTokenShape, selectedTokenColor);
+      }
+    }
     renderPdfPage();
-  }, [renderPdfPage]);
+  }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage]);
+
+  const handleFileUpload = async (event) => {
+    const files = event.target.files;
+    if (files.length === 0) return;
+  
+    const newPdfsData = [];
+    for (const file of files) {
+      if (file.type !== 'application/pdf') continue;
+  
+      if (pdfs.some(p => p.fileName === file.name)) {
+        console.warn(`Skipping duplicate file: ${file.name}`);
+        continue;
+      }
+  
+      if (sessionToRestore) {
+        const matchingPdfInSession = sessionToRestore.pdfs.find(p => p.fileName === file.name);
+        if (matchingPdfInSession) {
+          try {
+            const url = URL.createObjectURL(file);
+            const pdfDoc = await pdfjsLib.getDocument(url).promise;
+            newPdfsData.push({
+              ...matchingPdfInSession,
+              file,
+              pdfDoc,
+              totalPages: pdfDoc.numPages,
+              // --- FIX: Restore bookmarks or get them fresh ---
+              bookmarks: matchingPdfInSession.bookmarks || await pdfDoc.getOutline() || [],
+            });
+          } catch (error) {
+            console.error('Error loading PDF for session restore:', file.name, error);
+          }
+        }
+      } else {
+        try {
+          const url = URL.createObjectURL(file);
+          const pdfDoc = await pdfjsLib.getDocument(url).promise;
+          newPdfsData.push({
+            id: Date.now() + file.name,
+            fileName: file.name,
+            file,
+            pdfDoc,
+            totalPages: pdfDoc.numPages,
+            currentPage: 1,
+            scale: 1,
+            pageLayers: {},
+            bookmarks: await pdfDoc.getOutline() || [],
+          });
+        } catch (error) {
+          console.error('Error loading PDF:', file.name, error);
+        }
+      }
+    }
+  
+    if (sessionToRestore) {
+      if (newPdfsData.length === sessionToRestore.pdfs.length) {
+        dispatch({ type: 'SET_STATE', payload: {
+          pdfs: newPdfsData,
+          activePdfId: sessionToRestore.activePdfId,
+          characters: sessionToRestore.characters,
+          notes: sessionToRestore.notes,
+          counters: sessionToRestore.counters,
+          sessionToRestore: null,
+        }});
+      } else {
+        alert('Could not restore session. Please select all the correct PDF files.');
+        dispatch({ type: 'SET_STATE', payload: { sessionToRestore: null } });
+      }
+    } else {
+      if (newPdfsData.length > 0) {
+        dispatch({ type: 'SET_STATE', payload: {
+          pdfs: [...pdfs, ...newPdfsData],
+          activePdfId: newPdfsData[0].id,
+        }});
+      }
+    }
+  };
+  
+  const handleSaveSession = () => {
+    const sessionData = {
+      pdfs: pdfs.map(p => ({
+        id: p.id,
+        fileName: p.fileName,
+        currentPage: p.currentPage,
+        scale: p.scale,
+        pageLayers: p.pageLayers,
+        totalPages: p.totalPages,
+        // --- FIX: Add bookmarks to the session file ---
+        bookmarks: p.bookmarks,
+      })),
+      activePdfId,
+      characters,
+      notes,
+      counters,
+    };
+  
+    const jsonString = JSON.stringify(sessionData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'gamebook-session.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  
+  const handleLoadSession = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type === 'application/json') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const sessionData = JSON.parse(e.target.result);
+          dispatch({ type: 'SET_STATE', payload: { sessionToRestore: sessionData } });
+          alert(`Session loaded. Please select the following PDF files: ${sessionData.pdfs.map(p => p.fileName).join(', ')}`);
+          fileInputRef.current.click();
+        } catch (error) {
+          console.error('Error parsing session file:', error);
+          alert('Could not load session file. It may be corrupt.');
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleNewSession = () => {
+    dispatch({ type: 'SET_STATE', payload: {
+      pdfs: [],
+      activePdfId: null,
+      characters: [],
+      notes: '',
+      counters: [],
+    }});
+  };
+
+  const closePdf = (pdfId) => {
+    const newPdfs = pdfs.filter(p => p.id !== pdfId);
+    dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
+  
+    if (activePdfId === pdfId) {
+      if (newPdfs.length > 0) {
+        dispatch({ type: 'SET_STATE', payload: { activePdfId: newPdfs[0].id } });
+      } else {
+        dispatch({ type: 'SET_STATE', payload: { activePdfId: null } });
+      }
+    }
+  };
   
   const updateActivePdf = (updates) => {
-    setPdfs(pdfs.map(p => p.id === activePdfId ? { ...p, ...updates } : p));
+    dispatch({ type: 'SET_STATE', payload: {
+      pdfs: pdfs.map(p => p.id === activePdfId ? { ...p, ...updates } : p),
+    }});
   };
 
   const goToPage = (pageNum) => {
@@ -686,110 +673,9 @@ const GamebookApp = () => {
   };
 
   const handleBookmarkNavigate = async (dest) => {
-    const activePdf = pdfs.find(p => p.id === activePdfId);
     if (!activePdf) return;
     const pageIndex = await activePdf.pdfDoc.getPageIndex(dest[0]);
     goToPage(pageIndex + 1); 
-  };
-
-  const addCharacter = () => {
-    const template = CHARACTER_TEMPLATES[selectedTemplate];
-    const newChar = {
-      id: Date.now(),
-      template: selectedTemplate,
-      data: {
-        customFields: []
-      }
-    };
-
-    template.fields.forEach(field => {
-      newChar.data[field.name] = field.default;
-    });
-
-    setCharacters([...characters, newChar]);
-  };
-
-  const updateCharacter = (id, field, value) => {
-    setCharacters(characters.map(char => 
-      char.id === id ? { 
-        ...char, 
-        data: { ...char.data, [field]: value }
-      } : char
-    ));
-  };
-  
-  const updateCustomField = (charId, fieldId, fieldProp, value) => {
-    setCharacters(characters.map(char => {
-      if (char.id === charId) {
-        const updatedFields = char.data.customFields.map(field => 
-          field.id === fieldId ? { ...field, [fieldProp]: value } : field
-        );
-        return { ...char, data: { ...char.data, customFields: updatedFields } };
-      }
-      return char;
-    }));
-  };
-
-  const addCustomField = (charId) => {
-    setCharacters(characters.map(char => {
-      if (char.id === charId) {
-        const newField = { id: Date.now(), name: 'New Stat', value: 0 };
-        const customFields = char.data.customFields || [];
-        return { ...char, data: { ...char.data, customFields: [...customFields, newField] } };
-      }
-      return char;
-    }));
-  };
-  
-  const removeCustomField = (charId, fieldId) => {
-    setCharacters(characters.map(char => {
-      if (char.id === charId) {
-        const updatedFields = char.data.customFields.filter(field => field.id !== fieldId);
-        return { ...char, data: { ...char.data, customFields: updatedFields } };
-      }
-      return char;
-    }));
-  };
-
-  const removeCharacter = (id) => {
-    setCharacters(characters.filter(char => char.id !== id));
-  };
-
-  const addCounter = () => {
-    setCounters([...counters, { 
-      id: Date.now(), 
-      name: `Counter ${counters.length + 1}`, 
-      value: 0,
-      color: '#3b82f6'
-    }]);
-  };
-
-  const updateCounter = (id, field, value) => {
-    setCounters(counters.map(counter => 
-      counter.id === id ? { ...counter, [field]: value } : counter
-    ));
-  };
-
-  const removeCounter = (id) => {
-    setCounters(counters.filter(counter => counter.id !== id));
-  };
-
-  const handleToggleVisibility = (layerId) => {
-    fabricCanvas.current?.toggleLayerVisibility(layerId);
-    setLayerStateKey(prev => prev + 1);
-  };
-
-  const handleSetActiveLayer = (layerId) => {
-    fabricCanvas.current?.setActiveLayer(layerId);
-    setLayerStateKey(prev => prev + 1);
-    setActiveDropdown(null);
-  };
-
-  const handleClearLayer = (layerId) => {
-    if (window.confirm('Are you sure you want to clear all items from this layer? This action cannot be undone.')) {
-      fabricCanvas.current?.clearLayer(layerId);
-      setLayerStateKey(prev => prev + 1);
-    }
   };
   
   const truncateFileName = (name) => {
@@ -800,114 +686,94 @@ const GamebookApp = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <FloatingDice />
-      
-      {isSidebarVisible && (
-        <Sidebar 
-          activeTab={activeTab} setActiveTab={setActiveTab}
-          characters={characters} addCharacter={addCharacter} updateCharacter={updateCharacter} removeCharacter={removeCharacter}
-          addCustomField={addCustomField} updateCustomField={updateCustomField} removeCustomField={removeCustomField}
-          notes={notes} setNotes={setNotes}
-          counters={counters} addCounter={addCounter} updateCounter={updateCounter} removeCounter={removeCounter}
-          activePdf={activePdf} handleBookmarkNavigate={handleBookmarkNavigate}
-          selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate}
-          openSections={openSections} toggleSection={toggleSection}
-        />
-      )}
-
-      <div className="flex-1 flex flex-col relative">
-        <Toolbar 
-          isSidebarVisible={isSidebarVisible} setIsSidebarVisible={setIsSidebarVisible}
-          activePdf={activePdf} goToPage={goToPage} zoomIn={zoomIn} zoomOut={zoomOut}
-          activeDropdown={activeDropdown} setActiveDropdown={setActiveDropdown}
-          fabricCanvas={fabricCanvas} handleToggleVisibility={handleToggleVisibility}
-          handleSetActiveLayer={handleSetActiveLayer} handleClearLayer={handleClearLayer}
-          selectedTool={selectedTool} setSelectedTool={setSelectedTool}
-          selectedColor={selectedColor} setSelectedColor={setSelectedColor}
-          selectedTokenShape={selectedTokenShape} setSelectedTokenShape={setSelectedTokenShape}
-          selectedTokenColor={selectedTokenColor} setSelectedTokenColor={setSelectedTokenColor}
-          tokenSize={tokenSize} setTokenSize={setTokenSize}
-        />
-
-        <div className="absolute top-2 right-3 z-30">
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="p-2 rounded hover:bg-gray-100 bg-white/80 backdrop-blur-sm"
-          >
-            <Menu size={16} />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20">
-              <button
-                onClick={() => { handleNewSession(); setMenuOpen(false); }}
-                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <FilePlus size={14} /> New Session
-              </button>
-              <button
-                onClick={() => { fileInputRef.current?.click(); setMenuOpen(false); }}
-                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Upload size={14} /> Load PDFs
-              </button>
-              <button
-                onClick={() => { sessionFileInputRef.current?.click(); setMenuOpen(false); }}
-                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Upload size={14} /> Load Session
-              </button>
-              <button
-                onClick={() => { handleSaveSession(); setMenuOpen(false); }}
-                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Save size={14} /> Save Session
-              </button>
-              <button
-                onClick={() => { fabricCanvas.current?.clear(); setMenuOpen(false); }}
-                className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <RotateCcw size={14} /> Clear Page Annotations
-              </button>
-            </div>
-          )}
-          <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileUpload} className="hidden" multiple />
-          <input ref={sessionFileInputRef} type="file" accept=".json" onChange={handleLoadSession} className="hidden" />
-        </div>
+    <AppContext.Provider value={{ state, dispatch, fabricCanvas, handleBookmarkNavigate, activePdf, goToPage, zoomIn, zoomOut }}>
+      <div className="flex h-screen bg-gray-100">
+        <FloatingDice />
         
-        {pdfs.length > 1 && (
-          <div className="bg-gray-200 flex items-center">
-            {pdfs.map(pdf => (
-              <div
-                key={pdf.id}
-                onClick={() => setActivePdfId(pdf.id)}
-                className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
-                  pdf.id === activePdfId ? 'bg-white' : 'bg-gray-200 hover:bg-gray-300'
-                }`}
-              >
-                <span className="text-sm">{truncateFileName(pdf.fileName)}</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closePdf(pdf.id);
-                  }}
-                  className="p-1 rounded-full hover:bg-red-500 hover:text-white"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
+        {isSidebarVisible && (
+          <Sidebar />
         )}
 
-        <PDFViewer 
-          activePdf={activePdf}
-          pdfCanvasRef={pdfCanvasRef}
-          overlayCanvasRef={overlayCanvasRef}
-          selectedTool={selectedTool}
-        />
+        <div className="flex-1 flex flex-col relative">
+          <Toolbar />
+
+          <div className="absolute top-2 right-3 z-30">
+            <button
+              onClick={() => dispatch({ type: 'SET_STATE', payload: { menuOpen: !menuOpen } })}
+              className="p-2 rounded hover:bg-gray-100 bg-white/80 backdrop-blur-sm"
+            >
+              <Menu size={16} />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20">
+                <button
+                  onClick={() => { handleNewSession(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <FilePlus size={14} /> New Session
+                </button>
+                <button
+                  onClick={() => { fileInputRef.current?.click(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Upload size={14} /> Load PDFs
+                </button>
+                <button
+                  onClick={() => { sessionFileInputRef.current?.click(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Upload size={14} /> Load Session
+                </button>
+                <button
+                  onClick={() => { handleSaveSession(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Save size={14} /> Save Session
+                </button>
+                <button
+                  onClick={() => { fabricCanvas.current?.clear(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <RotateCcw size={14} /> Clear Page Annotations
+                </button>
+              </div>
+            )}
+            <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileUpload} className="hidden" multiple />
+            <input ref={sessionFileInputRef} type="file" accept=".json" onChange={handleLoadSession} className="hidden" />
+          </div>
+          
+          {pdfs.length > 1 && (
+            <div className="bg-gray-200 flex items-center">
+              {pdfs.map(pdf => (
+                <div
+                  key={pdf.id}
+                  onClick={() => dispatch({ type: 'SET_STATE', payload: { activePdfId: pdf.id } })}
+                  className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
+                    pdf.id === activePdfId ? 'bg-white' : 'bg-gray-200 hover:bg-gray-300'
+                  }`}
+                >
+                  <span className="text-sm">{truncateFileName(pdf.fileName)}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closePdf(pdf.id);
+                    }}
+                    className="p-1 rounded-full hover:bg-red-500 hover:text-white"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <PDFViewer 
+            pdfCanvasRef={pdfCanvasRef}
+            overlayCanvasRef={overlayCanvasRef}
+          />
+        </div>
       </div>
-    </div>
+    </AppContext.Provider>
   );
 };
 

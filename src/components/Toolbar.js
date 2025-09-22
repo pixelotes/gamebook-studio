@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { AppContext } from '../state/appState';
 import {
   PanelLeft, ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Layers, ChevronDown, Eye, EyeOff, Trash2,
   Move, Stamp, Square, Type, Pen, Eraser, Circle
@@ -6,14 +7,59 @@ import {
 import { TOKEN_SHAPES } from '../data/Shapes';
 import { TOKEN_COLORS } from '../data/Colors';
 
-const Toolbar = (props) => {
+const Toolbar = () => {
+  // --- FIX: Added zoomIn and zoomOut to the context destructuring ---
+  const { state, dispatch, fabricCanvas, goToPage, zoomIn, zoomOut, activePdf } = useContext(AppContext);
   const {
-    isSidebarVisible, setIsSidebarVisible, activePdf, goToPage, zoomIn, zoomOut,
-    activeDropdown, setActiveDropdown, fabricCanvas, handleToggleVisibility,
-    handleSetActiveLayer, handleClearLayer, selectedTool, setSelectedTool,
-    selectedColor, setSelectedColor, selectedTokenShape, setSelectedTokenShape,
-    selectedTokenColor, setSelectedTokenColor, tokenSize, setTokenSize
-  } = props;
+    isSidebarVisible, activeDropdown, selectedTool, selectedColor,
+    selectedTokenShape, selectedTokenColor, tokenSize
+  } = state;
+
+  const setIsSidebarVisible = (isVisible) => {
+    dispatch({ type: 'SET_STATE', payload: { isSidebarVisible: isVisible } });
+  };
+
+  const setActiveDropdown = (dropdown) => {
+    dispatch({ type: 'SET_STATE', payload: { activeDropdown: dropdown } });
+  };
+
+  const setSelectedTool = (tool) => {
+    dispatch({ type: 'SET_STATE', payload: { selectedTool: tool } });
+  };
+
+  const setSelectedColor = (color) => {
+    dispatch({ type: 'SET_STATE', payload: { selectedColor: color } });
+  };
+
+  const setSelectedTokenShape = (shape) => {
+    dispatch({ type: 'SET_STATE', payload: { selectedTokenShape: shape } });
+  };
+
+  const setSelectedTokenColor = (color) => {
+    dispatch({ type: 'SET_STATE', payload: { selectedTokenColor: color } });
+  };
+
+  const setTokenSize = (size) => {
+    dispatch({ type: 'SET_STATE', payload: { tokenSize: size } });
+  };
+
+  const handleToggleVisibility = (layerId) => {
+    fabricCanvas.current?.toggleLayerVisibility(layerId);
+    dispatch({ type: 'SET_STATE', payload: { layerStateKey: state.layerStateKey + 1 } });
+  };
+
+  const handleSetActiveLayer = (layerId) => {
+    fabricCanvas.current?.setActiveLayer(layerId);
+    dispatch({ type: 'SET_STATE', payload: { layerStateKey: state.layerStateKey + 1 } });
+    setActiveDropdown(null);
+  };
+
+  const handleClearLayer = (layerId) => {
+    if (window.confirm('Are you sure you want to clear all items from this layer? This action cannot be undone.')) {
+      fabricCanvas.current?.clearLayer(layerId);
+      dispatch({ type: 'SET_STATE', payload: { layerStateKey: state.layerStateKey + 1 } });
+    }
+  };
 
   const tools = [
     { id: 'select', icon: Move, label: 'Select' },

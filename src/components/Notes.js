@@ -1,6 +1,14 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { AppContext } from '../state/appState';
 
-const Notes = ({ notes, setNotes }) => {
+const Notes = () => {
+  const { state, dispatch } = useContext(AppContext);
+  const { notes } = state;
+
+  const setNotes = (value) => {
+    dispatch({ type: 'SET_STATE', payload: { notes: value } });
+  };
+
   return (
     <div>
       <h3 className="font-semibold mb-3">Game Notes</h3>
