@@ -4,79 +4,11 @@ import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import DiceParser from './utils/DiceParser';
 import BookmarkItem from './components/BookmarkItem';
 import FloatingDice from './components/FloatingDice';
+import { TOKEN_SHAPES } from './data/Shapes'
+import { TOKEN_COLORS } from './data/Colors'
+import { CHARACTER_TEMPLATES } from './data/Templates'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
-
-// Token Palette Data
-const TOKEN_SHAPES = {
-  circle: { name: 'Circle', icon: '●' },
-  square: { name: 'Square', icon: '■' },
-  triangle: { name: 'Triangle', icon: '▲' },
-  diamond: { name: 'Diamond', icon: '♦' },
-  heart: { name: 'Heart', icon: '♥' },
-  star: { name: 'Star', icon: '★' },
-  check: { name: 'Check', icon: '✔' },
-  cross: { name: 'Cross', icon: '✘' },
-  skull: { name: 'Skull', icon: '☠' },
-  shield: { name: 'Shield', icon: '⛨' },
-  arrow: { name: 'Arrow', icon: '→' },
-  coin: { name: 'Coin', icon: '◎' },
-  meeple: { name: 'Meeple', icon: '👤' },
-  house: { name: 'House', icon: '⌂' },
-  dice1: { name: 'Dice 1', icon: '⚀' },
-  dice2: { name: 'Dice 2', icon: '⚁' },
-  dice3: { name: 'Dice 3', icon: '⚂' },
-  dice4: { name: 'Dice 4', icon: '⚃' },
-  dice5: { name: 'Dice 5', icon: '⚄' },
-  dice6: { name: 'Dice 6', icon: '⚅' }
-};
-
-const TOKEN_COLORS = [
-  { name: 'Red', value: '#ff6b6b' },
-  { name: 'Blue', value: '#4ecdc4' },
-  { name: 'Green', value: '#96ceb4' },
-  { name: 'Yellow', value: '#feca57' },
-  { name: 'Purple', value: '#ff9ff3' },
-  { name: 'Orange', value: '#ff9500' },
-  { name: 'Pink', value: '#ff6b9d' },
-  { name: 'Teal', value: '#00d2d3' },
-  { name: 'Black', value: '#2c2c54' },
-  { name: 'White', value: '#ffffff' }
-];
-
-// Character Sheet Templates
-const CHARACTER_TEMPLATES = {
-  custom: {
-    name: 'Custom',
-    fields: [
-      { name: 'name', label: 'Character Name', type: 'text', default: 'New Character' }
-    ]
-  },
-  basic: {
-    name: 'Basic RPG',
-    fields: [
-      { name: 'name', label: 'Character Name', type: 'text', default: 'New Character' },
-      { name: 'level', label: 'Level', type: 'number', default: 1 },
-      { name: 'health', label: 'Health', type: 'number', default: 10 },
-      { name: 'maxHealth', label: 'Max Health', type: 'number', default: 10 },
-      { name: 'strength', label: 'Strength', type: 'number', default: 10 },
-      { name: 'dexterity', label: 'Dexterity', type: 'number', default: 10 },
-      { name: 'intelligence', label: 'Intelligence', type: 'number', default: 10 },
-      { name: 'armor', label: 'Armor Class', type: 'number', default: 10 }
-    ]
-  },
-  dnd5e: {
-    name: 'D&D 5e',
-    fields: [
-      { name: 'name', label: 'Character Name', type: 'text', default: 'New Character' },
-      { name: 'class', label: 'Class', type: 'text', default: 'Fighter' },
-      { name: 'level', label: 'Level', type: 'number', default: 1 },
-      { name: 'ac', label: 'Armor Class', type: 'number', default: 10 },
-      { name: 'hp', label: 'Hit Points', type: 'number', default: 8 },
-      { name: 'maxHp', label: 'Max HP', type: 'number', default: 8 }
-    ]
-  }
-};
 
 // Enhanced Mock Fabric.js Canvas
 class MockFabricCanvas {
