@@ -1,5 +1,14 @@
 import { io } from 'socket.io-client';
 
+// Use different debounce times for different operations
+const DEBOUNCE_TIMES = {
+  drawing: 50,      // Near real-time for drawing
+  tokens: 100,      // Quick for token movement
+  text: 500,        // Moderate for text input
+  characters: 300,  // Moderate for character updates
+  notes: 1000       // Can be slower for notes
+};
+
 class SocketService {
   constructor() {
     this.socket = null;
@@ -8,6 +17,8 @@ class SocketService {
     this.isHost = false;
     this.listeners = new Map();
     this.serverUrl = 'http://localhost:3001';
+    this.debounceTimers = {};
+    this.layerUpdateTimer = null; // Timer specifically for layer updates
   }
 
   // Connect to the multiplayer server
@@ -99,10 +110,18 @@ class SocketService {
     });
   }
 
-  // Update game state (characters, counters, notes, etc.)
-  updateGameState(updates) {
+  // Update game state (characters, counters, notes, etc.) with adaptive debouncing
+  updateGameState(updates, urgency = 'characters') {
     if (this.socket && this.isConnected && this.sessionId) {
-      this.socket.emit('update-game-state', updates);
+      // Clear any existing timer for this urgency type
+      if (this.debounceTimers[urgency]) {
+        clearTimeout(this.debounceTimers[urgency]);
+      }
+
+      // Set a new timer
+      this.debounceTimers[urgency] = setTimeout(() => {
+        this.socket.emit('update-game-state', updates);
+      }, DEBOUNCE_TIMES[urgency] || 300);
     }
   }
 
@@ -113,10 +132,18 @@ class SocketService {
     }
   }
 
-  // Update layers (drawings, tokens, annotations)
+  // Update layers (drawings, tokens, annotations) with debouncing
   updateLayers(pdfId, pageNum, layers) {
     if (this.socket && this.isConnected && this.sessionId) {
-      this.socket.emit('update-layers', { pdfId, pageNum, layers });
+      // Clear the previous timer to debounce
+      if (this.layerUpdateTimer) {
+        clearTimeout(this.layerUpdateTimer);
+      }
+
+      // Set a new timer to emit the correct event
+      this.layerUpdateTimer = setTimeout(() => {
+        this.socket.emit('update-layers', { pdfId, pageNum, layers });
+      }, DEBOUNCE_TIMES.drawing);
     }
   }
 

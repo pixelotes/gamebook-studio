@@ -706,16 +706,20 @@ const handlePdfAdded = async (pdfData) => {
   useEffect(() => {
     if (!socketService.isMultiplayerActive()) return;
 
-    const handler = setTimeout(() => {
-        socketService.updateGameState({
-            characters: state.characters,
-            notes: state.notes,
-            counters: state.counters,
-        });
-    }, 1000);
+    socketService.updateGameState({ characters: state.characters }, 'characters');
+  }, [state.characters]);
 
-    return () => clearTimeout(handler);
-  }, [state.characters, state.notes, state.counters]);
+  useEffect(() => {
+    if (!socketService.isMultiplayerActive()) return;
+
+    socketService.updateGameState({ notes: state.notes }, 'notes');
+  }, [state.notes]);
+
+  useEffect(() => {
+    if (!socketService.isMultiplayerActive()) return;
+
+    socketService.updateGameState({ counters: state.counters }, 'characters'); // Using 'characters' urgency for counters as well
+  }, [state.counters]);
 
   const handleCreateMultiplayerSession = async (sessionId) => {
     setMultiplayerSession(sessionId);
