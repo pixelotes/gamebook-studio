@@ -20,7 +20,7 @@ const CollapsibleSection = ({ title, children, isOpen, onToggle }) => (
   </div>
 );
 
-const Sidebar = () => {
+const Sidebar = ({ children }) => {
   const { state, dispatch, activePdf } = useContext(AppContext);
   const { activeTab, selectedTemplate, openSections } = state;
 
@@ -43,6 +43,8 @@ const Sidebar = () => {
         <p className="text-sm text-gray-600">Digital tabletop companion</p>
       </div>
       
+      {children}
+
       <div className="flex-1 overflow-y-auto">
         <CollapsibleSection title="Game Session" isOpen={openSections.session} onToggle={() => toggleSection('session')}>
           <div className="flex border-b border-gray-200">

@@ -1,5 +1,5 @@
-import React, { useReducer, useRef, useEffect, useCallback } from 'react';
-import { Upload, RotateCcw, Save, Menu, FilePlus, X } from 'lucide-react';
+import React, { useReducer, useRef, useEffect, useCallback, useState } from 'react';
+import { Upload, RotateCcw, Save, Menu, FilePlus, X, Wifi } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import FloatingDice from './components/FloatingDice';
 import Sidebar from './components/Sidebar';
@@ -7,12 +7,14 @@ import Toolbar from './components/Toolbar';
 import PDFViewer from './components/PDFViewer';
 import { AppContext, initialState, reducer } from './state/appState';
 import { TOKEN_SHAPES } from './data/Shapes';
+import { MultiplayerModal, MultiplayerStatus, MultiplayerNotifications } from './components/MultiplayerModal';
+import socketService from './services/SocketService';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
 // Enhanced Mock Fabric.js Canvas
 class MockFabricCanvas {
-  constructor(canvasElement) {
+  constructor(canvasElement, onLayerUpdate) {
     this.canvas = canvasElement;
     this.ctx = canvasElement.getContext('2d');
     this.pageLayers = {};
@@ -28,7 +30,18 @@ class MockFabricCanvas {
     this.tokenSize = 20;
     this.scale = 1;
     this.startPos = { x: 0, y: 0 };
+    this.onLayerUpdate = onLayerUpdate;
+    this.currentPdfId = null;
     this.setupEvents();
+  }
+
+  setCurrentPdf(pdfId) {
+    this.currentPdfId = pdfId;
+  }
+
+  updateLayersFromMultiplayer(layers) {
+    this.pageLayers[this.currentPage] = layers;
+    this.render();
   }
   
   get layers() {
@@ -132,24 +145,39 @@ class MockFabricCanvas {
   }
 
   handleMouseUp(e) {
-    if (this.isDrawing && this.tool === 'rectangle') {
-        const rect = this.canvas.getBoundingClientRect();
-        const endX = (e.clientX - rect.left) / this.scale;
-        const endY = (e.clientY - rect.top) / this.scale;
+    if (this.isDrawing) {
+        if (this.tool === 'rectangle') {
+            const rect = this.canvas.getBoundingClientRect();
+            const endX = (e.clientX - rect.left) / this.scale;
+            const endY = (e.clientY - rect.top) / this.scale;
 
-        const x = Math.min(this.startPos.x, endX);
-        const y = Math.min(this.startPos.y, endY);
-        const width = Math.abs(this.startPos.x - endX);
-        const height = Math.abs(this.startPos.y - endY);
+            const x = Math.min(this.startPos.x, endX);
+            const y = Math.min(this.startPos.y, endY);
+            const width = Math.abs(this.startPos.x - endX);
+            const height = Math.abs(this.startPos.y - endY);
 
-        if (width > 2 && height > 2) { 
-            this.addObject('drawings', {
-                type: 'rectangle',
-                x, y, width, height,
-                color: this.selectedColor,
-                id: Date.now()
-            });
+            if (width > 2 && height > 2) { 
+                this.addObject('drawings', {
+                    type: 'rectangle',
+                    x, y, width, height,
+                    color: this.selectedColor,
+                    id: Date.now()
+                });
+            }
         }
+        
+        const newLayers = JSON.parse(JSON.stringify(this.layers));
+        if (this.onLayerUpdate && this.currentPdfId) {
+            this.onLayerUpdate(this.currentPdfId, this.currentPage, newLayers);
+        }
+    }
+
+
+    if (this.isDragging && this.dragTarget) {
+      const newLayers = JSON.parse(JSON.stringify(this.layers));
+      if (this.onLayerUpdate && this.currentPdfId) {
+        this.onLayerUpdate(this.currentPdfId, this.currentPage, newLayers);
+      }
     }
 
     this.isDragging = false;
@@ -186,31 +214,50 @@ class MockFabricCanvas {
   }
   
   removeObjectAt(x, y) {
-    for (const layer of this.layers) {
-      if (!layer.visible || layer.locked) continue;
+    let changed = false;
+    const newLayers = this.layers.map(layer => {
+        if (!layer.visible || layer.locked) return layer;
+        const originalLength = layer.objects.length;
+        const newObjects = layer.objects.filter(obj => {
+            if (obj.type === 'gameToken') {
+                const distance = Math.sqrt((x - obj.x * this.scale) ** 2 + (y - obj.y * this.scale) ** 2);
+                return distance > obj.size * this.scale;
+            }
+            if (obj.type === 'path') {
+                return !obj.points.some(p => {
+                    const distance = Math.sqrt((x - p.x * this.scale) ** 2 + (y - p.y * this.scale) ** 2);
+                    return distance < 10;
+                });
+            }
+            return true;
+        });
+        if (newObjects.length !== originalLength) {
+            changed = true;
+        }
+        return { ...layer, objects: newObjects };
+    });
 
-      layer.objects = layer.objects.filter(obj => {
-        if (obj.type === 'gameToken') {
-          const distance = Math.sqrt((x - obj.x * this.scale) ** 2 + (y - obj.y * this.scale) ** 2);
-          return distance > obj.size * this.scale;
+    if (changed) {
+        this.pageLayers[this.currentPage] = newLayers;
+        this.render();
+        if (this.onLayerUpdate && this.currentPdfId) {
+            this.onLayerUpdate(this.currentPdfId, this.currentPage, newLayers);
         }
-        if (obj.type === 'path') {
-          return !obj.points.some(p => {
-            const distance = Math.sqrt((x - p.x * this.scale) ** 2 + (y - p.y * this.scale) ** 2);
-            return distance < 10;
-          });
-        }
-        return true;
-      });
     }
-    this.render();
   }
 
   removeToken(tokenId) {
     const tokensLayer = this.layers.find(l => l.id === 'tokens');
     if (tokensLayer) {
-      tokensLayer.objects = tokensLayer.objects.filter(obj => obj.id !== tokenId);
-      this.render();
+        const newObjects = tokensLayer.objects.filter(obj => obj.id !== tokenId);
+        const newLayers = this.layers.map(l =>
+            l.id === 'tokens' ? { ...l, objects: newObjects } : l
+        );
+        this.pageLayers[this.currentPage] = newLayers;
+        this.render();
+        if (this.onLayerUpdate && this.currentPdfId) {
+            this.onLayerUpdate(this.currentPdfId, this.currentPage, newLayers);
+        }
     }
   }
 
@@ -226,8 +273,15 @@ class MockFabricCanvas {
   addObject(layerId, obj) {
     const layer = this.layers.find(l => l.id === layerId);
     if (layer) {
-      layer.objects.push(obj);
-      this.render();
+        const newObjects = [...layer.objects, obj];
+        const newLayers = this.layers.map(l =>
+            l.id === layerId ? { ...l, objects: newObjects } : l
+        );
+        this.pageLayers[this.currentPage] = newLayers;
+        this.render();
+        if (this.onLayerUpdate && this.currentPdfId) {
+            this.onLayerUpdate(this.currentPdfId, this.currentPage, newLayers);
+        }
     }
   }
 
@@ -262,16 +316,24 @@ class MockFabricCanvas {
   clearLayer(layerId) {
     const layer = this.layers.find(l => l.id === layerId);
     if (layer) {
-      layer.objects = [];
-      this.render();
+        const newLayers = this.layers.map(l =>
+            l.id === layerId ? { ...l, objects: [] } : l
+        );
+        this.pageLayers[this.currentPage] = newLayers;
+        this.render();
+        if (this.onLayerUpdate && this.currentPdfId) {
+            this.onLayerUpdate(this.currentPdfId, this.currentPage, newLayers);
+        }
     }
   }
 
   clear() {
-    this.layers.forEach(layer => {
-      layer.objects = [];
-    });
+    const newLayers = this.layers.map(layer => ({ ...layer, objects: [] }));
+    this.pageLayers[this.currentPage] = newLayers;
     this.render();
+    if (this.onLayerUpdate && this.currentPdfId) {
+        this.onLayerUpdate(this.currentPdfId, this.currentPage, newLayers);
+    }
   }
 
   setTool(tool) {
@@ -441,6 +503,12 @@ const GamebookApp = () => {
     isSidebarVisible, menuOpen
   } = state;
 
+  const [showMultiplayerModal, setShowMultiplayerModal] = useState(false);
+  const [multiplayerSession, setMultiplayerSession] = useState(null);
+  const [connectedPlayers, setConnectedPlayers] = useState(1);
+  const [notifications, setNotifications] = useState([]);
+  const [isHost, setIsHost] = useState(false);
+
   const pdfCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -448,6 +516,38 @@ const GamebookApp = () => {
   const fabricCanvas = useRef(null);
   
   const activePdf = pdfs.find(p => p.id === activePdfId);
+
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const addNotification = (message, type = 'info', details = null) => {
+    const notification = {
+      id: Date.now(),
+      message,
+      type,
+      details
+    };
+    setNotifications(prev => [...prev, notification]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== notification.id));
+    }, 5000);
+  };
+
+  const handleLayerUpdate = useCallback((pdfId, pageNum, layers) => {
+    const currentPdfs = stateRef.current.pdfs;
+    const newPdfs = currentPdfs.map(p => {
+        if (p.id === pdfId) {
+            const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
+            return { ...p, pageLayers: updatedPageLayers };
+        }
+        return p;
+    });
+    dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
+
+    if (socketService.isMultiplayerActive()) {
+        socketService.updateLayers(pdfId, pageNum, layers);
+    }
+  }, []);
 
   const renderPdfPage = useCallback(async () => {
     if (!activePdf || !pdfCanvasRef.current) return;
@@ -487,18 +587,190 @@ const GamebookApp = () => {
   
   useEffect(() => {
     if (overlayCanvasRef.current && !fabricCanvas.current) {
-      fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current);
+      fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current, handleLayerUpdate);
     }
     if (fabricCanvas.current) {
       fabricCanvas.current.setTokenSize(tokenSize);
       fabricCanvas.current.setTool(selectedTool);
       fabricCanvas.current.setColor(selectedColor);
+      if (activePdf) {
+        fabricCanvas.current.setCurrentPdf(activePdf.id);
+      }
       if (selectedTool === 'token') {
         fabricCanvas.current.setSelectedToken(selectedTokenShape, selectedTokenColor);
       }
     }
     renderPdfPage();
-  }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage]);
+  }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate]);
+
+  useEffect(() => {
+    const handleGameStateUpdate = (updates) => {
+        dispatch({ type: 'SET_STATE', payload: updates });
+    };
+    const handlePageNavigated = (data) => {
+        const currentPdfs = stateRef.current.pdfs;
+        const newPdfs = currentPdfs.map(pdf =>
+            pdf.id === data.pdfId
+                ? { ...pdf, currentPage: data.currentPage, scale: data.scale }
+                : pdf
+        );
+        dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
+    };
+    const handleLayersUpdated = (data) => {
+        if (fabricCanvas.current && data.pdfId === stateRef.current.activePdfId && data.pageNum === stateRef.current.pdfs.find(p=>p.id === data.pdfId)?.currentPage) {
+            fabricCanvas.current.updateLayersFromMultiplayer(data.layers);
+        }
+        const currentPdfs = stateRef.current.pdfs;
+        const newPdfs = currentPdfs.map(pdf => {
+            if (pdf.id === data.pdfId) {
+                const updatedPageLayers = { ...pdf.pageLayers, [data.pageNum]: data.layers };
+                return { ...pdf, pageLayers: updatedPageLayers };
+            }
+            return pdf;
+        });
+        dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
+    };
+
+    const handlePdfAdded = async (pdfData) => {
+        if (stateRef.current.pdfs.some(p => p.id === pdfData.id)) return;
+        try {
+            const pdfUrl = socketService.getPdfUrl(pdfData.id);
+            const response = await fetch(pdfUrl);
+            const arrayBuffer = await response.arrayBuffer();
+            const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+            
+            const newPdf = {
+                ...pdfData,
+                pdfDoc,
+                file: null
+            };
+            
+            dispatch({ type: 'SET_STATE', payload: { pdfs: [...stateRef.current.pdfs, newPdf] }});
+            addNotification(`PDF "${pdfData.fileName}" was added to the session`, 'success');
+        } catch (error) {
+            console.error('Failed to load PDF from session:', error);
+            addNotification('Failed to load PDF from session', 'error');
+        }
+    };
+
+    const handlePdfRemoved = (pdfId) => {
+        const currentPdfs = stateRef.current.pdfs;
+        const newPdfs = currentPdfs.filter(p => p.id !== pdfId);
+        let newActivePdfId = stateRef.current.activePdfId;
+        if (newActivePdfId === pdfId) {
+            newActivePdfId = newPdfs.length > 0 ? newPdfs[0].id : null;
+        }
+        dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs, activePdfId: newActivePdfId } });
+        addNotification('A PDF was removed from the session', 'info');
+    };
+
+    socketService.on('game-state-updated', handleGameStateUpdate);
+    socketService.on('page-navigated', handlePageNavigated);
+    socketService.on('layers-updated', handleLayersUpdated);
+    socketService.on('pdf-added', handlePdfAdded);
+    socketService.on('pdf-removed', handlePdfRemoved);
+
+    return () => {
+        socketService.off('game-state-updated', handleGameStateUpdate);
+        socketService.off('page-navigated', handlePageNavigated);
+        socketService.off('layers-updated', handleLayersUpdated);
+        socketService.off('pdf-added', handlePdfAdded);
+        socketService.off('pdf-removed', handlePdfRemoved);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!socketService.isMultiplayerActive()) return;
+
+    const handler = setTimeout(() => {
+        socketService.updateGameState({
+            characters: state.characters,
+            notes: state.notes,
+            counters: state.counters,
+        });
+    }, 1000);
+
+    return () => clearTimeout(handler);
+  }, [state.characters, state.notes, state.counters]);
+
+  const handleCreateMultiplayerSession = async (sessionId) => {
+    setMultiplayerSession(sessionId);
+    setIsHost(true);
+    setConnectedPlayers(1);
+    addNotification(`Multiplayer session created: ${sessionId}`, 'success');
+    
+    const uploadPromises = pdfs
+        .filter(pdf => pdf.file)
+        .map(pdf => socketService.uploadPdfToSession(pdf.file, {
+            id: pdf.id,
+            fileName: pdf.fileName,
+            totalPages: pdf.totalPages,
+            bookmarks: pdf.bookmarks || []
+        }));
+
+    await Promise.all(uploadPromises);
+
+    const pdfsForSession = pdfs.map(p => ({
+        id: p.id,
+        fileName: p.fileName,
+        totalPages: p.totalPages,
+        bookmarks: p.bookmarks,
+        pageLayers: p.pageLayers,
+    }));
+    
+    socketService.updateGameState({
+        pdfs: pdfsForSession,
+        characters,
+        notes,
+        counters,
+    });
+  };
+
+  const handleJoinMultiplayerSession = async (response) => {
+    setMultiplayerSession(response.sessionId || socketService.getSessionInfo().sessionId);
+    setIsHost(response.isHost);
+    setConnectedPlayers(response.clientCount);
+    
+    if (response.gameState) {
+      const { activePdfId, ...restOfGameState } = response.gameState;
+      dispatch({ type: 'SET_STATE', payload: restOfGameState });
+
+      if (response.gameState.pdfs && response.gameState.pdfs.length > 0) {
+        const loadedPdfs = [];
+        for (const pdfData of response.gameState.pdfs) {
+          try {
+            const pdfUrl = socketService.getPdfUrl(pdfData.id);
+            const pdfResponse = await fetch(pdfUrl);
+            const arrayBuffer = await pdfResponse.arrayBuffer();
+            const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+            
+            loadedPdfs.push({
+              ...pdfData,
+              pdfDoc,
+              file: null
+            });
+          } catch (error) {
+            console.error('Failed to load PDF from session:', pdfData.fileName, error);
+          }
+        }
+        const payload = { pdfs: loadedPdfs };
+        if (loadedPdfs.length > 0) {
+          payload.activePdfId = loadedPdfs[0].id;
+        }
+        dispatch({ type: 'SET_STATE', payload });
+      }
+    }
+    
+    addNotification(`Joined multiplayer session`, 'success');
+  };
+
+  const handleLeaveMultiplayerSession = () => {
+    socketService.disconnect();
+    setMultiplayerSession(null);
+    setIsHost(false);
+    setConnectedPlayers(1);
+    addNotification('Left multiplayer session', 'info');
+  };
 
   const handleFileUpload = async (event) => {
     const files = event.target.files;
@@ -524,7 +796,6 @@ const GamebookApp = () => {
               file,
               pdfDoc,
               totalPages: pdfDoc.numPages,
-              // --- FIX: Restore bookmarks or get them fresh ---
               bookmarks: matchingPdfInSession.bookmarks || await pdfDoc.getOutline() || [],
             });
           } catch (error) {
@@ -535,7 +806,7 @@ const GamebookApp = () => {
         try {
           const url = URL.createObjectURL(file);
           const pdfDoc = await pdfjsLib.getDocument(url).promise;
-          newPdfsData.push({
+          const pdfData = {
             id: Date.now() + file.name,
             fileName: file.name,
             file,
@@ -544,8 +815,18 @@ const GamebookApp = () => {
             currentPage: 1,
             scale: 1,
             pageLayers: {},
-            bookmarks: await pdfDoc.getOutline() || [],
-          });
+            bookmarks: await pdfjsLib.getDocument(url).promise.then(doc => doc.getOutline()).catch(() => []) || [],
+          };
+          
+          if (socketService.isMultiplayerActive()) {
+            try {
+              await socketService.uploadPdfToSession(file, pdfData);
+            } catch (error) {
+              console.error('Failed to upload PDF to multiplayer session:', error);
+              addNotification('Failed to share PDF with other players', 'error');
+            }
+          }
+          newPdfsData.push(pdfData);
         } catch (error) {
           console.error('Error loading PDF:', file.name, error);
         }
@@ -570,7 +851,7 @@ const GamebookApp = () => {
       if (newPdfsData.length > 0) {
         dispatch({ type: 'SET_STATE', payload: {
           pdfs: [...pdfs, ...newPdfsData],
-          activePdfId: newPdfsData[0].id,
+          activePdfId: activePdfId || newPdfsData[0].id,
         }});
       }
     }
@@ -585,7 +866,6 @@ const GamebookApp = () => {
         scale: p.scale,
         pageLayers: p.pageLayers,
         totalPages: p.totalPages,
-        // --- FIX: Add bookmarks to the session file ---
         bookmarks: p.bookmarks,
       })),
       activePdfId,
@@ -626,49 +906,55 @@ const GamebookApp = () => {
   };
 
   const handleNewSession = () => {
-    dispatch({ type: 'SET_STATE', payload: {
-      pdfs: [],
-      activePdfId: null,
-      characters: [],
-      notes: '',
-      counters: [],
-    }});
+    if (socketService.isMultiplayerActive()) {
+      handleLeaveMultiplayerSession();
+    }
+    dispatch({ type: 'SET_STATE', payload: initialState });
   };
 
   const closePdf = (pdfId) => {
-    const newPdfs = pdfs.filter(p => p.id !== pdfId);
-    dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
-  
-    if (activePdfId === pdfId) {
-      if (newPdfs.length > 0) {
-        dispatch({ type: 'SET_STATE', payload: { activePdfId: newPdfs[0].id } });
-      } else {
-        dispatch({ type: 'SET_STATE', payload: { activePdfId: null } });
-      }
+    if (socketService.isMultiplayerActive()) {
+      socketService.removePdf(pdfId);
     }
+    const newPdfs = pdfs.filter(p => p.id !== pdfId);
+    let newActivePdfId = activePdfId;
+    if (activePdfId === pdfId) {
+        newActivePdfId = newPdfs.length > 0 ? newPdfs[0].id : null;
+    }
+    dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs, activePdfId: newActivePdfId } });
   };
   
   const updateActivePdf = (updates) => {
-    dispatch({ type: 'SET_STATE', payload: {
-      pdfs: pdfs.map(p => p.id === activePdfId ? { ...p, ...updates } : p),
-    }});
+    const newPdfs = pdfs.map(p => p.id === activePdfId ? { ...p, ...updates } : p);
+    dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs }});
   };
 
   const goToPage = (pageNum) => {
     if (activePdf && pageNum >= 1 && pageNum <= activePdf.totalPages) {
       updateActivePdf({ currentPage: pageNum });
+      if (socketService.isMultiplayerActive()) {
+        socketService.navigatePage(activePdf.id, pageNum, activePdf.scale);
+      }
     }
   };
 
   const zoomIn = () => {
     if (activePdf) {
-      updateActivePdf({ scale: Math.min(activePdf.scale + 0.25, 3) });
+      const newScale = Math.min(activePdf.scale + 0.25, 3);
+      updateActivePdf({ scale: newScale });
+       if (socketService.isMultiplayerActive()) {
+        socketService.navigatePage(activePdf.id, activePdf.currentPage, newScale);
+      }
     }
   };
   
   const zoomOut = () => {
     if (activePdf) {
-      updateActivePdf({ scale: Math.max(activePdf.scale - 0.25, 0.5) });
+      const newScale = Math.max(activePdf.scale - 0.25, 0.5);
+      updateActivePdf({ scale: newScale });
+      if (socketService.isMultiplayerActive()) {
+        socketService.navigatePage(activePdf.id, activePdf.currentPage, newScale);
+      }
     }
   };
 
@@ -688,10 +974,30 @@ const GamebookApp = () => {
   return (
     <AppContext.Provider value={{ state, dispatch, fabricCanvas, handleBookmarkNavigate, activePdf, goToPage, zoomIn, zoomOut }}>
       <div className="flex h-screen bg-gray-100">
+        <MultiplayerNotifications notifications={notifications} />
+        
+        <MultiplayerModal
+          isOpen={showMultiplayerModal}
+          onClose={() => setShowMultiplayerModal(false)}
+          onSessionCreated={handleCreateMultiplayerSession}
+          onSessionJoined={handleJoinMultiplayerSession}
+        />
         <FloatingDice />
         
         {isSidebarVisible && (
-          <Sidebar />
+          <Sidebar>
+            <div className="p-4 border-b">
+              {multiplayerSession && (
+                <MultiplayerStatus
+                  sessionId={multiplayerSession}
+                  isHost={isHost}
+                  connectedPlayers={connectedPlayers}
+                  onLeaveSession={handleLeaveMultiplayerSession}
+                  onCopySessionId={() => addNotification('Session ID copied to clipboard', 'success')}
+                />
+              )}
+            </div>
+          </Sidebar>
         )}
 
         <div className="flex-1 flex flex-col relative">
@@ -706,6 +1012,27 @@ const GamebookApp = () => {
             </button>
             {menuOpen && (
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20">
+                 {!multiplayerSession ? (
+                  <button
+                    onClick={() => {
+                      setShowMultiplayerModal(true);
+                      dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });
+                    }}
+                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <Wifi size={14} /> Start Multiplayer Session
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      handleLeaveMultiplayerSession();
+                      dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });
+                    }}
+                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    <Wifi size={14} /> Leave Multiplayer Session
+                  </button>
+                )}
                 <button
                   onClick={() => { handleNewSession(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -742,7 +1069,7 @@ const GamebookApp = () => {
             <input ref={sessionFileInputRef} type="file" accept=".json" onChange={handleLoadSession} className="hidden" />
           </div>
           
-          {pdfs.length > 1 && (
+          {pdfs.length > 0 && (
             <div className="bg-gray-200 flex items-center">
               {pdfs.map(pdf => (
                 <div
