@@ -631,27 +631,51 @@ const GamebookApp = () => {
         dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
     };
 
-    const handlePdfAdded = async (pdfData) => {
-        if (stateRef.current.pdfs.some(p => p.id === pdfData.id)) return;
-        try {
-            const pdfUrl = socketService.getPdfUrl(pdfData.id);
-            const response = await fetch(pdfUrl);
-            const arrayBuffer = await response.arrayBuffer();
-            const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
-            
-            const newPdf = {
-                ...pdfData,
-                pdfDoc,
-                file: null
-            };
-            
-            dispatch({ type: 'SET_STATE', payload: { pdfs: [...stateRef.current.pdfs, newPdf] }});
-            addNotification(`PDF "${pdfData.fileName}" was added to the session`, 'success');
-        } catch (error) {
-            console.error('Failed to load PDF from session:', error);
-            addNotification('Failed to load PDF from session', 'error');
+const handlePdfAdded = async (pdfData) => {
+    // If a PDF with the same ID already exists, do nothing.
+    if (stateRef.current.pdfs.some(p => p.id === pdfData.id)) return;
+
+    try {
+        const pdfUrl = socketService.getPdfUrl(pdfData.id);
+        const response = await fetch(pdfUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+
+        const newPdf = {
+            ...pdfData,
+            pdfDoc,
+            file: null
+        };
+
+        const currentPdfs = [...stateRef.current.pdfs];
+        const existingPdfIndex = currentPdfs.findIndex(p => p.fileName === pdfData.fileName);
+
+        if (existingPdfIndex !== -1) {
+            // If a PDF with the same name exists, replace it.
+            const oldPdfId = currentPdfs[existingPdfIndex].id;
+            currentPdfs[existingPdfIndex] = newPdf;
+
+            dispatch({
+                type: 'SET_STATE',
+                payload: {
+                    pdfs: currentPdfs,
+                    // If the replaced PDF was the active one, keep the new one active.
+                    activePdfId: stateRef.current.activePdfId === oldPdfId
+                        ? newPdf.id
+                        : stateRef.current.activePdfId
+                }
+            });
+        } else {
+            // Otherwise, add the new PDF.
+            dispatch({ type: 'SET_STATE', payload: { pdfs: [...currentPdfs, newPdf] } });
         }
-    };
+
+        addNotification(`PDF "${pdfData.fileName}" was added to the session`, 'success');
+    } catch (error) {
+        console.error('Failed to load PDF from session:', error);
+        addNotification('Failed to load PDF from session', 'error');
+    }
+  };
 
     const handlePdfRemoved = (pdfId) => {
         const currentPdfs = stateRef.current.pdfs;
@@ -772,7 +796,7 @@ const GamebookApp = () => {
     addNotification('Left multiplayer session', 'info');
   };
 
-  const handleFileUpload = async (event) => {
+const handleFileUpload = async (event) => {
     const files = event.target.files;
     if (files.length === 0) return;
   
@@ -817,15 +841,6 @@ const GamebookApp = () => {
             pageLayers: {},
             bookmarks: await pdfjsLib.getDocument(url).promise.then(doc => doc.getOutline()).catch(() => []) || [],
           };
-          
-          if (socketService.isMultiplayerActive()) {
-            try {
-              await socketService.uploadPdfToSession(file, pdfData);
-            } catch (error) {
-              console.error('Failed to upload PDF to multiplayer session:', error);
-              addNotification('Failed to share PDF with other players', 'error');
-            }
-          }
           newPdfsData.push(pdfData);
         } catch (error) {
           console.error('Error loading PDF:', file.name, error);
@@ -848,11 +863,24 @@ const GamebookApp = () => {
         dispatch({ type: 'SET_STATE', payload: { sessionToRestore: null } });
       }
     } else {
-      if (newPdfsData.length > 0) {
+      if (newPdfsData.length > 0) { //change to 1 to hide tabs with a single pdf
+        // First, update the local state with the new PDFs.
         dispatch({ type: 'SET_STATE', payload: {
           pdfs: [...pdfs, ...newPdfsData],
           activePdfId: activePdfId || newPdfsData[0].id,
         }});
+        
+        // Then, if in a multiplayer session, upload the new PDFs.
+        if (socketService.isMultiplayerActive()) {
+          for (const pdfData of newPdfsData) {
+            try {
+              await socketService.uploadPdfToSession(pdfData.file, pdfData);
+            } catch (error) {
+              console.error('Failed to upload PDF to multiplayer session:', error);
+              addNotification('Failed to share PDF with other players', 'error');
+            }
+          }
+        }
       }
     }
   };
@@ -1020,7 +1048,7 @@ const GamebookApp = () => {
                     }}
                     className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                   >
-                    <Wifi size={14} /> Start Multiplayer Session
+                    <Wifi size={14} /> Multiplayer
                   </button>
                 ) : (
                   <button
@@ -1030,7 +1058,7 @@ const GamebookApp = () => {
                     }}
                     className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                   >
-                    <Wifi size={14} /> Leave Multiplayer Session
+                    <Wifi size={14} /> Disconnect
                   </button>
                 )}
                 <button
