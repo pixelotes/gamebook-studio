@@ -703,8 +703,14 @@ const handlePdfAdded = async (pdfData) => {
                 }
             });
         } else {
-            // Otherwise, add the new PDF.
-            dispatch({ type: 'SET_STATE', payload: { pdfs: [...currentPdfs, newPdf] } });
+            // Otherwise, add the new PDF and make it active
+            dispatch({ 
+                type: 'SET_STATE', 
+                payload: { 
+                    pdfs: [...currentPdfs, newPdf],
+                    activePdfId: newPdf.id
+                } 
+            });
         }
 
         addNotification(`PDF "${pdfData.fileName}" was added to the session`, 'success');
@@ -912,7 +918,7 @@ const handleFileUpload = async (event) => {
         // First, update the local state with the new PDFs.
         dispatch({ type: 'SET_STATE', payload: {
           pdfs: [...pdfs, ...newPdfsData],
-          activePdfId: activePdfId || newPdfsData[0].id,
+          activePdfId: newPdfsData[0].id,
         }});
         
         // Then, if in a multiplayer session, upload the new PDFs.
@@ -988,6 +994,10 @@ const handleFileUpload = async (event) => {
   };
 
   const closePdf = (pdfId) => {
+    if (multiplayerSession && !isHost) {
+      addNotification("Only the session host can close PDFs", "error");
+      return;
+    }
     if (socketService.isMultiplayerActive()) {
       socketService.removePdf(pdfId);
     }
