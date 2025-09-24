@@ -10,6 +10,7 @@ import { TOKEN_SHAPES } from './data/Shapes';
 import { MultiplayerModal, MultiplayerStatus, MultiplayerNotifications } from './components/MultiplayerModal';
 import socketService from './services/SocketService';
 import { create } from 'jsondiffpatch';
+import pako from 'pako';
 
 const diffpatcher = create({
   objectHash: (obj) => obj.id,
@@ -654,13 +655,16 @@ const GamebookApp = () => {
         dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
     };
     const handleLayersUpdated = (data) => {
-        if (fabricCanvas.current && data.pdfId === stateRef.current.activePdfId && data.pageNum === stateRef.current.pdfs.find(p=>p.id === data.pdfId)?.currentPage) {
-            fabricCanvas.current.updateLayersFromMultiplayer(data.layers);
+        // Decompress the incoming data
+        const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
+
+        if (fabricCanvas.current && decompressedData.pdfId === stateRef.current.activePdfId && decompressedData.pageNum === stateRef.current.pdfs.find(p=>p.id === decompressedData.pdfId)?.currentPage) {
+            fabricCanvas.current.updateLayersFromMultiplayer(decompressedData.layers);
         }
         const currentPdfs = stateRef.current.pdfs;
         const newPdfs = currentPdfs.map(pdf => {
-            if (pdf.id === data.pdfId) {
-                const updatedPageLayers = { ...pdf.pageLayers, [data.pageNum]: data.layers };
+            if (pdf.id === decompressedData.pdfId) {
+                const updatedPageLayers = { ...pdf.pageLayers, [decompressedData.pageNum]: decompressedData.layers };
                 return { ...pdf, pageLayers: updatedPageLayers };
             }
             return pdf;

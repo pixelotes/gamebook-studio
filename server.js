@@ -6,6 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jsondiffpatch = require('jsondiffpatch');
+const pako = require('pako');
 
 const diffpatcher = jsondiffpatch.create({
   objectHash: (obj) => obj.id || JSON.stringify(obj),
@@ -298,15 +299,20 @@ io.on('connection', (socket) => {
     if (!socket.sessionId) return;
     
     const session = gameSessions.get(socket.sessionId);
+
+
     if (!session) return;
 
+    // Decompress the incoming data
+    const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
+    
     // Update page layers in session
-    if (!session.gameState.pageLayers[data.pdfId]) {
-      session.gameState.pageLayers[data.pdfId] = {};
+    if (!session.gameState.pageLayers[decompressedData.pdfId]) {
+      session.gameState.pageLayers[decompressedData.pdfId] = {};
     }
-    session.gameState.pageLayers[data.pdfId][data.pageNum] = data.layers;
+    session.gameState.pageLayers[decompressedData.pdfId][decompressedData.pageNum] = decompressedData.layers;
 
-    // Broadcast to other clients
+    // Broadcast to other clients in compressed format
     socket.to(socket.sessionId).emit('layers-updated', data);
   });
 

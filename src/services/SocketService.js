@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import pako from 'pako';
 
 // Use different debounce times for different operations
 const DEBOUNCE_TIMES = {
@@ -159,7 +160,9 @@ class SocketService {
 
       // Set a new timer to emit the correct event
       this.layerUpdateTimer = setTimeout(() => {
-        this.socket.emit('update-layers', { pdfId, pageNum, layers });
+        const data = { pdfId, pageNum, layers };
+        const compressedData = pako.deflate(JSON.stringify(data)); // Compress the data
+        this.socket.emit('update-layers', compressedData);
       }, DEBOUNCE_TIMES.drawing);
     }
   }
@@ -167,7 +170,8 @@ class SocketService {
   // Send real-time updates (while drawing/dragging)
   sendRealTimeUpdate(updateType, data) {
     if (this.socket && this.isConnected && this.sessionId) {
-      this.socket.emit('real-time-update', { type: updateType, data });
+        const compressedData = pako.deflate(JSON.stringify({ type: updateType, data })); // Compress the data
+        this.socket.emit('real-time-update', compressedData);
     }
   }
 
@@ -242,11 +246,26 @@ class SocketService {
   setupEventListeners() {
     if (!this.socket) return;
 
+    // Decompress incoming real-time updates
+    this.socket.on('real-time-update', (data) => {
+        try {
+            const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
+            
+            if (this.listeners.has('real-time-update')) {
+                this.listeners.get('real-time-update').forEach(callback => callback(decompressedData));
+            }
+        } catch (error) {
+            console.error('Error decompressing real-time update:', error);
+        }
+    });
+
     // Set up all stored listeners
     this.listeners.forEach((callbacks, event) => {
-      callbacks.forEach(callback => {
-        this.socket.on(event, callback);
-      });
+        if(event !== 'real-time-update') { // The real-time-update is handled already
+            callbacks.forEach(callback => {
+                this.socket.on(event, callback);
+            });
+        }
     });
   }
 
