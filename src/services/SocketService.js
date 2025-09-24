@@ -124,6 +124,13 @@ class SocketService {
       }, DEBOUNCE_TIMES[urgency] || 300);
     }
   }
+  
+  // Acknowledge a received update
+  sendAcknowledgement(version) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('ack-update', { version });
+    }
+  }
 
   // Navigate to a specific page
   navigatePage(pdfId, currentPage, scale) {

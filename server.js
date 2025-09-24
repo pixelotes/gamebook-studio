@@ -51,6 +51,8 @@ class GameSession {
       pageLayers: {}
     };
     this.pdfFiles = new Map(); // Store actual PDF file data
+    this.updateVersion = 0;
+    this.latestUpdates = []; // Store the last few updates for context
   }
 
   addClient(socketId) {
@@ -63,7 +65,22 @@ class GameSession {
   }
 
   updateGameState(updates) {
+    this.updateVersion++;
+    const updatePayload = {
+      version: this.updateVersion,
+      updates
+    };
+    
+    // Naively merge state for now. This will be improved with differential updates.
     this.gameState = { ...this.gameState, ...updates };
+
+    // Keep a log of the last 10 updates
+    this.latestUpdates.push(updatePayload);
+    if (this.latestUpdates.length > 10) {
+      this.latestUpdates.shift();
+    }
+    
+    return updatePayload;
   }
 
   addPdf(pdfData, fileBuffer) {
@@ -76,7 +93,8 @@ class GameSession {
       id: this.id,
       hostSocketId: this.hostSocketId,
       clientCount: this.clients.size,
-      gameState: this.gameState
+      gameState: this.gameState,
+      version: this.updateVersion
     };
   }
 }
@@ -169,7 +187,8 @@ io.on('connection', (socket) => {
       success: true,
       gameState: session.gameState,
       isHost: session.hostSocketId === socket.id,
-      clientCount: session.clients.size
+      clientCount: session.clients.size,
+      version: session.updateVersion
     });
 
     // Notify other clients about new player
@@ -196,7 +215,8 @@ io.on('connection', (socket) => {
       sessionId,
       gameState: session.gameState,
       isHost: true,
-      clientCount: 1
+      clientCount: 1,
+      version: session.updateVersion
     });
   });
 
@@ -207,13 +227,22 @@ io.on('connection', (socket) => {
     const session = gameSessions.get(socket.sessionId);
     if (!session) return;
 
-    session.updateGameState(updates);
+    const updatePayload = session.updateGameState(updates);
     
     // Broadcast to all other clients in the session
-    socket.to(socket.sessionId).emit('game-state-updated', updates);
+    socket.to(socket.sessionId).emit('game-state-updated', updatePayload);
     
-    console.log(`Game state updated in session ${socket.sessionId}`);
+    console.log(`Game state updated in session ${socket.sessionId} to version ${updatePayload.version}`);
   });
+
+  // Acknowledgment from client
+  socket.on('ack-update', (data) => {
+    if (socket.sessionId) {
+      // In the future, this is where we'd clear the message from a retransmission queue
+      console.log(`Client ${socket.id} acknowledged version ${data.version}`);
+    }
+  });
+
 
   // PDF page navigation
   socket.on('navigate-page', (data) => {

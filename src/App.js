@@ -12,6 +12,15 @@ import socketService from './services/SocketService';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
+// Custom hook to get the previous value of a prop or state
+const usePrevious = (value) => {
+  const ref = useRef();
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+};
+
 // Enhanced Mock Fabric.js Canvas
 class MockFabricCanvas {
   constructor(canvasElement, onLayerUpdate) {
@@ -508,6 +517,7 @@ const GamebookApp = () => {
   const [connectedPlayers, setConnectedPlayers] = useState(1);
   const [notifications, setNotifications] = useState([]);
   const [isHost, setIsHost] = useState(false);
+  const [gameStateVersion, setGameStateVersion] = useState(0);
 
   const pdfCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
@@ -604,8 +614,11 @@ const GamebookApp = () => {
   }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate]);
 
   useEffect(() => {
-    const handleGameStateUpdate = (updates) => {
+    const handleGameStateUpdate = (data) => {
+        const { version, updates } = data;
         dispatch({ type: 'SET_STATE', payload: updates });
+        setGameStateVersion(version);
+        socketService.sendAcknowledgement(version);
     };
     const handlePageNavigated = (data) => {
         const currentPdfs = stateRef.current.pdfs;
@@ -703,23 +716,26 @@ const handlePdfAdded = async (pdfData) => {
     };
   }, []);
 
+  const prevCharacters = usePrevious(characters);
   useEffect(() => {
-    if (!socketService.isMultiplayerActive()) return;
+    if (socketService.isMultiplayerActive() && JSON.stringify(prevCharacters) !== JSON.stringify(characters)) {
+      socketService.updateGameState({ characters: characters }, 'characters');
+    }
+  }, [characters, prevCharacters]);
 
-    socketService.updateGameState({ characters: state.characters }, 'characters');
-  }, [state.characters]);
-
+  const prevNotes = usePrevious(notes);
   useEffect(() => {
-    if (!socketService.isMultiplayerActive()) return;
+    if (socketService.isMultiplayerActive() && prevNotes !== notes) {
+      socketService.updateGameState({ notes: notes }, 'notes');
+    }
+  }, [notes, prevNotes]);
 
-    socketService.updateGameState({ notes: state.notes }, 'notes');
-  }, [state.notes]);
-
+  const prevCounters = usePrevious(counters);
   useEffect(() => {
-    if (!socketService.isMultiplayerActive()) return;
-
-    socketService.updateGameState({ counters: state.counters }, 'characters'); // Using 'characters' urgency for counters as well
-  }, [state.counters]);
+    if (socketService.isMultiplayerActive() && JSON.stringify(prevCounters) !== JSON.stringify(counters)) {
+      socketService.updateGameState({ counters: counters }, 'characters'); // Using 'characters' urgency for counters as well
+    }
+  }, [counters, prevCounters]);
 
   const handleCreateMultiplayerSession = async (sessionId) => {
     setMultiplayerSession(sessionId);
@@ -760,6 +776,7 @@ const handlePdfAdded = async (pdfData) => {
     setConnectedPlayers(response.clientCount);
     
     if (response.gameState) {
+      setGameStateVersion(response.version);
       const { activePdfId, ...restOfGameState } = response.gameState;
       dispatch({ type: 'SET_STATE', payload: restOfGameState });
 
@@ -904,6 +921,7 @@ const handleFileUpload = async (event) => {
       characters,
       notes,
       counters,
+      version: gameStateVersion
     };
   
     const jsonString = JSON.stringify(sessionData, null, 2);
@@ -925,6 +943,7 @@ const handleFileUpload = async (event) => {
       reader.onload = (e) => {
         try {
           const sessionData = JSON.parse(e.target.result);
+          setGameStateVersion(sessionData.version || 0);
           dispatch({ type: 'SET_STATE', payload: { sessionToRestore: sessionData } });
           alert(`Session loaded. Please select the following PDF files: ${sessionData.pdfs.map(p => p.fileName).join(', ')}`);
           fileInputRef.current.click();
