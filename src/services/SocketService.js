@@ -132,6 +132,16 @@ class SocketService {
     }
   }
 
+  requestMissingUpdates(fromVersion) {
+    return new Promise((resolve) => {
+        if (!this.socket || !this.isConnected) return resolve({ error: 'Not connected' });
+
+        this.socket.emit('request-missing-updates', { fromVersion }, (response) => {
+            resolve(response);
+        });
+    });
+  }
+
   // Navigate to a specific page
   navigatePage(pdfId, currentPage, scale) {
     if (this.socket && this.isConnected && this.sessionId) {

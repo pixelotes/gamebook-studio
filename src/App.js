@@ -9,6 +9,12 @@ import { AppContext, initialState, reducer } from './state/appState';
 import { TOKEN_SHAPES } from './data/Shapes';
 import { MultiplayerModal, MultiplayerStatus, MultiplayerNotifications } from './components/MultiplayerModal';
 import socketService from './services/SocketService';
+import { create } from 'jsondiffpatch';
+
+const diffpatcher = create({
+  objectHash: (obj) => obj.id,
+});
+
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
@@ -614,12 +620,30 @@ const GamebookApp = () => {
   }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate]);
 
   useEffect(() => {
-    const handleGameStateUpdate = (data) => {
-        const { version, updates } = data;
-        dispatch({ type: 'SET_STATE', payload: updates });
-        setGameStateVersion(version);
-        socketService.sendAcknowledgement(version);
+    const handleGameStateDelta = async (data) => {
+        if (data.fromVersion !== gameStateVersion) {
+            // We've missed an update, request a catch-up from the server
+            const response = await socketService.requestMissingUpdates(gameStateVersion);
+            if (response.fullState) {
+                dispatch({ type: 'SET_STATE', payload: response.fullState });
+                setGameStateVersion(response.version);
+            } else if (response.deltas) {
+                let currentState = { ...stateRef.current };
+                response.deltas.forEach(d => {
+                    currentState = diffpatcher.patch(currentState, d.delta);
+                });
+                dispatch({ type: 'SET_STATE', payload: currentState });
+                setGameStateVersion(response.deltas[response.deltas.length - 1].version);
+            }
+            return;
+        }
+
+        const newState = diffpatcher.patch({ ...stateRef.current }, data.delta);
+        dispatch({ type: 'SET_STATE', payload: newState });
+        setGameStateVersion(data.version);
+        socketService.sendAcknowledgement(data.version);
     };
+
     const handlePageNavigated = (data) => {
         const currentPdfs = stateRef.current.pdfs;
         const newPdfs = currentPdfs.map(pdf =>
@@ -701,20 +725,20 @@ const handlePdfAdded = async (pdfData) => {
         addNotification('A PDF was removed from the session', 'info');
     };
 
-    socketService.on('game-state-updated', handleGameStateUpdate);
+    socketService.on('game-state-delta', handleGameStateDelta);
     socketService.on('page-navigated', handlePageNavigated);
     socketService.on('layers-updated', handleLayersUpdated);
     socketService.on('pdf-added', handlePdfAdded);
     socketService.on('pdf-removed', handlePdfRemoved);
 
     return () => {
-        socketService.off('game-state-updated', handleGameStateUpdate);
+        socketService.off('game-state-delta', handleGameStateDelta);
         socketService.off('page-navigated', handlePageNavigated);
         socketService.off('layers-updated', handleLayersUpdated);
         socketService.off('pdf-added', handlePdfAdded);
         socketService.off('pdf-removed', handlePdfRemoved);
     };
-  }, []);
+  }, [gameStateVersion]);
 
   const prevCharacters = usePrevious(characters);
   useEffect(() => {

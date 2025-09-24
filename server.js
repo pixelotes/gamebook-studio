@@ -5,6 +5,12 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const jsondiffpatch = require('jsondiffpatch');
+
+const diffpatcher = jsondiffpatch.create({
+  objectHash: (obj) => obj.id || JSON.stringify(obj),
+  arrays: { detectMove: true }
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -51,8 +57,8 @@ class GameSession {
       pageLayers: {}
     };
     this.pdfFiles = new Map(); // Store actual PDF file data
-    this.updateVersion = 0;
-    this.latestUpdates = []; // Store the last few updates for context
+    this.stateVersion = 0;
+    this.stateHistory = []; // Keep recent states for late-joining clients
   }
 
   addClient(socketId) {
@@ -65,22 +71,27 @@ class GameSession {
   }
 
   updateGameState(updates) {
-    this.updateVersion++;
-    const updatePayload = {
-      version: this.updateVersion,
-      updates
-    };
-    
-    // Naively merge state for now. This will be improved with differential updates.
+    const previousState = { ...this.gameState };
     this.gameState = { ...this.gameState, ...updates };
-
-    // Keep a log of the last 10 updates
-    this.latestUpdates.push(updatePayload);
-    if (this.latestUpdates.length > 10) {
-      this.latestUpdates.shift();
-    }
     
-    return updatePayload;
+    const delta = diffpatcher.diff(previousState, this.gameState);
+    
+    if (delta) { // Only update version and history if there's a change
+        this.stateVersion++;
+        
+        this.stateHistory.push({
+            version: this.stateVersion,
+            delta,
+            timestamp: Date.now()
+        });
+
+        if (this.stateHistory.length > 20) { // Store more history
+            this.stateHistory.shift();
+        }
+
+        return { delta, version: this.stateVersion };
+    }
+    return null; // No changes
   }
 
   addPdf(pdfData, fileBuffer) {
@@ -94,7 +105,7 @@ class GameSession {
       hostSocketId: this.hostSocketId,
       clientCount: this.clients.size,
       gameState: this.gameState,
-      version: this.updateVersion
+      version: this.stateVersion
     };
   }
 }
@@ -188,7 +199,7 @@ io.on('connection', (socket) => {
       gameState: session.gameState,
       isHost: session.hostSocketId === socket.id,
       clientCount: session.clients.size,
-      version: session.updateVersion
+      version: session.stateVersion
     });
 
     // Notify other clients about new player
@@ -216,7 +227,7 @@ io.on('connection', (socket) => {
       gameState: session.gameState,
       isHost: true,
       clientCount: 1,
-      version: session.updateVersion
+      version: session.stateVersion
     });
   });
 
@@ -227,12 +238,32 @@ io.on('connection', (socket) => {
     const session = gameSessions.get(socket.sessionId);
     if (!session) return;
 
-    const updatePayload = session.updateGameState(updates);
+    const result = session.updateGameState(updates);
     
-    // Broadcast to all other clients in the session
-    socket.to(socket.sessionId).emit('game-state-updated', updatePayload);
+    if (result) {
+        const { delta, version } = result;
+        socket.to(socket.sessionId).emit('game-state-delta', {
+            delta,
+            version,
+            fromVersion: version - 1
+        });
+        console.log(`Game state delta sent for version ${version} in session ${socket.sessionId}`);
+    }
+  });
+
+  socket.on('request-missing-updates', ({ fromVersion }, callback) => {
+    const session = gameSessions.get(socket.sessionId);
+    if (!session) return callback({ error: 'Session not found' });
+
+    const relevantUpdates = session.stateHistory.filter(h => h.version > fromVersion);
     
-    console.log(`Game state updated in session ${socket.sessionId} to version ${updatePayload.version}`);
+    if (relevantUpdates.length > 0 && relevantUpdates[0].version === fromVersion + 1) {
+        // We can send the deltas
+        callback({ success: true, deltas: relevantUpdates });
+    } else {
+        // We need to send the full state
+        callback({ success: true, fullState: session.gameState, version: session.stateVersion });
+    }
   });
 
   // Acknowledgment from client
