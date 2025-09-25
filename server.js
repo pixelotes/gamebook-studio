@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const jsondiffpatch = require('jsondiffpatch');
 const pako = require('pako');
+const crc = require('crc');
 
 const diffpatcher = jsondiffpatch.create({
   objectHash: (obj) => obj.id || JSON.stringify(obj),
@@ -243,6 +244,8 @@ io.on('connection', (socket) => {
     
     if (result) {
         const { delta, version } = result;
+        const gameStateCrc = crc.crc32(JSON.stringify(session.gameState)).toString(16);
+        console.log(`Game state updated version ${version} in session ${socket.sessionId} CRC: ${gameStateCrc}`);
         socket.to(socket.sessionId).emit('game-state-delta', {
             delta,
             version,
@@ -311,7 +314,8 @@ io.on('connection', (socket) => {
       session.gameState.pageLayers[decompressedData.pdfId] = {};
     }
     session.gameState.pageLayers[decompressedData.pdfId][decompressedData.pageNum] = decompressedData.layers;
-
+    const pdfCrc = crc.crc32(JSON.stringify(session.gameState.pageLayers)).toString(16);
+    console.log(`PDF layers updated for ${decompressedData.pdfId} page ${decompressedData.pageNum} in session ${socket.sessionId} CRC: ${pdfCrc}`);
     // Broadcast to other clients in compressed format
     socket.to(socket.sessionId).emit('layers-updated', data);
   });
