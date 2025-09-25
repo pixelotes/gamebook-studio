@@ -21,7 +21,7 @@ const CollapsibleSection = ({ title, children, isOpen, onToggle }) => (
 );
 
 const Sidebar = ({ children }) => {
-  const { state, dispatch, activePdf } = useContext(AppContext);
+  const { state, dispatch } = useContext(AppContext);
   const { activeTab, selectedTemplate, openSections } = state;
 
   const setActiveTab = (tabId) => {
