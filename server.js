@@ -249,7 +249,8 @@ io.on('connection', (socket) => {
         socket.to(socket.sessionId).emit('game-state-delta', {
             delta,
             version,
-            fromVersion: version - 1
+            fromVersion: version - 1,
+            crc: gameStateCrc
         });
         console.log(`Game state delta sent for version ${version} in session ${socket.sessionId}`);
     }
@@ -317,7 +318,7 @@ io.on('connection', (socket) => {
     const pdfCrc = crc.crc32(JSON.stringify(session.gameState.pageLayers)).toString(16);
     console.log(`PDF layers updated for ${decompressedData.pdfId} page ${decompressedData.pageNum} in session ${socket.sessionId} CRC: ${pdfCrc}`);
     // Broadcast to other clients in compressed format
-    socket.to(socket.sessionId).emit('layers-updated', data);
+    socket.to(socket.sessionId).emit('layers-updated', {data, crc: pdfCrc});
   });
 
   // Real-time drawing/token placement
