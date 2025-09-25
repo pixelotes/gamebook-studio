@@ -854,6 +854,13 @@ const handlePdfAdded = async (pdfData) => {
 const handleFileUpload = async (event) => {
     const files = event.target.files;
     if (files.length === 0) return;
+
+    // Prevent non-host from uploading PDFs in multiplayer
+    if (multiplayerSession && !isHost) {
+      addNotification("Only the session host can open PDFs", "error");
+      event.target.value = ''; // Reset file input
+      return;
+    }
   
     const newPdfsData = [];
     for (const file of files) {
