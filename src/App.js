@@ -49,6 +49,7 @@ class MockFabricCanvas {
     this.activeLayer = 'tokens';
     this.isDrawing = false;
     this.isDragging = false;
+    this.previewRect = null;
     this.dragTarget = null;
     this.dragOffset = { x: 0, y: 0 };
     this.tool = 'select';
@@ -204,6 +205,20 @@ class MockFabricCanvas {
       return; // Prevent other mouse move actions
     }
 
+    if (this.isDrawing && this.tool === 'rectangle' && this.startPos) {
+        const endX = (e.clientX - rect.left) / this.scale;
+        const endY = (e.clientY - rect.top) / this.scale;
+        
+        this.previewRect = {
+            x: Math.min(this.startPos.x, endX),
+            y: Math.min(this.startPos.y, endY),
+            width: Math.abs(this.startPos.x - endX),
+            height: Math.abs(this.startPos.y - endY)
+        };
+        // No need to call render, the animation loop will pick it up
+        return;
+    }
+
     if (this.isDragging && this.dragTarget) {
       this.dragTarget.x = (x - this.dragOffset.x) / this.scale;
       this.dragTarget.y = (y - this.dragOffset.y) / this.scale;
@@ -214,12 +229,29 @@ class MockFabricCanvas {
   }
 
   handleMouseUp(e) {
+
+    // Rectangle tool
+    if (this.isDrawing && this.tool === 'rectangle') {
+        if (this.previewRect && this.previewRect.width > 2 && this.previewRect.height > 2) { 
+            this.addObject('drawings', {
+                type: 'rectangle',
+                ...this.previewRect,
+                color: this.selectedColor,
+                id: Date.now()
+            });
+        }
+        this.previewRect = null; // Clear the preview rectangle
+    }
+
+    // Ruler tool
     if (this.isMeasuring) {
       this.isMeasuring = false;
       this.rulerStart = null;
       this.rulerEnd = null;
       this.render(); // Re-render to clear the ruler
     }
+
+    // Drawing tool
     if (this.isDrawing) {
         if (this.tool === 'rectangle') {
             const rect = this.canvas.getBoundingClientRect();
@@ -499,7 +531,19 @@ class MockFabricCanvas {
         this.ctx.restore();
       });
     });
-        if (this.isMeasuring && this.rulerStart && this.rulerEnd) {
+
+    // Render the live preview of the rectangle
+    if (this.previewRect) {
+        this.ctx.save();
+        this.ctx.scale(this.scale, this.scale);
+        this.ctx.strokeStyle = this.selectedColor;
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeRect(this.previewRect.x, this.previewRect.y, this.previewRect.width, this.previewRect.height);
+        this.ctx.restore();
+    }
+
+    // Render ruler tool
+    if (this.isMeasuring && this.rulerStart && this.rulerEnd) {
       this.ctx.save();
 
       const start = this.rulerStart;
@@ -1335,8 +1379,8 @@ const handleFileUpload = async (event) => {
         
         {isSidebarVisible && (
           <Sidebar>
-            <div className="p-4 border-b">
-              {multiplayerSession && (
+            {multiplayerSession && (
+            <div className="p-4 border-b">        
                 <MultiplayerStatus
                   sessionId={multiplayerSession}
                   isHost={isHost}
@@ -1344,8 +1388,8 @@ const handleFileUpload = async (event) => {
                   onLeaveSession={handleLeaveMultiplayerSession}
                   onCopySessionId={() => addNotification('Session ID copied to clipboard', 'success')}
                 />
-              )}
             </div>
+          )}
           </Sidebar>
         )}
 
