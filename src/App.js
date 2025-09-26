@@ -42,6 +42,9 @@ class MockFabricCanvas {
     this.canvas = canvasElement;
     this.ctx = canvasElement.getContext('2d');
     this.pageLayers = {};
+    this.isMeasuring = false;
+    this.rulerStart = null;
+    this.rulerEnd = null;
     this.currentPage = 1;
     this.activeLayer = 'tokens';
     this.isDrawing = false;
@@ -120,6 +123,13 @@ class MockFabricCanvas {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    if (this.tool === 'ruler') {
+      this.isMeasuring = true;
+      this.rulerStart = { x, y };
+      this.rulerEnd = { x, y };
+      this.render();
+      return;
+    }
     if (this.tool === 'pointer') {
       this.addPointer(x, y, this.selectedColor); // Pass the current color
       if (socketService.isMultiplayerActive()) {
@@ -188,6 +198,12 @@ class MockFabricCanvas {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    if (this.isMeasuring) {
+      this.rulerEnd = { x, y };
+      this.render();
+      return; // Prevent other mouse move actions
+    }
+
     if (this.isDragging && this.dragTarget) {
       this.dragTarget.x = (x - this.dragOffset.x) / this.scale;
       this.dragTarget.y = (y - this.dragOffset.y) / this.scale;
@@ -198,6 +214,12 @@ class MockFabricCanvas {
   }
 
   handleMouseUp(e) {
+    if (this.isMeasuring) {
+      this.isMeasuring = false;
+      this.rulerStart = null;
+      this.rulerEnd = null;
+      this.render(); // Re-render to clear the ruler
+    }
     if (this.isDrawing) {
         if (this.tool === 'rectangle') {
             const rect = this.canvas.getBoundingClientRect();
@@ -477,7 +499,43 @@ class MockFabricCanvas {
         this.ctx.restore();
       });
     });
-    this.ctx.restore();
+        if (this.isMeasuring && this.rulerStart && this.rulerEnd) {
+      this.ctx.save();
+
+      const start = this.rulerStart;
+      const end = this.rulerEnd;
+
+      // Draw the ruler line
+      this.ctx.beginPath();
+      this.ctx.moveTo(start.x, start.y);
+      this.ctx.lineTo(end.x, end.y);
+      this.ctx.strokeStyle = this.selectedColor;
+      this.ctx.lineWidth = 2;
+      this.ctx.setLineDash([5, 5]); // Make it a dashed line
+      this.ctx.stroke();
+      this.ctx.setLineDash([]); // Reset for other drawings
+
+      // Calculate distance and prepare text
+      const distance = Math.hypot(end.x - start.x, end.y - start.y);
+      const text = `${distance.toFixed(0)} px`;
+
+      // Position the text label near the end of the line
+      const textPadding = 5;
+      const textX = end.x + 10;
+      const textY = end.y;
+
+      // Draw a background for the text to make it readable
+      this.ctx.font = '12px Arial';
+      const textWidth = this.ctx.measureText(text).width;
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      this.ctx.fillRect(textX - textPadding, textY - 12 - textPadding, textWidth + textPadding * 2, 12 + textPadding * 2);
+      
+      // Draw the text
+      this.ctx.fillStyle = 'white';
+      this.ctx.fillText(text, textX, textY);
+
+      this.ctx.restore();
+    }
   }
   
   renderPointer(pointer) {
