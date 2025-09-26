@@ -50,6 +50,7 @@ class MockFabricCanvas {
     this.isDrawing = false;
     this.isDragging = false;
     this.previewRect = null;
+    this.previewToken = null;
     this.dragTarget = null;
     this.dragOffset = { x: 0, y: 0 };
     this.tool = 'select';
@@ -84,6 +85,7 @@ class MockFabricCanvas {
     this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
     this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
+    this.canvas.addEventListener('mouseleave', (e) => this.handleMouseLeave(e));
   }
   
   loadPageLayers(pageLayers) {
@@ -163,16 +165,16 @@ class MockFabricCanvas {
     if (!activeLayerObj || activeLayerObj.locked) return;
 
     if (this.tool === 'token' && this.selectedToken) {
-      this.addObject('tokens', {
-        type: 'gameToken',
-        shape: this.selectedToken.shape,
-        x: x / this.scale,
-        y: y / this.scale,
-        size: this.tokenSize,
-        color: this.selectedToken.color,
-        strokeColor: this.selectedToken.color === '#ffffff' ? '#000000' : '#ffffff',
-        id: Date.now()
-      });
+        const tokenData = this.previewToken || {
+          type: 'gameToken',
+          shape: this.selectedToken.shape,
+          x: (e.clientX - rect.left) / this.scale,
+          y: (e.clientY - rect.top) / this.scale,
+          size: this.tokenSize,
+          color: this.selectedToken.color,
+          strokeColor: this.selectedToken.color === '#ffffff' ? '#000000' : '#ffffff',
+      };
+      this.addObject('tokens', { ...tokenData, id: Date.now() });
     } else if (this.tool === 'draw') {
       this.isDrawing = true;
       this.startPath(x / this.scale, y / this.scale);
@@ -195,10 +197,31 @@ class MockFabricCanvas {
     }
   }
 
+  handleMouseLeave(e) {
+    this.previewToken = null;
+  }
+
   handleMouseMove(e) {
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    if (this.tool === 'token' && this.selectedToken) {
+      this.previewToken = {
+        type: 'gameToken',
+        shape: this.selectedToken.shape,
+        x: x / this.scale,
+        y: y / this.scale,
+        size: this.tokenSize,
+        color: this.selectedToken.color,
+        strokeColor: this.selectedToken.color === '#ffffff' ? '#000000' : '#ffffff',
+      };
+      // Animation loop will handle rendering
+      return;
+    } else {
+      // Ensure the preview is cleared if we switch tools while the mouse is over the canvas
+      this.previewToken = null;
+    }
 
     if (this.isMeasuring) {
       this.rulerEnd = { x, y };
@@ -545,6 +568,16 @@ class MockFabricCanvas {
         this.ctx.strokeStyle = this.selectedColor;
         this.ctx.lineWidth = 3;
         this.ctx.strokeRect(this.previewRect.x, this.previewRect.y, this.previewRect.width, this.previewRect.height);
+        this.ctx.restore();
+    }
+
+    // Token preview
+    if (this.previewToken) {
+        this.ctx.save();
+        this.ctx.scale(this.scale, this.scale);
+        this.ctx.globalAlpha = 0.6; // Make the preview semi-transparent
+        this.renderGameToken(this.previewToken);
+        this.ctx.globalAlpha = 1.0; // Reset alpha
         this.ctx.restore();
     }
 
