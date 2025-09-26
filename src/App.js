@@ -708,9 +708,13 @@ const GamebookApp = () => {
         );
         dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
     };
+  
     const handleLayersUpdated = (data) => {
+        // Check if data is wrapped in an object and extract it
+        const compressedData = data.data ? data.data : data;
+
         // Decompress the incoming data
-        const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
+        const decompressedData = JSON.parse(pako.inflate(compressedData, { to: 'string' }));
 
         if (fabricCanvas.current && decompressedData.pdfId === stateRef.current.activePdfId && decompressedData.pageNum === stateRef.current.pdfs.find(p=>p.id === decompressedData.pdfId)?.currentPage) {
             fabricCanvas.current.updateLayersFromMultiplayer(decompressedData.layers);

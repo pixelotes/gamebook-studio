@@ -318,7 +318,7 @@ io.on('connection', (socket) => {
     const pdfCrc = crc.crc32(JSON.stringify(session.gameState.pageLayers)).toString(16);
     console.log(`PDF layers updated for ${decompressedData.pdfId} page ${decompressedData.pageNum} in session ${socket.sessionId} CRC: ${pdfCrc}`);
     // Broadcast to other clients in compressed format
-    socket.to(socket.sessionId).emit('layers-updated', {data, crc: pdfCrc});
+    socket.to(socket.sessionId).emit('layers-updated', data);
   });
 
   // Real-time drawing/token placement
