@@ -1,5 +1,5 @@
 import React, { useReducer, useRef, useEffect, useCallback, useState } from 'react';
-import { Upload, RotateCcw, Save, Menu, FilePlus, X, Wifi } from 'lucide-react';
+import { Upload, RotateCcw, Save, Menu, FilePlus, X, Wifi, Moon, Sun } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import FloatingDice from './components/FloatingDice';
 import Sidebar from './components/Sidebar';
@@ -524,7 +524,7 @@ const GamebookApp = () => {
   const {
     pdfs, activePdfId, characters, notes, counters, selectedTool, selectedColor,
     selectedTokenShape, selectedTokenColor, tokenSize, sessionToRestore,
-    isSidebarVisible, menuOpen
+    isSidebarVisible, menuOpen, theme
   } = state;
 
   const [showMultiplayerModal, setShowMultiplayerModal] = useState(false);
@@ -632,6 +632,14 @@ const GamebookApp = () => {
     }
     renderPdfPage();
   }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate]);
+
+  useEffect(() => {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }, [theme]);
 
   useEffect(() => {
     const handleGameStateDelta = async (data) => {
@@ -1127,7 +1135,7 @@ const handleFileUpload = async (event) => {
 
   return (
     <AppContext.Provider value={{ state, dispatch, fabricCanvas, handleBookmarkNavigate, activePdf, goToPage, zoomIn, zoomOut }}>
-      <div className="flex h-screen bg-gray-100">
+      <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
         <MultiplayerNotifications notifications={notifications} />
         
         <MultiplayerModal
@@ -1188,6 +1196,17 @@ const handleFileUpload = async (event) => {
                     <Wifi size={14} /> Disconnect
                   </button>
                 )}
+                <button
+                  onClick={() => { dispatch({ type: 'TOGGLE_THEME' }); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+                  Toggle Theme
+                </button>
+                <button
+                  onClick={() => { handleNewSession(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                ></button>
                 <button
                   onClick={() => { handleNewSession(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

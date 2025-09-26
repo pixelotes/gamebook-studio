@@ -71,7 +71,7 @@ const Toolbar = () => {
   ];
 
   return (
-    <div className="bg-white border-b border-gray-200 px-3 py-1  flex items-center justify-between">
+    <div className="bg-white border-b border-gray-200 px-3 py-1 flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center gap-4">
         <button
           onClick={() => setIsSidebarVisible(!isSidebarVisible)}
