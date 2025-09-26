@@ -60,7 +60,8 @@ class MockFabricCanvas {
     this.startPos = { x: 0, y: 0 };
     this.onLayerUpdate = onLayerUpdate;
     this.currentPdfId = null;
-    this.animationFrameId = null; // Add property to hold animation frame ID
+    this.animationFrameId = null;
+    this.lineWidth = 3;
     this.setupEvents();
     this.startAnimationLoop(); // Start the animation loop
   }
@@ -426,11 +427,16 @@ class MockFabricCanvas {
     }
   }
 
+  setLineWidth(width) {
+    this.lineWidth = width;
+  }
+
   startPath(x, y) {
     this.addObject('drawings', {
       type: 'path',
       points: [{ x, y }],
       color: this.selectedColor,
+      width: this.lineWidth,
       id: Date.now()
     });
   }
@@ -507,7 +513,7 @@ class MockFabricCanvas {
         } else if (obj.type === 'path') {
           this.ctx.beginPath();
           this.ctx.strokeStyle = obj.color;
-          this.ctx.lineWidth = 3;
+          this.ctx.lineWidth = obj.width || 3; // Use the saved width
           this.ctx.lineCap = 'round';
           this.ctx.lineJoin = 'round';
           
@@ -744,7 +750,7 @@ const GamebookApp = () => {
   const {
     pdfs, activePdfId, characters, notes, counters, selectedTool, selectedColor,
     selectedTokenShape, selectedTokenColor, tokenSize, sessionToRestore,
-    isSidebarVisible, menuOpen, theme
+    isSidebarVisible, menuOpen, theme, lineWidth
   } = state;
 
   const [showMultiplayerModal, setShowMultiplayerModal] = useState(false);
@@ -851,6 +857,7 @@ const GamebookApp = () => {
       fabricCanvas.current.setTokenSize(tokenSize);
       fabricCanvas.current.setTool(selectedTool);
       fabricCanvas.current.setColor(selectedColor);
+      fabricCanvas.current.setLineWidth(lineWidth);
       if (activePdf) {
         fabricCanvas.current.setCurrentPdf(activePdf.id);
       }
@@ -859,7 +866,7 @@ const GamebookApp = () => {
       }
     }
     renderPdfPage();
-  }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate]);
+  }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate, lineWidth]);
 
   useEffect(() => {
     const handleGameStateDelta = async (data) => {

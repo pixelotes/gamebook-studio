@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { AppContext } from '../state/appState';
 import {
   PanelLeft, ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Layers, ChevronDown, Eye, EyeOff, Trash2,
-  Move, Stamp, Square, Type, Pen, Eraser, Circle, MousePointerClick, Ruler
+  Move, Stamp, Square, Type, Pen, Eraser, Circle, MousePointerClick, Ruler, Signal
 } from 'lucide-react';
 import { TOKEN_SHAPES } from '../data/Shapes';
 import { TOKEN_COLORS } from '../data/Colors';
@@ -12,7 +12,7 @@ const Toolbar = () => {
   const { state, dispatch, fabricCanvas, goToPage, zoomIn, zoomOut, activePdf } = useContext(AppContext);
   const {
     isSidebarVisible, activeDropdown, selectedTool, selectedColor,
-    selectedTokenShape, selectedTokenColor, tokenSize
+    selectedTokenShape, selectedTokenColor, tokenSize, lineWidth
   } = state;
 
   const setIsSidebarVisible = (isVisible) => {
@@ -60,6 +60,17 @@ const Toolbar = () => {
       dispatch({ type: 'SET_STATE', payload: { layerStateKey: state.layerStateKey + 1 } });
     }
   };
+
+  const setLineWidth = (width) => {
+    dispatch({ type: 'SET_STATE', payload: { lineWidth: width } });
+  };
+  
+  const lineWidths = [
+    { value: 1, label: 'Thin' },
+    { value: 3, label: 'Normal' },
+    { value: 8, label: 'Thick' },
+    { value: 15, label: 'Heavy' },
+  ];
 
   const tools = [
     { id: 'select', icon: Move, label: 'Select' },
@@ -225,6 +236,37 @@ const Toolbar = () => {
                     >
                       <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }}/>
                       {color.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+                    {selectedTool === 'draw' && (
+            <div className="relative">
+              <button
+                onClick={() => setActiveDropdown(activeDropdown === 'lineWidth' ? null : 'lineWidth')}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
+                title="Select line width"
+              >
+                <Signal size={16} />
+                <span className="font-medium">{lineWidth}px</span>
+                <ChevronDown size={14} className="text-gray-500" />
+              </button>
+              {activeDropdown === 'lineWidth' && (
+                <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+                  {lineWidths.map(width => (
+                    <button
+                      key={width.value}
+                      onClick={() => {
+                        setLineWidth(width.value);
+                        setActiveDropdown(null);
+                      }}
+                      className="w-full text-left flex items-center justify-between gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                    >
+                      <span>{width.label}</span>
+                      <span className="text-xs text-gray-500">{width.value}px</span>
                     </button>
                   ))}
                 </div>

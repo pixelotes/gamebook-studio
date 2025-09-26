@@ -22,6 +22,7 @@ export const initialState = {
   selectedTokenShape: 'circle',
   selectedTokenColor: '#ff6b6b',
   tokenSize: 20,
+  lineWidth: 3,
   sessionToRestore: null,
   menuOpen: false,
   activeDropdown: null,
