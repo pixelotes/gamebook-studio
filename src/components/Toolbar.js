@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { AppContext } from '../state/appState';
 import {
   PanelLeft, ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Layers, ChevronDown, Eye, EyeOff, Trash2,
-  Move, Stamp, Square, Type, Pen, Eraser, Circle
+  Move, Stamp, Square, Type, Pen, Eraser, Circle, MousePointerClick
 } from 'lucide-react';
 import { TOKEN_SHAPES } from '../data/Shapes';
 import { TOKEN_COLORS } from '../data/Colors';
@@ -64,6 +64,7 @@ const Toolbar = () => {
   const tools = [
     { id: 'select', icon: Move, label: 'Select' },
     { id: 'token', icon: Stamp, label: 'Token' },
+    { id: 'pointer', icon: MousePointerClick, label: 'Pointer' },
     { id: 'rectangle', icon: Square, label: 'Rectangle' },
     { id: 'text', icon: Type, label: 'Text' },
     { id: 'draw', icon: Pen, label: 'Draw' },

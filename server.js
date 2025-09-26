@@ -321,6 +321,14 @@ io.on('connection', (socket) => {
     socket.to(socket.sessionId).emit('layers-updated', data);
   });
 
+  // Send pointer events
+  socket.on('pointer-event', (data) => {
+    if (socket.sessionId) {
+      // Broadcast to all other clients in the session
+      socket.to(socket.sessionId).emit('pointer-event', data);
+    }
+  });
+  
   // Real-time drawing/token placement
   socket.on('real-time-update', (data) => {
     if (!socket.sessionId) return;

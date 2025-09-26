@@ -56,7 +56,9 @@ class MockFabricCanvas {
     this.startPos = { x: 0, y: 0 };
     this.onLayerUpdate = onLayerUpdate;
     this.currentPdfId = null;
+    this.animationFrameId = null; // Add property to hold animation frame ID
     this.setupEvents();
+    this.startAnimationLoop(); // Start the animation loop
   }
 
   setCurrentPdf(pdfId) {
@@ -99,11 +101,36 @@ class MockFabricCanvas {
     this.scale = scale;
     this.render();
   }
+  
+  addPointer(x, y) {
+    const pointer = {
+      type: 'pointer',
+      id: Date.now() + Math.random(),
+      createdAt: Date.now(),
+      x: x / this.scale,
+      y: y / this.scale,
+    };
+    // Add the pointer to the 'drawings' layer
+    this.addObject('drawings', pointer);
+  }
 
   handleMouseDown(e) {
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    if (this.tool === 'pointer') {
+      this.addPointer(x, y);
+      if (socketService.isMultiplayerActive()) {
+        socketService.sendPointer({
+          pdfId: this.currentPdfId,
+          pageNum: this.currentPage,
+          x,
+          y,
+        });
+      }
+      return;
+    }
 
     if (this.tool === 'select') {
       const clickedToken = this.findTokenAt(x, y);
@@ -253,6 +280,40 @@ class MockFabricCanvas {
                     return distance < 10;
                 });
             }
+            if (obj.type === 'text') {
+                const font = obj.font || '16px Arial';
+                this.ctx.font = font;
+                const textWidth = this.ctx.measureText(obj.content).width;
+                const fontSize = parseInt(font.match(/\d+/)[0] || '16');
+
+                const scaledX = obj.x * this.scale;
+                const scaledY = obj.y * this.scale;
+                const scaledWidth = textWidth * this.scale;
+                const scaledHeight = fontSize * this.scale;
+
+                return (
+                    x < scaledX ||
+                    x > scaledX + scaledWidth ||
+                    y > scaledY ||
+                    y < scaledY - scaledHeight
+                );
+            }
+            // --- FIX STARTS HERE ---
+            if (obj.type === 'rectangle') {
+                const scaledX = obj.x * this.scale;
+                const scaledY = obj.y * this.scale;
+                const scaledWidth = obj.width * this.scale;
+                const scaledHeight = obj.height * this.scale;
+                
+                // Check if the click is outside the rectangle's bounds
+                return (
+                    x < scaledX ||
+                    x > scaledX + scaledWidth ||
+                    y < scaledY ||
+                    y > scaledY + scaledHeight
+                );
+            }
+            // --- FIX ENDS HERE ---
             return true;
         });
         if (newObjects.length !== originalLength) {
@@ -385,6 +446,8 @@ class MockFabricCanvas {
         
         if (obj.type === 'gameToken') {
           this.renderGameToken(obj);
+        } else if (obj.type === 'pointer') {
+          this.renderPointer(obj); // Call the new render method
         } else if (obj.type === 'path') {
           this.ctx.beginPath();
           this.ctx.strokeStyle = obj.color;
@@ -413,6 +476,59 @@ class MockFabricCanvas {
       });
     });
     this.ctx.restore();
+  }
+  
+  renderPointer(pointer) {
+    const life = (Date.now() - pointer.createdAt) / 1000; // age in seconds
+    if (life > 10) return;
+
+    const x = pointer.x;
+    const y = pointer.y;
+
+    // Animation: pulsing scale and rotation
+    const pulse = Math.sin(life * Math.PI * 2); // A cycle every second
+    const scale = 1 + pulse * 0.2;
+    const rotation = life * 90; // degrees per second
+    const size = 20;
+
+    this.ctx.strokeStyle = '#ff3838';
+    this.ctx.lineWidth = 3;
+    
+    this.ctx.translate(x, y);
+    this.ctx.rotate(rotation * Math.PI / 180);
+    this.ctx.scale(scale, scale);
+
+    // Draw a crosshair
+    this.ctx.beginPath();
+    this.ctx.moveTo(-size, 0);
+    this.ctx.lineTo(size, 0);
+    this.ctx.moveTo(0, -size);
+    this.ctx.lineTo(0, size);
+    this.ctx.stroke();
+  }
+
+  startAnimationLoop() {
+    const loop = () => {
+      // Clean up expired pointers
+      this.layers.forEach(layer => {
+        layer.objects = layer.objects.filter(obj => {
+          if (obj.type === 'pointer') {
+            return (Date.now() - obj.createdAt) < 10000;
+          }
+          return true;
+        });
+      });
+
+      this.render();
+      this.animationFrameId = requestAnimationFrame(loop);
+    };
+    this.animationFrameId = requestAnimationFrame(loop);
+  }
+
+  stopAnimationLoop() {
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
   }
 
   renderGameToken(token) {
@@ -544,6 +660,14 @@ const GamebookApp = () => {
 
   const stateRef = useRef(state);
   stateRef.current = state;
+  
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   const addNotification = (message, type = 'info', details = null) => {
     const notification = {
@@ -634,14 +758,6 @@ const GamebookApp = () => {
   }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate]);
 
   useEffect(() => {
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    }, [theme]);
-
-  useEffect(() => {
     const handleGameStateDelta = async (data) => {
         if (data.fromVersion !== gameStateVersion) {
             // We've missed an update, request a catch-up from the server
@@ -716,13 +832,9 @@ const GamebookApp = () => {
         );
         dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
     };
-  
     const handleLayersUpdated = (data) => {
-        // Check if data is wrapped in an object and extract it
-        const compressedData = data.data ? data.data : data;
-
         // Decompress the incoming data
-        const decompressedData = JSON.parse(pako.inflate(compressedData, { to: 'string' }));
+        const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
 
         if (fabricCanvas.current && decompressedData.pdfId === stateRef.current.activePdfId && decompressedData.pageNum === stateRef.current.pdfs.find(p=>p.id === decompressedData.pdfId)?.currentPage) {
             fabricCanvas.current.updateLayersFromMultiplayer(decompressedData.layers);
@@ -737,6 +849,18 @@ const GamebookApp = () => {
         });
         dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
     };
+    
+    const handlePointerEvent = (data) => {
+      const activePdf = stateRef.current.pdfs.find(p => p.id === stateRef.current.activePdfId);
+      if (
+        fabricCanvas.current &&
+        data.pdfId === activePdf?.id &&
+        data.pageNum === activePdf?.currentPage
+      ) {
+        fabricCanvas.current.addPointer(data.x, data.y);
+      }
+    };
+
 
 const handlePdfAdded = async (pdfData) => {
     // If a PDF with the same ID already exists, do nothing.
@@ -806,6 +930,7 @@ const handlePdfAdded = async (pdfData) => {
     socketService.on('layers-updated', handleLayersUpdated);
     socketService.on('pdf-added', handlePdfAdded);
     socketService.on('pdf-removed', handlePdfRemoved);
+    socketService.on('pointer-event', handlePointerEvent);
 
     return () => {
         socketService.off('game-state-delta', handleGameStateDelta);
@@ -813,6 +938,7 @@ const handlePdfAdded = async (pdfData) => {
         socketService.off('layers-updated', handleLayersUpdated);
         socketService.off('pdf-added', handlePdfAdded);
         socketService.off('pdf-removed', handlePdfRemoved);
+        socketService.off('pointer-event', handlePointerEvent);
     };
   }, [gameStateVersion]);
 
@@ -1148,8 +1274,8 @@ const handleFileUpload = async (event) => {
         
         {isSidebarVisible && (
           <Sidebar>
-            {multiplayerSession && (
-            <div className="p-4 border-b">          
+            <div className="p-4 border-b">
+              {multiplayerSession && (
                 <MultiplayerStatus
                   sessionId={multiplayerSession}
                   isHost={isHost}
@@ -1157,9 +1283,8 @@ const handleFileUpload = async (event) => {
                   onLeaveSession={handleLeaveMultiplayerSession}
                   onCopySessionId={() => addNotification('Session ID copied to clipboard', 'success')}
                 />
-              
+              )}
             </div>
-            )}
           </Sidebar>
         )}
 
@@ -1169,19 +1294,19 @@ const handleFileUpload = async (event) => {
           <div className="absolute top-2 right-3 z-30">
             <button
               onClick={() => dispatch({ type: 'SET_STATE', payload: { menuOpen: !menuOpen } })}
-              className="p-2 rounded hover:bg-gray-100 bg-white/80 backdrop-blur-sm"
+              className="p-2 rounded hover:bg-gray-100 bg-white/80 backdrop-blur-sm dark:bg-gray-800/80 dark:hover:bg-gray-700"
             >
               <Menu size={16} />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20">
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20 dark:bg-gray-800 dark:border dark:border-gray-700">
                  {!multiplayerSession ? (
                   <button
                     onClick={() => {
                       setShowMultiplayerModal(true);
                       dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });
                     }}
-                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                   >
                     <Wifi size={14} /> Multiplayer
                   </button>
@@ -1191,7 +1316,7 @@ const handleFileUpload = async (event) => {
                       handleLeaveMultiplayerSession();
                       dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });
                     }}
-                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/50"
                   >
                     <Wifi size={14} /> Disconnect
                   </button>
@@ -1206,34 +1331,30 @@ const handleFileUpload = async (event) => {
                 <button
                   onClick={() => { handleNewSession(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                ></button>
-                <button
-                  onClick={() => { handleNewSession(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                 >
                   <FilePlus size={14} /> New Session
                 </button>
                 <button
                   onClick={() => { fileInputRef.current?.click(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <Upload size={14} /> Load PDFs
                 </button>
                 <button
                   onClick={() => { sessionFileInputRef.current?.click(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <Upload size={14} /> Load Session
                 </button>
                 <button
                   onClick={() => { handleSaveSession(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <Save size={14} /> Save Session
                 </button>
                 <button
                   onClick={() => { fabricCanvas.current?.clear(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <RotateCcw size={14} /> Clear Page Annotations
                 </button>
@@ -1244,13 +1365,13 @@ const handleFileUpload = async (event) => {
           </div>
           
           {pdfs.length > 0 && (
-            <div className="bg-gray-200 flex items-center">
+            <div className="bg-gray-200 flex items-center dark:bg-gray-800">
               {pdfs.map(pdf => (
                 <div
                   key={pdf.id}
                   onClick={() => dispatch({ type: 'SET_STATE', payload: { activePdfId: pdf.id } })}
                   className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
-                    pdf.id === activePdfId ? 'bg-white' : 'bg-gray-200 hover:bg-gray-300'
+                    pdf.id === activePdfId ? 'bg-white dark:bg-gray-700' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'
                   }`}
                 >
                   <span className="text-sm">{truncateFileName(pdf.fileName)}</span>

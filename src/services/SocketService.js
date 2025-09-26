@@ -175,6 +175,13 @@ class SocketService {
     }
   }
 
+  // Add this new method to send pointer events
+  sendPointer(data) {
+    if (this.socket && this.isConnected && this.sessionId) {
+      this.socket.emit('pointer-event', data);
+    }
+  }
+  
   // Roll dice
   rollDice(expression, result) {
     if (this.socket && this.isConnected && this.sessionId) {
