@@ -102,13 +102,14 @@ class MockFabricCanvas {
     this.render();
   }
   
-  addPointer(x, y) {
+  addPointer(x, y, color) {
     const pointer = {
       type: 'pointer',
       id: Date.now() + Math.random(),
       createdAt: Date.now(),
       x: x / this.scale,
       y: y / this.scale,
+      color: color || this.selectedColor, // Store the color on the object
     };
     // Add the pointer to the 'drawings' layer
     this.addObject('drawings', pointer);
@@ -120,13 +121,14 @@ class MockFabricCanvas {
     const y = e.clientY - rect.top;
 
     if (this.tool === 'pointer') {
-      this.addPointer(x, y);
+      this.addPointer(x, y, this.selectedColor); // Pass the current color
       if (socketService.isMultiplayerActive()) {
         socketService.sendPointer({
           pdfId: this.currentPdfId,
           pageNum: this.currentPage,
           x,
           y,
+          color: this.selectedColor, // Send the color in the event
         });
       }
       return;
@@ -491,7 +493,7 @@ class MockFabricCanvas {
     const rotation = life * 90; // degrees per second
     const size = 20;
 
-    this.ctx.strokeStyle = '#ff3838';
+    this.ctx.strokeStyle = pointer.color;
     this.ctx.lineWidth = 3;
     
     this.ctx.translate(x, y);
@@ -857,7 +859,8 @@ const GamebookApp = () => {
         data.pdfId === activePdf?.id &&
         data.pageNum === activePdf?.currentPage
       ) {
-        fabricCanvas.current.addPointer(data.x, data.y);
+        // Pass the color from the event data
+        fabricCanvas.current.addPointer(data.x, data.y, data.color);
       }
     };
 
