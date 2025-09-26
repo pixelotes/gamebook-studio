@@ -1140,8 +1140,8 @@ const handleFileUpload = async (event) => {
         
         {isSidebarVisible && (
           <Sidebar>
-            <div className="p-4 border-b">
-              {multiplayerSession && (
+            {multiplayerSession && (
+            <div className="p-4 border-b">          
                 <MultiplayerStatus
                   sessionId={multiplayerSession}
                   isHost={isHost}
@@ -1149,8 +1149,9 @@ const handleFileUpload = async (event) => {
                   onLeaveSession={handleLeaveMultiplayerSession}
                   onCopySessionId={() => addNotification('Session ID copied to clipboard', 'success')}
                 />
-              )}
+              
             </div>
+            )}
           </Sidebar>
         )}
 
