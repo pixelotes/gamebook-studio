@@ -18,7 +18,14 @@ const diffpatcher = create({
 });
 
 
+//pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+// Configure PDF.js for better compatibility
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+
+// Disable some problematic features for better compatibility
+pdfjsLib.getDocument.GlobalWorkerOptions = {
+  workerSrc: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`,
+};
 
 // Custom hook to get the previous value of a prop or state
 const usePrevious = (value) => {
@@ -581,10 +588,15 @@ const GamebookApp = () => {
       
       canvas.height = viewport.height;
       canvas.width = viewport.width;
+
+      // Clear the canvas first
+      context.clearRect(0, 0, canvas.width, canvas.height);
       
       const renderContext = {
         canvasContext: context,
-        viewport: viewport
+        viewport: viewport,
+        background: 'white',
+        transform: null
       };
   
       await page.render(renderContext).promise;
