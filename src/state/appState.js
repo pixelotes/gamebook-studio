@@ -3,6 +3,9 @@ import { CHARACTER_TEMPLATES } from '../data/Templates';
 
 export const AppContext = React.createContext();
 
+// A simple utility to generate more unique IDs
+const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+
 export const initialState = {
   pdfs: [],
   activePdfId: null,
@@ -33,7 +36,7 @@ export function reducer(state, action) {
     case 'ADD_CHARACTER':
         const template = CHARACTER_TEMPLATES[state.selectedTemplate];
         const newChar = {
-          id: Date.now(),
+          id: generateUniqueId(), // FIX: Use a more unique ID
           template: state.selectedTemplate,
           data: {
             customFields: []

@@ -11,6 +11,7 @@ import { MultiplayerModal, MultiplayerStatus, MultiplayerNotifications } from '.
 import socketService from './services/SocketService';
 import { create } from 'jsondiffpatch';
 import pako from 'pako';
+import { crc32 } from 'crc';
 
 const diffpatcher = create({
   objectHash: (obj) => obj.id,
@@ -640,6 +641,47 @@ const GamebookApp = () => {
         }
 
         const newState = diffpatcher.patch({ ...stateRef.current }, data.delta);
+        
+        // --- CRC Validation Start ---
+        const serverCrc = data.crc;
+        console.log(`Received CRC from server: ${serverCrc}`);
+
+        const pageLayersForCrc = {};
+        newState.pdfs.forEach(p => {
+            if (p.pageLayers && Object.keys(p.pageLayers).length > 0) {
+                pageLayersForCrc[p.id] = p.pageLayers;
+            }
+        });
+
+        const pdfsForCrc = newState.pdfs.map(p => ({
+            id: p.id,
+            fileName: p.fileName,
+            totalPages: p.totalPages,
+            currentPage: p.currentPage,
+            scale: p.scale,
+            bookmarks: p.bookmarks || [],
+            pageLayers: p.pageLayers || {},
+        }));
+        
+        const finalClientStateForCrc = {
+            pdfs: pdfsForCrc,
+            activePdfId: newState.activePdfId,
+            characters: newState.characters,
+            notes: newState.notes,
+            counters: newState.counters,
+            pageLayers: pageLayersForCrc
+        };
+        
+        const clientCrc = crc32(JSON.stringify(finalClientStateForCrc)).toString(16);
+        console.log(`Calculated Client CRC: ${clientCrc}`);
+
+        if (clientCrc === serverCrc) {
+            console.log('%cCRC Match!', 'color: green; font-weight: bold;');
+        } else {
+            console.error('%cCRC Mismatch!', 'color: red; font-weight: bold;');
+        }
+        // --- CRC Validation End ---
+
         dispatch({ type: 'SET_STATE', payload: newState });
         setGameStateVersion(data.version);
         socketService.sendAcknowledgement(data.version);

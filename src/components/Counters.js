@@ -2,6 +2,9 @@ import React, { useContext } from 'react';
 import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 
+// A simple utility to generate more unique IDs
+const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+
 const Counters = () => {
   const { state, dispatch } = useContext(AppContext);
   const { counters } = state;
@@ -9,7 +12,7 @@ const Counters = () => {
   const addCounter = () => {
     dispatch({ type: 'SET_STATE', payload: {
       counters: [...counters, { 
-        id: Date.now(), 
+        id: generateUniqueId(), // FIX: Use a more unique ID
         name: `Counter ${counters.length + 1}`, 
         value: 0,
         color: '#3b82f6'
@@ -31,6 +34,11 @@ const Counters = () => {
     }});
   };
 
+  // FIX: Silently filter out duplicate counters to prevent crashes
+  const uniqueCounters = counters.filter((counter, index, self) =>
+    index === self.findIndex((c) => c.id === counter.id)
+  );
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -44,7 +52,7 @@ const Counters = () => {
         </button>
       </div>
 
-      {counters.map(counter => (
+      {uniqueCounters.map(counter => (
         <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg">
           <div className="flex items-center justify-between mb-2">
             <input

@@ -3,6 +3,9 @@ import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
 
+// A simple utility to generate more unique IDs
+const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+
 const CharacterSheet = () => {
   const { state, dispatch } = useContext(AppContext);
   const { characters } = state;
@@ -19,7 +22,7 @@ const CharacterSheet = () => {
     dispatch({ type: 'SET_STATE', payload: {
       characters: characters.map(char => {
         if (char.id === charId) {
-          const newField = { id: Date.now(), name: 'New Stat', value: 0 };
+          const newField = { id: generateUniqueId(), name: 'New Stat', value: 0 }; // FIX: Use a more unique ID
           const customFields = char.data.customFields || [];
           return { ...char, data: { ...char.data, customFields: [...customFields, newField] } };
         }
@@ -54,9 +57,14 @@ const CharacterSheet = () => {
     }});
   };
 
+  // FIX: Silently filter out duplicate characters to prevent crashes
+  const uniqueCharacters = characters.filter((char, index, self) =>
+    index === self.findIndex((c) => c.id === char.id)
+  );
+
   return (
     <div>
-      {characters.map(char => {
+      {uniqueCharacters.map(char => {
         const template = CHARACTER_TEMPLATES[char.template];
         return (
           <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg">
