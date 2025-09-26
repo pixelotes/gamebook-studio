@@ -735,15 +735,40 @@ class MockFabricCanvas {
   }
 
   renderHeart(x, y, size) {
-    const scale = size / 20;
+    const w = size * 2;
+    const h = w * 1.1;
+    const topCurveHeight = h * 0.3;
+    const bottomCurveHeight = h * 0.7;
+
     this.ctx.beginPath();
-    this.ctx.moveTo(x, y + 5 * scale);
-    this.ctx.bezierCurveTo(x, y + 2 * scale, x - 5 * scale, y - 2 * scale, x - 10 * scale, y + 2 * scale);
-    this.ctx.bezierCurveTo(x - 15 * scale, y + 7 * scale, x - 15 * scale, y + 12 * scale, x - 10 * scale, y + 12 * scale);
-    this.ctx.bezierCurveTo(x - 5 * scale, y + 17 * scale, x, y + 22 * scale, x, y + 22 * scale);
-    this.ctx.bezierCurveTo(x, y + 22 * scale, x + 5 * scale, y + 17 * scale, x + 10 * scale, y + 12 * scale);
-    this.ctx.bezierCurveTo(x + 15 * scale, y + 12 * scale, x + 15 * scale, y + 7 * scale, x + 10 * scale, y + 2 * scale);
-    this.ctx.bezierCurveTo(x + 5 * scale, y - 2 * scale, x, y + 2 * scale, x, y + 5 * scale);
+    
+    // Start at the bottom point
+    this.ctx.moveTo(x, y + bottomCurveHeight / 2);
+
+    // Left side
+    this.ctx.bezierCurveTo(
+      x, y + (bottomCurveHeight - topCurveHeight) / 2,
+      x - w / 2, y + (bottomCurveHeight - topCurveHeight) / 2,
+      x - w / 2, y - topCurveHeight / 2
+    );
+    this.ctx.bezierCurveTo(
+      x - w / 2, y - (topCurveHeight + bottomCurveHeight) / 2,
+      x, y - (topCurveHeight + bottomCurveHeight) / 2,
+      x, y - topCurveHeight / 2
+    );
+
+    // Right side
+    this.ctx.bezierCurveTo(
+      x, y - (topCurveHeight + bottomCurveHeight) / 2,
+      x + w / 2, y - (topCurveHeight + bottomCurveHeight) / 2,
+      x + w / 2, y - topCurveHeight / 2
+    );
+    this.ctx.bezierCurveTo(
+      x + w / 2, y + (bottomCurveHeight - topCurveHeight) / 2,
+      x, y + (bottomCurveHeight - topCurveHeight) / 2,
+      x, y + bottomCurveHeight / 2
+    );
+
     this.ctx.closePath();
     this.ctx.fill();
     this.ctx.stroke();
