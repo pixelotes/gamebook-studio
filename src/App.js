@@ -520,23 +520,26 @@ class MockFabricCanvas {
 
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    
+    // Apply scale ONCE for all persistent objects and previews
     this.ctx.save();
     this.ctx.scale(this.scale, this.scale);
-    
+
+    // Render all saved objects from layers
     this.layers.forEach(layer => {
       if (!layer.visible) return;
-      
       layer.objects.forEach(obj => {
         this.ctx.save();
         
         if (obj.type === 'gameToken') {
           this.renderGameToken(obj);
         } else if (obj.type === 'pointer') {
-          this.renderPointer(obj); // Call the new render method
+          this.renderPointer(obj);
         } else if (obj.type === 'path') {
           this.ctx.beginPath();
           this.ctx.strokeStyle = obj.color;
-          this.ctx.lineWidth = obj.width || 3; // Use the saved width
+          this.ctx.lineWidth = obj.width || 3;
           this.ctx.lineCap = 'round';
           this.ctx.lineJoin = 'round';
           
@@ -561,27 +564,27 @@ class MockFabricCanvas {
       });
     });
 
-    // Render the live preview of the rectangle
+    // Render the live preview of the rectangle (within the same scaled context)
     if (this.previewRect) {
         this.ctx.save();
-        this.ctx.scale(this.scale, this.scale);
         this.ctx.strokeStyle = this.selectedColor;
         this.ctx.lineWidth = 3;
         this.ctx.strokeRect(this.previewRect.x, this.previewRect.y, this.previewRect.width, this.previewRect.height);
         this.ctx.restore();
     }
-
-    // Token preview
+    
+    // Render the live preview of the token (within the same scaled context)
     if (this.previewToken) {
         this.ctx.save();
-        this.ctx.scale(this.scale, this.scale);
         this.ctx.globalAlpha = 0.6; // Make the preview semi-transparent
         this.renderGameToken(this.previewToken);
-        this.ctx.globalAlpha = 1.0; // Reset alpha
         this.ctx.restore();
     }
+    
+    // Restore the main scaling context
+    this.ctx.restore();
 
-    // Render ruler tool
+    // Render the ruler on top of everything, without scaling, which is correct
     if (this.isMeasuring && this.rulerStart && this.rulerEnd) {
       this.ctx.save();
 
@@ -594,26 +597,24 @@ class MockFabricCanvas {
       this.ctx.lineTo(end.x, end.y);
       this.ctx.strokeStyle = this.selectedColor;
       this.ctx.lineWidth = 2;
-      this.ctx.setLineDash([5, 5]); // Make it a dashed line
+      this.ctx.setLineDash([5, 5]);
       this.ctx.stroke();
-      this.ctx.setLineDash([]); // Reset for other drawings
+      this.ctx.setLineDash([]);
 
       // Calculate distance and prepare text
       const distance = Math.hypot(end.x - start.x, end.y - start.y);
-      const text = `${distance.toFixed(0)} px`;
+      const text = `${(distance / this.scale).toFixed(0)} px`; // Also fix ruler to show unscaled pixels
 
-      // Position the text label near the end of the line
+      // Position the text label
       const textPadding = 5;
       const textX = end.x + 10;
       const textY = end.y;
-
-      // Draw a background for the text to make it readable
+      
       this.ctx.font = '12px Arial';
       const textWidth = this.ctx.measureText(text).width;
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       this.ctx.fillRect(textX - textPadding, textY - 12 - textPadding, textWidth + textPadding * 2, 12 + textPadding * 2);
       
-      // Draw the text
       this.ctx.fillStyle = 'white';
       this.ctx.fillText(text, textX, textY);
 
