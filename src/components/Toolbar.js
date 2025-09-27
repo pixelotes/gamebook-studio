@@ -8,7 +8,6 @@ import { TOKEN_SHAPES } from '../data/Shapes';
 import { TOKEN_COLORS } from '../data/Colors';
 
 const Toolbar = () => {
-  // --- FIX: Added zoomIn and zoomOut to the context destructuring ---
   const { state, dispatch, fabricCanvas, goToPage, zoomIn, zoomOut, activePdf } = useContext(AppContext);
   const {
     isSidebarVisible, activeDropdown, selectedTool, selectedColor,

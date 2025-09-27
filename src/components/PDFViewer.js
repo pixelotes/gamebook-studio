@@ -3,7 +3,6 @@ import { AppContext } from '../state/appState';
 import { FileText } from 'lucide-react';
 
 const PDFViewer = ({ pdfCanvasRef, overlayCanvasRef }) => {
-  // --- FIX: Destructure `activePdf` from the context root, not `state` ---
   const { state, activePdf } = useContext(AppContext);
   const { selectedTool } = state;
 

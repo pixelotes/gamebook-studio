@@ -378,7 +378,6 @@ class MockFabricCanvas {
                     y < scaledY - scaledHeight
                 );
             }
-            // --- FIX STARTS HERE ---
             if (obj.type === 'rectangle') {
                 const scaledX = obj.x * this.scale;
                 const scaledY = obj.y * this.scale;
@@ -393,7 +392,6 @@ class MockFabricCanvas {
                     y > scaledY + scaledHeight
                 );
             }
-            // --- FIX ENDS HERE ---
             return true;
         });
         if (newObjects.length !== originalLength) {
@@ -603,7 +601,7 @@ class MockFabricCanvas {
 
       // Calculate distance and prepare text
       const distance = Math.hypot(end.x - start.x, end.y - start.y);
-      const text = `${(distance / this.scale).toFixed(0)} px`; // Also fix ruler to show unscaled pixels
+      const text = `${(distance / this.scale).toFixed(0)} px`;
 
       // Position the text label
       const textPadding = 5;

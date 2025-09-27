@@ -12,7 +12,7 @@ const Counters = () => {
   const addCounter = () => {
     dispatch({ type: 'SET_STATE', payload: {
       counters: [...counters, { 
-        id: generateUniqueId(), // FIX: Use a more unique ID
+        id: generateUniqueId(),
         name: `Counter ${counters.length + 1}`, 
         value: 0,
         color: '#3b82f6'
@@ -34,7 +34,7 @@ const Counters = () => {
     }});
   };
 
-  // FIX: Silently filter out duplicate counters to prevent crashes
+  // Silently filter out duplicate counters to prevent crashes
   const uniqueCounters = counters.filter((counter, index, self) =>
     index === self.findIndex((c) => c.id === counter.id)
   );

@@ -22,7 +22,7 @@ const CharacterSheet = () => {
     dispatch({ type: 'SET_STATE', payload: {
       characters: characters.map(char => {
         if (char.id === charId) {
-          const newField = { id: generateUniqueId(), name: 'New Stat', value: 0 }; // FIX: Use a more unique ID
+          const newField = { id: generateUniqueId(), name: 'New Stat', value: 0 },
           const customFields = char.data.customFields || [];
           return { ...char, data: { ...char.data, customFields: [...customFields, newField] } };
         }
@@ -57,7 +57,7 @@ const CharacterSheet = () => {
     }});
   };
 
-  // FIX: Silently filter out duplicate characters to prevent crashes
+  // Silently filter out duplicate characters to prevent crashes
   const uniqueCharacters = characters.filter((char, index, self) =>
     index === self.findIndex((c) => c.id === char.id)
   );
