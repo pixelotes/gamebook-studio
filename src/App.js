@@ -1,5 +1,5 @@
 import React, { useReducer, useRef, useEffect, useCallback, useState } from 'react';
-import { Upload, RotateCcw, Save, Menu, FilePlus, X, Wifi, Moon, Sun } from 'lucide-react';
+import { Upload, RotateCcw, Save, Menu, FilePlus, X, Wifi, Moon, Sun, Columns, ArrowLeftRight } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import FloatingDice from './components/FloatingDice';
 import Sidebar from './components/Sidebar';
@@ -17,15 +17,7 @@ const diffpatcher = create({
   objectHash: (obj) => obj.id,
 });
 
-
-//pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
-// Configure PDF.js for better compatibility
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
-
-// Disable some problematic features for better compatibility
-pdfjsLib.getDocument.GlobalWorkerOptions = {
-  workerSrc: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`,
-};
 
 // Custom hook to get the previous value of a prop or state
 const usePrevious = (value) => {
@@ -38,7 +30,7 @@ const usePrevious = (value) => {
 
 // Enhanced Mock Fabric.js Canvas
 class MockFabricCanvas {
-  constructor(canvasElement, onLayerUpdate) {
+  constructor(canvasElement, onLayerUpdate, paneId = 'primary') {
     this.canvas = canvasElement;
     this.ctx = canvasElement.getContext('2d');
     this.pageLayers = {};
@@ -63,8 +55,9 @@ class MockFabricCanvas {
     this.currentPdfId = null;
     this.animationFrameId = null;
     this.lineWidth = 3;
+    this.paneId = paneId; // Track which pane this canvas belongs to
     this.setupEvents();
-    this.startAnimationLoop(); // Start the animation loop
+    this.startAnimationLoop();
   }
 
   setCurrentPdf(pdfId) {
@@ -116,9 +109,8 @@ class MockFabricCanvas {
       createdAt: Date.now(),
       x: x / this.scale,
       y: y / this.scale,
-      color: color || this.selectedColor, // Store the color on the object
+      color: color || this.selectedColor,
     };
-    // Add the pointer to the 'drawings' layer
     this.addObject('drawings', pointer);
   }
 
@@ -135,14 +127,14 @@ class MockFabricCanvas {
       return;
     }
     if (this.tool === 'pointer') {
-      this.addPointer(x, y, this.selectedColor); // Pass the current color
+      this.addPointer(x, y, this.selectedColor);
       if (socketService.isMultiplayerActive()) {
         socketService.sendPointer({
           pdfId: this.currentPdfId,
           pageNum: this.currentPage,
           x,
           y,
-          color: this.selectedColor, // Send the color in the event
+          color: this.selectedColor,
         });
       }
       return;
@@ -216,17 +208,15 @@ class MockFabricCanvas {
         color: this.selectedToken.color,
         strokeColor: this.selectedToken.color === '#ffffff' ? '#000000' : '#ffffff',
       };
-      // Animation loop will handle rendering
       return;
     } else {
-      // Ensure the preview is cleared if we switch tools while the mouse is over the canvas
       this.previewToken = null;
     }
 
     if (this.isMeasuring) {
       this.rulerEnd = { x, y };
       this.render();
-      return; // Prevent other mouse move actions
+      return;
     }
 
     if (this.isDrawing && this.tool === 'rectangle' && this.startPos) {
@@ -239,7 +229,6 @@ class MockFabricCanvas {
             width: Math.abs(this.startPos.x - endX),
             height: Math.abs(this.startPos.y - endY)
         };
-        // No need to call render, the animation loop will pick it up
         return;
     }
 
@@ -253,8 +242,6 @@ class MockFabricCanvas {
   }
 
   handleMouseUp(e) {
-
-    // Rectangle tool
     if (this.isDrawing && this.tool === 'rectangle') {
         if (this.previewRect && this.previewRect.width > 2 && this.previewRect.height > 2) { 
             this.addObject('drawings', {
@@ -264,18 +251,16 @@ class MockFabricCanvas {
                 id: Date.now()
             });
         }
-        this.previewRect = null; // Clear the preview rectangle
+        this.previewRect = null;
     }
 
-    // Ruler tool
     if (this.isMeasuring) {
       this.isMeasuring = false;
       this.rulerStart = null;
       this.rulerEnd = null;
-      this.render(); // Re-render to clear the ruler
+      this.render();
     }
 
-    // Drawing tool
     if (this.isDrawing) {
         if (this.tool === 'rectangle') {
             const rect = this.canvas.getBoundingClientRect();
@@ -302,7 +287,6 @@ class MockFabricCanvas {
             this.onLayerUpdate(this.currentPdfId, this.currentPage, newLayers);
         }
     }
-
 
     if (this.isDragging && this.dragTarget) {
       const newLayers = JSON.parse(JSON.stringify(this.layers));
@@ -384,7 +368,6 @@ class MockFabricCanvas {
                 const scaledWidth = obj.width * this.scale;
                 const scaledHeight = obj.height * this.scale;
                 
-                // Check if the click is outside the rectangle's bounds
                 return (
                     x < scaledX ||
                     x > scaledX + scaledWidth ||
@@ -519,12 +502,9 @@ class MockFabricCanvas {
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     
-    
-    // Apply scale ONCE for all persistent objects and previews
     this.ctx.save();
     this.ctx.scale(this.scale, this.scale);
 
-    // Render all saved objects from layers
     this.layers.forEach(layer => {
       if (!layer.visible) return;
       layer.objects.forEach(obj => {
@@ -562,7 +542,6 @@ class MockFabricCanvas {
       });
     });
 
-    // Render the live preview of the rectangle (within the same scaled context)
     if (this.previewRect) {
         this.ctx.save();
         this.ctx.strokeStyle = this.selectedColor;
@@ -571,25 +550,21 @@ class MockFabricCanvas {
         this.ctx.restore();
     }
     
-    // Render the live preview of the token (within the same scaled context)
     if (this.previewToken) {
         this.ctx.save();
-        this.ctx.globalAlpha = 0.6; // Make the preview semi-transparent
+        this.ctx.globalAlpha = 0.6;
         this.renderGameToken(this.previewToken);
         this.ctx.restore();
     }
     
-    // Restore the main scaling context
     this.ctx.restore();
 
-    // Render the ruler on top of everything, without scaling, which is correct
     if (this.isMeasuring && this.rulerStart && this.rulerEnd) {
       this.ctx.save();
 
       const start = this.rulerStart;
       const end = this.rulerEnd;
 
-      // Draw the ruler line
       this.ctx.beginPath();
       this.ctx.moveTo(start.x, start.y);
       this.ctx.lineTo(end.x, end.y);
@@ -599,11 +574,9 @@ class MockFabricCanvas {
       this.ctx.stroke();
       this.ctx.setLineDash([]);
 
-      // Calculate distance and prepare text
       const distance = Math.hypot(end.x - start.x, end.y - start.y);
       const text = `${(distance / this.scale).toFixed(0)} px`;
 
-      // Position the text label
       const textPadding = 5;
       const textX = end.x + 10;
       const textY = end.y;
@@ -621,16 +594,15 @@ class MockFabricCanvas {
   }
   
   renderPointer(pointer) {
-    const life = (Date.now() - pointer.createdAt) / 1000; // age in seconds
+    const life = (Date.now() - pointer.createdAt) / 1000;
     if (life > 10) return;
 
     const x = pointer.x;
     const y = pointer.y;
 
-    // Animation: pulsing scale and rotation
-    const pulse = Math.sin(life * Math.PI * 2); // A cycle every second
+    const pulse = Math.sin(life * Math.PI * 2);
     const scale = 1 + pulse * 0.2;
-    const rotation = life * 90; // degrees per second
+    const rotation = life * 90;
     const size = 20;
 
     this.ctx.strokeStyle = pointer.color;
@@ -640,7 +612,6 @@ class MockFabricCanvas {
     this.ctx.rotate(rotation * Math.PI / 180);
     this.ctx.scale(scale, scale);
 
-    // Draw a crosshair
     this.ctx.beginPath();
     this.ctx.moveTo(-size, 0);
     this.ctx.lineTo(size, 0);
@@ -651,7 +622,6 @@ class MockFabricCanvas {
 
   startAnimationLoop() {
     const loop = () => {
-      // Clean up expired pointers
       this.layers.forEach(layer => {
         layer.objects = layer.objects.filter(obj => {
           if (obj.type === 'pointer') {
@@ -741,10 +711,8 @@ class MockFabricCanvas {
 
     this.ctx.beginPath();
     
-    // Start at the bottom point
     this.ctx.moveTo(x, y + bottomCurveHeight / 2);
 
-    // Left side
     this.ctx.bezierCurveTo(
       x, y + (bottomCurveHeight - topCurveHeight) / 2,
       x - w / 2, y + (bottomCurveHeight - topCurveHeight) / 2,
@@ -756,7 +724,6 @@ class MockFabricCanvas {
       x, y - topCurveHeight / 2
     );
 
-    // Right side
     this.ctx.bezierCurveTo(
       x, y - (topCurveHeight + bottomCurveHeight) / 2,
       x + w / 2, y - (topCurveHeight + bottomCurveHeight) / 2,
@@ -805,7 +772,7 @@ class MockFabricCanvas {
 const GamebookApp = () => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const {
-    pdfs, activePdfId, characters, notes, counters, selectedTool, selectedColor,
+    pdfs, activePdfId, secondaryPdfId, isDualPaneMode, characters, notes, counters, selectedTool, selectedColor,
     selectedTokenShape, selectedTokenColor, tokenSize, sessionToRestore,
     isSidebarVisible, menuOpen, theme, lineWidth
   } = state;
@@ -819,11 +786,15 @@ const GamebookApp = () => {
 
   const pdfCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
+  const secondaryPdfCanvasRef = useRef(null);
+  const secondaryOverlayCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const sessionFileInputRef = useRef(null);
   const fabricCanvas = useRef(null);
+  const secondaryFabricCanvas = useRef(null);
   
   const activePdf = pdfs.find(p => p.id === activePdfId);
+  const secondaryPdf = pdfs.find(p => p.id === secondaryPdfId);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -865,22 +836,21 @@ const GamebookApp = () => {
     }
   }, []);
 
-  const renderPdfPage = useCallback(async () => {
-    if (!activePdf || !pdfCanvasRef.current) return;
+  const renderPdfPage = useCallback(async (pdfData, canvasRef, paneId = 'primary') => {
+    if (!pdfData || !canvasRef.current) return;
   
-    const { pdfDoc, currentPage, scale, pageLayers } = activePdf;
+    const { pdfDoc, currentPage, scale, pageLayers } = pdfData;
   
     try {
       const page = await pdfDoc.getPage(currentPage);
       const viewport = page.getViewport({ scale: scale });
       
-      const canvas = pdfCanvasRef.current;
+      const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
       
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
-      // Clear the canvas first
       context.clearRect(0, 0, canvas.width, canvas.height);
       
       const renderContext = {
@@ -892,24 +862,35 @@ const GamebookApp = () => {
   
       await page.render(renderContext).promise;
   
-      if (overlayCanvasRef.current) {
-        overlayCanvasRef.current.width = viewport.width;
-        overlayCanvasRef.current.height = viewport.height;
-        if (fabricCanvas.current) {
-          fabricCanvas.current.loadPageLayers(pageLayers);
-          fabricCanvas.current.setScale(scale);
-          fabricCanvas.current.setCurrentPage(currentPage);
+      const overlayCanvas = paneId === 'primary' ? overlayCanvasRef.current : secondaryOverlayCanvasRef.current;
+      const canvas_fabric = paneId === 'primary' ? fabricCanvas.current : secondaryFabricCanvas.current;
+      
+      if (overlayCanvas) {
+        overlayCanvas.width = viewport.width;
+        overlayCanvas.height = viewport.height;
+        if (canvas_fabric) {
+          canvas_fabric.loadPageLayers(pageLayers);
+          canvas_fabric.setScale(scale);
+          canvas_fabric.setCurrentPage(currentPage);
         }
       }
     } catch (error) {
       console.error('Error rendering page:', error);
     }
-  }, [activePdf]);
+  }, []);
   
   useEffect(() => {
+    // Initialize primary canvas
     if (overlayCanvasRef.current && !fabricCanvas.current) {
-      fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current, handleLayerUpdate);
+      fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current, handleLayerUpdate, 'primary');
     }
+    
+    // Initialize secondary canvas when dual pane is enabled
+    if (isDualPaneMode && secondaryOverlayCanvasRef.current && !secondaryFabricCanvas.current) {
+      secondaryFabricCanvas.current = new MockFabricCanvas(secondaryOverlayCanvasRef.current, handleLayerUpdate, 'secondary');
+    }
+    
+    // Update primary canvas
     if (fabricCanvas.current) {
       fabricCanvas.current.setTokenSize(tokenSize);
       fabricCanvas.current.setTool(selectedTool);
@@ -922,13 +903,31 @@ const GamebookApp = () => {
         fabricCanvas.current.setSelectedToken(selectedTokenShape, selectedTokenColor);
       }
     }
-    renderPdfPage();
-  }, [activePdf, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate, lineWidth]);
+    
+    // Update secondary canvas
+    if (secondaryFabricCanvas.current) {
+      secondaryFabricCanvas.current.setTokenSize(tokenSize);
+      secondaryFabricCanvas.current.setTool(selectedTool);
+      secondaryFabricCanvas.current.setColor(selectedColor);
+      secondaryFabricCanvas.current.setLineWidth(lineWidth);
+      if (secondaryPdf) {
+        secondaryFabricCanvas.current.setCurrentPdf(secondaryPdf.id);
+      }
+      if (selectedTool === 'token') {
+        secondaryFabricCanvas.current.setSelectedToken(selectedTokenShape, selectedTokenColor);
+      }
+    }
+    
+    renderPdfPage(activePdf, pdfCanvasRef, 'primary');
+    if (isDualPaneMode) {
+      renderPdfPage(secondaryPdf, secondaryPdfCanvasRef, 'secondary');
+    }
+  }, [activePdf, secondaryPdf, isDualPaneMode, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate, lineWidth]);
 
+  // Multiplayer effect handlers (keeping the same as original)
   useEffect(() => {
     const handleGameStateDelta = async (data) => {
         if (data.fromVersion !== gameStateVersion) {
-            // We've missed an update, request a catch-up from the server
             const response = await socketService.requestMissingUpdates(gameStateVersion);
             if (response.fullState) {
                 dispatch({ type: 'SET_STATE', payload: response.fullState });
@@ -946,10 +945,7 @@ const GamebookApp = () => {
 
         const newState = diffpatcher.patch({ ...stateRef.current }, data.delta);
         
-        // --- CRC Validation Start ---
         const serverCrc = data.crc;
-        console.log(`Received CRC from server: ${serverCrc}`);
-
         const pageLayersForCrc = {};
         newState.pdfs.forEach(p => {
             if (p.pageLayers && Object.keys(p.pageLayers).length > 0) {
@@ -977,14 +973,12 @@ const GamebookApp = () => {
         };
         
         const clientCrc = crc32(JSON.stringify(finalClientStateForCrc)).toString(16);
-        console.log(`Calculated Client CRC: ${clientCrc}`);
 
         if (clientCrc === serverCrc) {
             console.log('%cCRC Match!', 'color: green; font-weight: bold;');
         } else {
             console.error('%cCRC Mismatch!', 'color: red; font-weight: bold;');
         }
-        // --- CRC Validation End ---
 
         dispatch({ type: 'SET_STATE', payload: newState });
         setGameStateVersion(data.version);
@@ -1000,13 +994,17 @@ const GamebookApp = () => {
         );
         dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
     };
+    
     const handleLayersUpdated = (data) => {
-        // Decompress the incoming data
         const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
 
         if (fabricCanvas.current && decompressedData.pdfId === stateRef.current.activePdfId && decompressedData.pageNum === stateRef.current.pdfs.find(p=>p.id === decompressedData.pdfId)?.currentPage) {
             fabricCanvas.current.updateLayersFromMultiplayer(decompressedData.layers);
         }
+        if (secondaryFabricCanvas.current && decompressedData.pdfId === stateRef.current.secondaryPdfId && decompressedData.pageNum === stateRef.current.pdfs.find(p=>p.id === decompressedData.pdfId)?.currentPage) {
+            secondaryFabricCanvas.current.updateLayersFromMultiplayer(decompressedData.layers);
+        }
+        
         const currentPdfs = stateRef.current.pdfs;
         const newPdfs = currentPdfs.map(pdf => {
             if (pdf.id === decompressedData.pdfId) {
@@ -1020,77 +1018,91 @@ const GamebookApp = () => {
     
     const handlePointerEvent = (data) => {
       const activePdf = stateRef.current.pdfs.find(p => p.id === stateRef.current.activePdfId);
+      const secondaryPdf = stateRef.current.pdfs.find(p => p.id === stateRef.current.secondaryPdfId);
+      
       if (
         fabricCanvas.current &&
         data.pdfId === activePdf?.id &&
         data.pageNum === activePdf?.currentPage
       ) {
-        // Pass the color from the event data
         fabricCanvas.current.addPointer(data.x, data.y, data.color);
+      }
+      
+      if (
+        secondaryFabricCanvas.current &&
+        data.pdfId === secondaryPdf?.id &&
+        data.pageNum === secondaryPdf?.currentPage
+      ) {
+        secondaryFabricCanvas.current.addPointer(data.x, data.y, data.color);
       }
     };
 
+    const handlePdfAdded = async (pdfData) => {
+        if (stateRef.current.pdfs.some(p => p.id === pdfData.id)) return;
 
-const handlePdfAdded = async (pdfData) => {
-    // If a PDF with the same ID already exists, do nothing.
-    if (stateRef.current.pdfs.some(p => p.id === pdfData.id)) return;
+        try {
+            const pdfUrl = socketService.getPdfUrl(pdfData.id);
+            const response = await fetch(pdfUrl);
+            const arrayBuffer = await response.arrayBuffer();
+            const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
 
-    try {
-        const pdfUrl = socketService.getPdfUrl(pdfData.id);
-        const response = await fetch(pdfUrl);
-        const arrayBuffer = await response.arrayBuffer();
-        const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+            const newPdf = {
+                ...pdfData,
+                pdfDoc,
+                file: null
+            };
 
-        const newPdf = {
-            ...pdfData,
-            pdfDoc,
-            file: null
-        };
+            const currentPdfs = [...stateRef.current.pdfs];
+            const existingPdfIndex = currentPdfs.findIndex(p => p.fileName === pdfData.fileName);
 
-        const currentPdfs = [...stateRef.current.pdfs];
-        const existingPdfIndex = currentPdfs.findIndex(p => p.fileName === pdfData.fileName);
+            if (existingPdfIndex !== -1) {
+                const oldPdfId = currentPdfs[existingPdfIndex].id;
+                currentPdfs[existingPdfIndex] = newPdf;
 
-        if (existingPdfIndex !== -1) {
-            // If a PDF with the same name exists, replace it.
-            const oldPdfId = currentPdfs[existingPdfIndex].id;
-            currentPdfs[existingPdfIndex] = newPdf;
+                dispatch({
+                    type: 'SET_STATE',
+                    payload: {
+                        pdfs: currentPdfs,
+                        activePdfId: stateRef.current.activePdfId === oldPdfId
+                            ? newPdf.id
+                            : stateRef.current.activePdfId
+                    }
+                });
+            } else {
+                dispatch({ 
+                    type: 'SET_STATE', 
+                    payload: { 
+                        pdfs: [...currentPdfs, newPdf],
+                        activePdfId: newPdf.id
+                    } 
+                });
+            }
 
-            dispatch({
-                type: 'SET_STATE',
-                payload: {
-                    pdfs: currentPdfs,
-                    // If the replaced PDF was the active one, keep the new one active.
-                    activePdfId: stateRef.current.activePdfId === oldPdfId
-                        ? newPdf.id
-                        : stateRef.current.activePdfId
-                }
-            });
-        } else {
-            // Otherwise, add the new PDF and make it active
-            dispatch({ 
-                type: 'SET_STATE', 
-                payload: { 
-                    pdfs: [...currentPdfs, newPdf],
-                    activePdfId: newPdf.id
-                } 
-            });
+            addNotification(`PDF "${pdfData.fileName}" was added to the session`, 'success');
+        } catch (error) {
+            console.error('Failed to load PDF from session:', error);
+            addNotification('Failed to load PDF from session', 'error');
         }
-
-        addNotification(`PDF "${pdfData.fileName}" was added to the session`, 'success');
-    } catch (error) {
-        console.error('Failed to load PDF from session:', error);
-        addNotification('Failed to load PDF from session', 'error');
-    }
-  };
+    };
 
     const handlePdfRemoved = (pdfId) => {
         const currentPdfs = stateRef.current.pdfs;
         const newPdfs = currentPdfs.filter(p => p.id !== pdfId);
         let newActivePdfId = stateRef.current.activePdfId;
+        let newSecondaryPdfId = stateRef.current.secondaryPdfId;
+        
         if (newActivePdfId === pdfId) {
             newActivePdfId = newPdfs.length > 0 ? newPdfs[0].id : null;
         }
-        dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs, activePdfId: newActivePdfId } });
+        if (newSecondaryPdfId === pdfId) {
+            newSecondaryPdfId = null;
+        }
+        
+        dispatch({ type: 'SET_STATE', payload: { 
+            pdfs: newPdfs, 
+            activePdfId: newActivePdfId,
+            secondaryPdfId: newSecondaryPdfId
+        } });
         addNotification('A PDF was removed from the session', 'info');
     };
 
@@ -1111,6 +1123,7 @@ const handlePdfAdded = async (pdfData) => {
     };
   }, [gameStateVersion]);
 
+  // Keep the same multiplayer state sync effects
   const prevCharacters = usePrevious(characters);
   useEffect(() => {
     if (socketService.isMultiplayerActive() && JSON.stringify(prevCharacters) !== JSON.stringify(characters)) {
@@ -1128,7 +1141,7 @@ const handlePdfAdded = async (pdfData) => {
   const prevCounters = usePrevious(counters);
   useEffect(() => {
     if (socketService.isMultiplayerActive() && JSON.stringify(prevCounters) !== JSON.stringify(counters)) {
-      socketService.updateGameState({ counters: counters }, 'characters'); // Using 'characters' urgency for counters as well
+      socketService.updateGameState({ counters: counters }, 'characters');
     }
   }, [counters, prevCounters]);
 
@@ -1212,14 +1225,13 @@ const handlePdfAdded = async (pdfData) => {
     addNotification('Left multiplayer session', 'info');
   };
 
-const handleFileUpload = async (event) => {
+  const handleFileUpload = async (event) => {
     const files = event.target.files;
     if (files.length === 0) return;
 
-    // Prevent non-host from uploading PDFs in multiplayer
     if (multiplayerSession && !isHost) {
       addNotification("Only the session host can open PDFs", "error");
-      event.target.value = ''; // Reset file input
+      event.target.value = '';
       return;
     }
   
@@ -1276,6 +1288,8 @@ const handleFileUpload = async (event) => {
         dispatch({ type: 'SET_STATE', payload: {
           pdfs: newPdfsData,
           activePdfId: sessionToRestore.activePdfId,
+          secondaryPdfId: sessionToRestore.secondaryPdfId,
+          isDualPaneMode: sessionToRestore.isDualPaneMode,
           characters: sessionToRestore.characters,
           notes: sessionToRestore.notes,
           counters: sessionToRestore.counters,
@@ -1286,14 +1300,12 @@ const handleFileUpload = async (event) => {
         dispatch({ type: 'SET_STATE', payload: { sessionToRestore: null } });
       }
     } else {
-      if (newPdfsData.length > 0) { //change to 1 to hide tabs with a single pdf
-        // First, update the local state with the new PDFs.
+      if (newPdfsData.length > 0) {
         dispatch({ type: 'SET_STATE', payload: {
           pdfs: [...pdfs, ...newPdfsData],
           activePdfId: newPdfsData[0].id,
         }});
         
-        // Then, if in a multiplayer session, upload the new PDFs.
         if (socketService.isMultiplayerActive()) {
           for (const pdfData of newPdfsData) {
             try {
@@ -1320,6 +1332,8 @@ const handleFileUpload = async (event) => {
         bookmarks: p.bookmarks,
       })),
       activePdfId,
+      secondaryPdfId,
+      isDualPaneMode,
       characters,
       notes,
       counters,
@@ -1375,61 +1389,110 @@ const handleFileUpload = async (event) => {
     }
     const newPdfs = pdfs.filter(p => p.id !== pdfId);
     let newActivePdfId = activePdfId;
+    let newSecondaryPdfId = secondaryPdfId;
+    
     if (activePdfId === pdfId) {
         newActivePdfId = newPdfs.length > 0 ? newPdfs[0].id : null;
     }
-    dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs, activePdfId: newActivePdfId } });
+    if (secondaryPdfId === pdfId) {
+        newSecondaryPdfId = null;
+    }
+    
+    dispatch({ type: 'SET_STATE', payload: { 
+        pdfs: newPdfs, 
+        activePdfId: newActivePdfId,
+        secondaryPdfId: newSecondaryPdfId
+    } });
   };
   
-  const updateActivePdf = (updates) => {
-    const newPdfs = pdfs.map(p => p.id === activePdfId ? { ...p, ...updates } : p);
+  const updatePdf = (pdfId, updates) => {
+    const newPdfs = pdfs.map(p => p.id === pdfId ? { ...p, ...updates } : p);
     dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs }});
   };
 
-  const goToPage = (pageNum) => {
-    if (activePdf && pageNum >= 1 && pageNum <= activePdf.totalPages) {
-      updateActivePdf({ currentPage: pageNum });
+  const goToPage = (pdfId, pageNum) => {
+    const pdf = pdfs.find(p => p.id === pdfId);
+    if (pdf && pageNum >= 1 && pageNum <= pdf.totalPages) {
+      updatePdf(pdfId, { currentPage: pageNum });
       if (socketService.isMultiplayerActive()) {
-        socketService.navigatePage(activePdf.id, pageNum, activePdf.scale);
+        socketService.navigatePage(pdf.id, pageNum, pdf.scale);
       }
     }
   };
 
-  const zoomIn = () => {
-    if (activePdf) {
-      const newScale = Math.min(activePdf.scale + 0.25, 3);
-      updateActivePdf({ scale: newScale });
+  const zoomIn = (pdfId) => {
+    const pdf = pdfs.find(p => p.id === pdfId);
+    if (pdf) {
+      const newScale = Math.min(pdf.scale + 0.25, 3);
+      updatePdf(pdfId, { scale: newScale });
        if (socketService.isMultiplayerActive()) {
-        socketService.navigatePage(activePdf.id, activePdf.currentPage, newScale);
+        socketService.navigatePage(pdf.id, pdf.currentPage, newScale);
       }
     }
   };
   
-  const zoomOut = () => {
-    if (activePdf) {
-      const newScale = Math.max(activePdf.scale - 0.25, 0.5);
-      updateActivePdf({ scale: newScale });
+  const zoomOut = (pdfId) => {
+    const pdf = pdfs.find(p => p.id === pdfId);
+    if (pdf) {
+      const newScale = Math.max(pdf.scale - 0.25, 0.5);
+      updatePdf(pdfId, { scale: newScale });
       if (socketService.isMultiplayerActive()) {
-        socketService.navigatePage(activePdf.id, activePdf.currentPage, newScale);
+        socketService.navigatePage(pdf.id, pdf.currentPage, newScale);
       }
     }
   };
 
-  const handleBookmarkNavigate = async (dest) => {
-    if (!activePdf) return;
-    const pageIndex = await activePdf.pdfDoc.getPageIndex(dest[0]);
-    goToPage(pageIndex + 1); 
+  const handleBookmarkNavigate = async (dest, pdfId = activePdfId) => {
+    const pdf = pdfs.find(p => p.id === pdfId);
+    if (!pdf) return;
+    const pageIndex = await pdf.pdfDoc.getPageIndex(dest[0]);
+    goToPage(pdfId, pageIndex + 1); 
   };
   
   const truncateFileName = (name) => {
-    if (name.length > 27) {
-      return name.substring(0, 25) + '...';
+    if (name.length > 20) {
+      return name.substring(0, 18) + '...';
     }
     return name;
   };
 
+  const toggleDualPane = () => {
+    if (!isDualPaneMode && pdfs.length > 1) {
+      // Enable dual pane with the second PDF
+      dispatch({ type: 'SET_STATE', payload: { 
+        isDualPaneMode: true,
+        secondaryPdfId: pdfs.find(p => p.id !== activePdfId)?.id || null
+      } });
+    } else {
+      // Disable dual pane
+      dispatch({ type: 'SET_STATE', payload: { 
+        isDualPaneMode: false,
+        secondaryPdfId: null
+      } });
+    }
+  };
+
+  const movePdfToPane = (pdfId, targetPane) => {
+    if (targetPane === 'primary') {
+      dispatch({ type: 'SET_STATE', payload: { activePdfId: pdfId } });
+    } else if (targetPane === 'secondary') {
+      dispatch({ type: 'SET_STATE', payload: { secondaryPdfId: pdfId } });
+    }
+  };
+
   return (
-    <AppContext.Provider value={{ state, dispatch, fabricCanvas, handleBookmarkNavigate, activePdf, goToPage, zoomIn, zoomOut }}>
+    <AppContext.Provider value={{ 
+      state, 
+      dispatch, 
+      fabricCanvas, 
+      secondaryFabricCanvas,
+      handleBookmarkNavigate, 
+      activePdf, 
+      secondaryPdf,
+      goToPage: (pageNum, pdfId = activePdfId) => goToPage(pdfId, pageNum), 
+      zoomIn: (pdfId = activePdfId) => zoomIn(pdfId), 
+      zoomOut: (pdfId = activePdfId) => zoomOut(pdfId)
+    }}>
       <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
         <MultiplayerNotifications notifications={notifications} />
         
@@ -1490,6 +1553,18 @@ const handleFileUpload = async (event) => {
                     <Wifi size={14} /> Disconnect
                   </button>
                 )}
+                {pdfs.length > 1 && (
+                  <button
+                    onClick={() => {
+                      toggleDualPane();
+                      dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });
+                    }}
+                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    <Columns size={14} /> 
+                    {isDualPaneMode ? 'Single Pane' : 'Dual Pane'}
+                  </button>
+                )}
                 <button
                   onClick={() => { dispatch({ type: 'TOGGLE_THEME' }); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -1522,7 +1597,11 @@ const handleFileUpload = async (event) => {
                   <Save size={14} /> Save Session
                 </button>
                 <button
-                  onClick={() => { fabricCanvas.current?.clear(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
+                  onClick={() => { 
+                    fabricCanvas.current?.clear(); 
+                    if (isDualPaneMode) secondaryFabricCanvas.current?.clear();
+                    dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); 
+                  }}
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <RotateCcw size={14} /> Clear Page Annotations
@@ -1533,35 +1612,127 @@ const handleFileUpload = async (event) => {
             <input ref={sessionFileInputRef} type="file" accept=".json" onChange={handleLoadSession} className="hidden" />
           </div>
           
+          {/* PDF Tabs */}
           {pdfs.length > 0 && (
             <div className="bg-gray-200 flex items-center dark:bg-gray-800">
-              {pdfs.map(pdf => (
-                <div
-                  key={pdf.id}
-                  onClick={() => dispatch({ type: 'SET_STATE', payload: { activePdfId: pdf.id } })}
-                  className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
-                    pdf.id === activePdfId ? 'bg-white dark:bg-gray-700' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <span className="text-sm">{truncateFileName(pdf.fileName)}</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      closePdf(pdf.id);
-                    }}
-                    className="p-1 rounded-full hover:bg-red-500 hover:text-white"
+              {!isDualPaneMode ? (
+                // Single pane tabs
+                pdfs.map(pdf => (
+                  <div
+                    key={pdf.id}
+                    onClick={() => dispatch({ type: 'SET_STATE', payload: { activePdfId: pdf.id } })}
+                    className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
+                      pdf.id === activePdfId ? 'bg-white dark:bg-gray-700' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'
+                    }`}
                   >
-                    <X size={12} />
-                  </button>
+                    <span className="text-sm">{truncateFileName(pdf.fileName)}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closePdf(pdf.id);
+                      }}
+                      className="p-1 rounded-full hover:bg-red-500 hover:text-white"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                // Dual pane tabs
+                <div className="flex-1 flex">
+                  {/* Primary pane tabs */}
+                  <div className="flex-1 flex border-r border-gray-300 dark:border-gray-600">
+                    <div className="text-xs text-gray-500 px-2 py-2 font-medium">Primary:</div>
+                    {pdfs.map(pdf => (
+                      <div
+                        key={`primary-${pdf.id}`}
+                        onClick={() => dispatch({ type: 'SET_STATE', payload: { activePdfId: pdf.id } })}
+                        className={`flex items-center gap-2 px-3 py-2 cursor-pointer text-sm ${
+                          pdf.id === activePdfId ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <span>{truncateFileName(pdf.fileName)}</span>
+                        {pdf.id !== activePdfId && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              movePdfToPane(pdf.id, 'primary');
+                            }}
+                            className="p-1 rounded hover:bg-blue-200 dark:hover:bg-blue-700"
+                            title="Move to primary pane"
+                          >
+                            <ArrowLeftRight size={10} />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closePdf(pdf.id);
+                          }}
+                          className="p-1 rounded-full hover:bg-red-500 hover:text-white"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Secondary pane tabs */}
+                  <div className="flex-1 flex">
+                    <div className="text-xs text-gray-500 px-2 py-2 font-medium">Secondary:</div>
+                    {pdfs.map(pdf => (
+                      <div
+                        key={`secondary-${pdf.id}`}
+                        onClick={() => dispatch({ type: 'SET_STATE', payload: { secondaryPdfId: pdf.id } })}
+                        className={`flex items-center gap-2 px-3 py-2 cursor-pointer text-sm ${
+                          pdf.id === secondaryPdfId ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <span>{truncateFileName(pdf.fileName)}</span>
+                        {pdf.id !== secondaryPdfId && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              movePdfToPane(pdf.id, 'secondary');
+                            }}
+                            className="p-1 rounded hover:bg-green-200 dark:hover:bg-green-700"
+                            title="Move to secondary pane"
+                          >
+                            <ArrowLeftRight size={10} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
 
-          <PDFViewer 
-            pdfCanvasRef={pdfCanvasRef}
-            overlayCanvasRef={overlayCanvasRef}
-          />
+          {/* PDF Viewer Area */}
+          <div className={`flex-1 ${isDualPaneMode ? 'flex' : ''}`}>
+            {/* Primary Pane */}
+            <div className={`${isDualPaneMode ? 'flex-1 border-r border-gray-300 dark:border-gray-600' : 'w-full'} flex flex-col`}>
+              <PDFViewer 
+                pdfCanvasRef={pdfCanvasRef}
+                overlayCanvasRef={overlayCanvasRef}
+                pdf={activePdf}
+                paneId="primary"
+              />
+            </div>
+            
+            {/* Secondary Pane */}
+            {isDualPaneMode && (
+              <div className="flex-1 flex flex-col">
+                <PDFViewer 
+                  pdfCanvasRef={secondaryPdfCanvasRef}
+                  overlayCanvasRef={secondaryOverlayCanvasRef}
+                  pdf={secondaryPdf}
+                  paneId="secondary"
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </AppContext.Provider>
