@@ -40,13 +40,11 @@ const Sidebar = ({ children }) => {
     <div className="w-full bg-white shadow-lg border-r border-gray-200 flex flex-col dark:bg-gray-800 dark:border-gray-700 h-full">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h1 className="text-xl font-bold text-gray-800 dark:text-gray-200">Gamebook Studio</h1>
-        <p className="text-sm text-gray-600 dark:text-gray-400">Digital tabletop companion</p>
       </div>
       
       {children}
 
       <div className="flex-1 overflow-y-auto">
-        <CollapsibleSection title="Game Session" isOpen={openSections.session} onToggle={() => toggleSection('session')}>
           <div className="flex border-b border-gray-200">
             {[
               { id: 'sheets', icon: Users, label: '' },
@@ -107,7 +105,6 @@ const Sidebar = ({ children }) => {
               <Bookmarks />
             )}
           </div>
-        </CollapsibleSection>
       </div>
     </div>
   );

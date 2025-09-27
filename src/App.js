@@ -1276,6 +1276,7 @@ const GamebookApp = () => {
             totalPages: pdfDoc.numPages,
             currentPage: 1,
             scale: 1,
+            initialScaleSet: false,
             pageLayers: {},
             bookmarks: await pdfjsLib.getDocument(url).promise.then(doc => doc.getOutline()).catch(() => []) || [],
           };
@@ -1498,21 +1499,21 @@ const GamebookApp = () => {
   };
 
 return (
-    <AppContext.Provider value={{
-      state,
-      dispatch,
-      fabricCanvas,
+    <AppContext.Provider value={{ 
+      state, 
+      dispatch, 
+      fabricCanvas, 
       secondaryFabricCanvas,
-      handleBookmarkNavigate,
-      activePdf,
+      handleBookmarkNavigate, 
+      activePdf, 
       secondaryPdf,
-      goToPage: (pageNum, pdfId = activePdfId) => goToPage(pdfId, pageNum),
-      zoomIn: (pdfId = activePdfId) => zoomIn(pdfId),
+      goToPage: (pageNum, pdfId = activePdfId) => goToPage(pdfId, pageNum), 
+      zoomIn: (pdfId = activePdfId) => zoomIn(pdfId), 
       zoomOut: (pdfId = activePdfId) => zoomOut(pdfId)
     }}>
       <div className="flex h-screen bg-gray-100 dark:bg-gray-900" style={{ width: '100vw', overflow: 'hidden' }}>
         <MultiplayerNotifications notifications={notifications} />
-
+        
         <MultiplayerModal
           isOpen={showMultiplayerModal}
           onClose={() => setShowMultiplayerModal(false)}
@@ -1520,13 +1521,13 @@ return (
           onSessionJoined={handleJoinMultiplayerSession}
         />
         <FloatingDice />
-
+        
         {isSidebarVisible && (
           <div className="flex h-full">
             <div style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: `${maxSidebarWidth}px`, height: '100%' }}>
               <Sidebar>
                 {multiplayerSession && (
-                  <div className="p-4 border-b">
+                  <div className="p-4 border-b">        
                     <MultiplayerStatus
                       sessionId={multiplayerSession}
                       isHost={isHost}
@@ -1538,7 +1539,7 @@ return (
                 )}
               </Sidebar>
             </div>
-            <ResizeHandle
+            <ResizeHandle 
               direction="horizontal"
               onResize={handleSidebarResize}
               minSize={200}
@@ -1548,9 +1549,9 @@ return (
           </div>
         )}
 
-        <div className="flex-1 flex flex-col relative" style={{
+        <div className="flex-1 flex flex-col relative" style={{ 
           width: isSidebarVisible ? `${window.innerWidth - sidebarWidth - 2}px` : '100vw',
-          overflow: 'hidden'
+          overflow: 'hidden' 
         }}>
           <Toolbar />
 
@@ -1592,7 +1593,7 @@ return (
                     }}
                     className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                   >
-                    <Columns size={14} />
+                    <Columns size={14} /> 
                     {isDualPaneMode ? 'Single Pane' : 'Dual Pane'}
                   </button>
                 )}
@@ -1628,10 +1629,10 @@ return (
                   <Save size={14} /> Save Session
                 </button>
                 <button
-                  onClick={() => {
-                    fabricCanvas.current?.clear();
+                  onClick={() => { 
+                    fabricCanvas.current?.clear(); 
                     if (isDualPaneMode) secondaryFabricCanvas.current?.clear();
-                    dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });
+                    dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); 
                   }}
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
@@ -1643,151 +1644,65 @@ return (
             <input ref={sessionFileInputRef} type="file" accept=".json" onChange={handleLoadSession} className="hidden" />
           </div>
 
-          {/* PDF Tabs */}
-          {pdfs.length > 0 && (
-            <div className="bg-gray-200 flex items-center dark:bg-gray-800">
-              {!isDualPaneMode ? (
-                // Single pane tabs
-                pdfs.map(pdf => (
-                  <div
-                    key={pdf.id}
-                    onClick={() => dispatch({ type: 'SET_STATE', payload: { activePdfId: pdf.id } })}
-                    className={`flex items-center gap-2 px-4 py-2 cursor-pointer ${
-                      pdf.id === activePdfId ? 'bg-white dark:bg-gray-700' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    <span className="text-sm">{truncateFileName(pdf.fileName)}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closePdf(pdf.id);
-                      }}
-                      className="p-1 rounded-full hover:bg-red-500 hover:text-white"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                // Dual pane tabs
-                <div className="flex-1 flex" style={{ width: '100%' }}>
-                  {/* Primary pane tabs */}
-                  <div
-                    className="flex border-r border-gray-300 dark:border-gray-600"
-                    style={{ width: primaryPaneWidth ? `${primaryPaneWidth}px` : '50%' }}
-                  >
-                    <div className="text-xs text-gray-500 px-2 py-2 font-medium">Primary:</div>
-                    {pdfs.map(pdf => (
-                      <div
-                        key={`primary-${pdf.id}`}
-                        onClick={() => dispatch({ type: 'SET_STATE', payload: { activePdfId: pdf.id } })}
-                        className={`flex items-center gap-2 px-3 py-2 cursor-pointer text-sm ${
-                          pdf.id === activePdfId ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        <span>{truncateFileName(pdf.fileName)}</span>
-                        {pdf.id !== activePdfId && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              movePdfToPane(pdf.id, 'primary');
-                            }}
-                            className="p-1 rounded hover:bg-blue-200 dark:hover:bg-blue-700"
-                            title="Move to primary pane"
-                          >
-                            <ArrowLeftRight size={10} />
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            closePdf(pdf.id);
-                          }}
-                          className="p-1 rounded-full hover:bg-red-500 hover:text-white"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Secondary pane tabs */}
-                  <div className="flex-1 flex">
-                    <div className="text-xs text-gray-500 px-2 py-2 font-medium">Secondary:</div>
-                    {pdfs.map(pdf => (
-                      <div
-                        key={`secondary-${pdf.id}`}
-                        onClick={() => dispatch({ type: 'SET_STATE', payload: { secondaryPdfId: pdf.id } })}
-                        className={`flex items-center gap-2 px-3 py-2 cursor-pointer text-sm ${
-                          pdf.id === secondaryPdfId ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        <span>{truncateFileName(pdf.fileName)}</span>
-                        {pdf.id !== secondaryPdfId && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              movePdfToPane(pdf.id, 'secondary');
-                            }}
-                            className="p-1 rounded hover:bg-green-200 dark:hover:bg-green-700"
-                            title="Move to secondary pane"
-                          >
-                            <ArrowLeftRight size={10} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* PDF Viewer Area */}
           <div className={`flex-1 ${isDualPaneMode ? 'flex' : ''}`} style={{ overflow: 'hidden' }}>
             {/* Primary Pane */}
-            <div
+            <div 
               className={`${isDualPaneMode ? '' : 'w-full'} flex flex-col`}
-              style={{
-                width: isDualPaneMode
+              style={{ 
+                width: isDualPaneMode 
                   ? (primaryPaneWidth || `${availableWidth * 0.5}px`)
                   : '100%'
               }}
             >
-              <PDFViewer
+              <PDFViewer 
                 pdfCanvasRef={pdfCanvasRef}
                 overlayCanvasRef={overlayCanvasRef}
                 pdf={activePdf}
                 paneId="primary"
+                pdfs={pdfs}
+                activePdfId={activePdfId}
+                secondaryPdfId={secondaryPdfId}
+                closePdf={closePdf}
+                movePdfToPane={movePdfToPane}
+                updatePdf={updatePdf}
               />
             </div>
-
+            
             {/* Pane Splitter */}
             {isDualPaneMode && (
-              <ResizeHandle
-                direction="horizontal"
-                onResize={handlePaneResize}
-                minSize={200}
-                maxSize={maxPrimaryPaneWidth}
-                initialSize={availableWidth * 0.5}
-              />
+              <div className="relative z-20">
+                <ResizeHandle 
+                  direction="horizontal"
+                  onResize={handlePaneResize}
+                  minSize={200}
+                  maxSize={maxPrimaryPaneWidth}
+                  initialSize={availableWidth * 0.5}
+                />
+              </div>
             )}
-
+            
             {/* Secondary Pane */}
             {isDualPaneMode && (
-              <div
+              <div 
                 className="flex-1 flex flex-col"
-                style={{
-                  width: primaryPaneWidth
-                    ? `${availableWidth - primaryPaneWidth - 2}px`
+                style={{ 
+                  width: primaryPaneWidth 
+                    ? `${availableWidth - primaryPaneWidth - 2}px` 
                     : `${availableWidth * 0.5}px`
                 }}
               >
-                <PDFViewer
+                <PDFViewer 
                   pdfCanvasRef={secondaryPdfCanvasRef}
                   overlayCanvasRef={secondaryOverlayCanvasRef}
                   pdf={secondaryPdf}
                   paneId="secondary"
+                  pdfs={pdfs}
+                  activePdfId={activePdfId}
+                  secondaryPdfId={secondaryPdfId}
+                  closePdf={closePdf}
+                  movePdfToPane={movePdfToPane}
+                  updatePdf={updatePdf}
                 />
               </div>
             )}
@@ -1797,5 +1712,6 @@ return (
     </AppContext.Provider>
   );
 };
+
 
 export default GamebookApp;
