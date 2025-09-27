@@ -60,19 +60,9 @@ const PDFViewer = ({ pdfCanvasRef, overlayCanvasRef, pdf, paneId = 'primary' }) 
   );
 
 const renderPdfControls = () => (
-    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 flex items-center gap-1">
+    <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1">
       {/* Main Controls */}
       <div className="flex items-center gap-0.5 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200/50 px-2 py-1 shadow-sm transition-all duration-200 hover:bg-white/90 hover:border-gray-200 dark:bg-gray-800/70 dark:border-gray-700/50 dark:hover:bg-gray-800/90 dark:hover:border-gray-700">
-        {/* Pane Indicator */}
-        {isDualPaneMode && (
-          <span className={`text-xs font-semibold px-1.5 py-0.5 rounded mr-1 ${
-            paneId === 'primary' 
-              ? 'bg-blue-100/80 text-blue-700 dark:bg-blue-900/80 dark:text-blue-300'
-              : 'bg-green-100/80 text-green-700 dark:bg-green-900/80 dark:text-green-300'
-          }`}>
-            {paneId === 'primary' ? 'P' : 'S'}
-          </span>
-        )}
         
         {/* Page Navigation */}
         <button

@@ -1,9 +1,9 @@
 // src/components/ResizeHandle.js
 import React, { useEffect, useRef, useState } from 'react';
 
-const ResizeHandle = ({ 
-  direction = 'horizontal', 
-  onResize, 
+const ResizeHandle = ({
+  direction = 'horizontal',
+  onResize,
   className = '',
   minSize = 200,
   maxSize = 600,
@@ -18,11 +18,11 @@ const ResizeHandle = ({
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isResizing) return;
-      
-      const delta = direction === 'horizontal' 
-        ? e.clientX - startPosRef.current 
+
+      const delta = direction === 'horizontal'
+        ? e.clientX - startPosRef.current
         : e.clientY - startPosRef.current;
-      
+
       const newSize = Math.min(maxSize, Math.max(minSize, startSizeRef.current + delta));
       setCurrentSize(newSize);
       onResize(newSize);
@@ -62,8 +62,8 @@ const ResizeHandle = ({
       ref={handleRef}
       className={`${
         direction === 'horizontal'
-          ? 'w-1 cursor-col-resize hover:bg-blue-400 transition-colors'
-          : 'h-1 cursor-row-resize hover:bg-blue-400 transition-colors'
+          ? 'w-2 cursor-col-resize hover:bg-blue-400 transition-colors'
+          : 'h-2 cursor-row-resize hover:bg-blue-400 transition-colors'
       } bg-gray-400 dark:bg-gray-700 ${className} ${isResizing ? 'bg-blue-500' : ''}`}
       style={{ zIndex: 50 }}
       onMouseDown={handleMouseDown}
