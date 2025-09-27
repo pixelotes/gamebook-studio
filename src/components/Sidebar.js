@@ -37,7 +37,7 @@ const Sidebar = ({ children }) => {
   };
 
   return (
-    <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col dark:bg-gray-800 dark:border-gray-700">
+    <div className="w-full bg-white shadow-lg border-r border-gray-200 flex flex-col dark:bg-gray-800 dark:border-gray-700 h-full">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h1 className="text-xl font-bold text-gray-800 dark:text-gray-200">Gamebook Studio</h1>
         <p className="text-sm text-gray-600 dark:text-gray-400">Digital tabletop companion</p>

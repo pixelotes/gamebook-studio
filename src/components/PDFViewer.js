@@ -134,7 +134,7 @@ const renderPdfControls = () => (
       </button>
       
       {localDropdownOpen && canvas && (
-        <div className="absolute bottom-full mb-2 left-0 w-64 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg z-30 border border-gray-200 p-2 space-y-1 dark:bg-gray-800/95 dark:border-gray-700">
+        <div className="absolute bottom-full mb-2 right-0 w-64 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg z-30 border border-gray-200 p-2 space-y-1 dark:bg-gray-800/95 dark:border-gray-700">
           <div className="px-2 py-1 text-xs font-bold text-gray-500 border-b -mx-2 mb-1 pb-2 dark:text-gray-400 dark:border-gray-600">
             {isDualPaneMode && `${paneId.charAt(0).toUpperCase() + paneId.slice(1)} - `}
             Active: <span className="text-blue-600 dark:text-blue-400">{canvas.layers.find(l => l.id === canvas.activeLayer)?.name}</span>
@@ -193,7 +193,7 @@ const renderPdfControls = () => (
             />
             <canvas
               ref={overlayCanvasRef}
-              className="absolute top-0 left-0 pointer-events-auto rounded"
+              className="absolute top-0 right-0 pointer-events-auto rounded"
               style={{ 
                 zIndex: 10,
                 cursor: selectedTool === 'select' ? 'default' : 'crosshair'
