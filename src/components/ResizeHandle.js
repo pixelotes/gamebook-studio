@@ -62,8 +62,8 @@ const ResizeHandle = ({
       ref={handleRef}
       className={`${
         direction === 'horizontal'
-          ? 'w-2 cursor-col-resize hover:bg-blue-400 transition-colors'
-          : 'h-2 cursor-row-resize hover:bg-blue-400 transition-colors'
+          ? 'w-1 cursor-col-resize hover:bg-blue-400 transition-colors'
+          : 'h-1 cursor-row-resize hover:bg-blue-400 transition-colors'
       } bg-gray-400 dark:bg-gray-700 ${className} ${isResizing ? 'bg-blue-500' : ''}`}
       style={{ zIndex: 50 }}
       onMouseDown={handleMouseDown}
