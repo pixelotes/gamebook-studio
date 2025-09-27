@@ -4,7 +4,7 @@ A digital tabletop companion for playing gamebooks and print-and-play board game
 
 
 
-## ✨ Key Features
+## Key Features
 
 * **Advanced PDF Viewer**: Load and render multiple PDF files which serve as your digital game board.
 * **Rich Annotation Toolkit**:
@@ -29,7 +29,7 @@ A digital tabletop companion for playing gamebooks and print-and-play board game
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 * **Frontend**: React, Tailwind CSS, PDF.js, Socket.IO Client
 * **Backend**: Node.js, Express, Socket.IO
@@ -41,7 +41,7 @@ A digital tabletop companion for playing gamebooks and print-and-play board game
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 To get a local copy up and running, follow these simple steps.
 
@@ -54,8 +54,8 @@ To get a local copy up and running, follow these simple steps.
 
 1.  **Clone the repository:**
     ```sh
-    git clone <your-repo-url>
-    cd <your-repo-directory>
+    git clone https://github.com/pixelotes/gamebook-studio
+    cd gamebook-studio
     ```
 
 2.  **Install dependencies:**
