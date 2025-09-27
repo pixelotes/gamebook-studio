@@ -10,6 +10,7 @@ import { TOKEN_SHAPES } from './data/Shapes';
 import { MultiplayerModal, MultiplayerStatus, MultiplayerNotifications } from './components/MultiplayerModal';
 import socketService from './services/SocketService';
 import { create } from 'jsondiffpatch';
+import ResizeHandle from './components/ResizeHandle';
 import pako from 'pako';
 import { crc32 } from 'crc';
 
@@ -783,6 +784,8 @@ const GamebookApp = () => {
   const [notifications, setNotifications] = useState([]);
   const [isHost, setIsHost] = useState(false);
   const [gameStateVersion, setGameStateVersion] = useState(0);
+  const [sidebarWidth, setSidebarWidth] = useState(state.sidebarWidth);
+  const [primaryPaneWidth, setPrimaryPaneWidth] = useState(null);
 
   const pdfCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
@@ -1448,6 +1451,20 @@ const GamebookApp = () => {
     const pageIndex = await pdf.pdfDoc.getPageIndex(dest[0]);
     goToPage(pdfId, pageIndex + 1); 
   };
+
+  const handleSidebarResize = useCallback((newWidth) => {
+    setSidebarWidth(newWidth);
+    dispatch({ type: 'SET_STATE', payload: { sidebarWidth: newWidth } });
+  }, []);
+
+  const handlePaneResize = useCallback((newWidth) => {
+    setPrimaryPaneWidth(newWidth);
+  }, []);
+
+    // Calculate max widths
+  const maxSidebarWidth = Math.min(600, window.innerWidth * 0.4);
+  const availableWidth = window.innerWidth - sidebarWidth - 2; // -2 for resize handle
+  const maxPrimaryPaneWidth = isDualPaneMode ? availableWidth * 0.8 : availableWidth;
   
   const truncateFileName = (name) => {
     if (name.length > 20) {
@@ -1493,7 +1510,7 @@ const GamebookApp = () => {
       zoomIn: (pdfId = activePdfId) => zoomIn(pdfId), 
       zoomOut: (pdfId = activePdfId) => zoomOut(pdfId)
     }}>
-      <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="flex h-screen bg-gray-100 dark:bg-gray-900" style={{ width: '100vw', overflow: 'hidden' }}>
         <MultiplayerNotifications notifications={notifications} />
         
         <MultiplayerModal
@@ -1505,22 +1522,36 @@ const GamebookApp = () => {
         <FloatingDice />
         
         {isSidebarVisible && (
-          <Sidebar>
-            {multiplayerSession && (
-            <div className="p-4 border-b">        
-                <MultiplayerStatus
-                  sessionId={multiplayerSession}
-                  isHost={isHost}
-                  connectedPlayers={connectedPlayers}
-                  onLeaveSession={handleLeaveMultiplayerSession}
-                  onCopySessionId={() => addNotification('Session ID copied to clipboard', 'success')}
-                />
+          <div className="flex">
+            <div style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: `${maxSidebarWidth}px` }}>
+              <Sidebar>
+                {multiplayerSession && (
+                  <div className="p-4 border-b">        
+                    <MultiplayerStatus
+                      sessionId={multiplayerSession}
+                      isHost={isHost}
+                      connectedPlayers={connectedPlayers}
+                      onLeaveSession={handleLeaveMultiplayerSession}
+                      onCopySessionId={() => addNotification('Session ID copied to clipboard', 'success')}
+                    />
+                  </div>
+                )}
+              </Sidebar>
             </div>
-          )}
-          </Sidebar>
+            <ResizeHandle 
+              direction="horizontal"
+              onResize={handleSidebarResize}
+              minSize={200}
+              maxSize={maxSidebarWidth}
+              initialSize={sidebarWidth}
+            />
+          </div>
         )}
 
-        <div className="flex-1 flex flex-col relative">
+        <div className="flex-1 flex flex-col relative" style={{ 
+          width: isSidebarVisible ? `${window.innerWidth - sidebarWidth - 2}px` : '100vw',
+          overflow: 'hidden' 
+        }}>
           <Toolbar />
 
           <div className="absolute top-2 right-3 z-30">
@@ -1710,9 +1741,16 @@ const GamebookApp = () => {
           )}
 
           {/* PDF Viewer Area */}
-          <div className={`flex-1 ${isDualPaneMode ? 'flex' : ''}`}>
+          <div className={`flex-1 ${isDualPaneMode ? 'flex' : ''}`} style={{ overflow: 'hidden' }}>
             {/* Primary Pane */}
-            <div className={`${isDualPaneMode ? 'flex-1 border-r border-gray-300 dark:border-gray-600' : 'w-full'} flex flex-col`}>
+            <div 
+              className={`${isDualPaneMode ? 'border-r border-gray-300 dark:border-gray-600' : 'w-full'} flex flex-col`}
+              style={{ 
+                width: isDualPaneMode 
+                  ? (primaryPaneWidth || `${availableWidth * 0.5}px`)
+                  : '100%'
+              }}
+            >
               <PDFViewer 
                 pdfCanvasRef={pdfCanvasRef}
                 overlayCanvasRef={overlayCanvasRef}
@@ -1721,9 +1759,27 @@ const GamebookApp = () => {
               />
             </div>
             
+            {/* Pane Splitter */}
+            {isDualPaneMode && (
+              <ResizeHandle 
+                direction="horizontal"
+                onResize={handlePaneResize}
+                minSize={200}
+                maxSize={maxPrimaryPaneWidth}
+                initialSize={availableWidth * 0.5}
+              />
+            )}
+            
             {/* Secondary Pane */}
             {isDualPaneMode && (
-              <div className="flex-1 flex flex-col">
+              <div 
+                className="flex-1 flex flex-col"
+                style={{ 
+                  width: primaryPaneWidth 
+                    ? `${availableWidth - primaryPaneWidth - 2}px` 
+                    : `${availableWidth * 0.5}px`
+                }}
+              >
                 <PDFViewer 
                   pdfCanvasRef={secondaryPdfCanvasRef}
                   overlayCanvasRef={secondaryOverlayCanvasRef}

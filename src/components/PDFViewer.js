@@ -59,16 +59,16 @@ const PDFViewer = ({ pdfCanvasRef, overlayCanvasRef, pdf, paneId = 'primary' }) 
     </div>
   );
 
- const renderPdfControls = () => (
-  <div className="absolute top-2 left-2 z-20 flex items-center gap-2">
+const renderPdfControls = () => (
+  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 flex items-center gap-2">
     {/* Main Controls */}
-    <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 px-2 py-1 shadow-sm dark:bg-gray-800/90 dark:border-gray-700">
+    <div className="flex items-center gap-1 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200/50 px-3 py-2 shadow-sm transition-all duration-200 hover:bg-white/90 hover:border-gray-200 dark:bg-gray-800/60 dark:border-gray-700/50 dark:hover:bg-gray-800/90 dark:hover:border-gray-700">
       {/* Pane Indicator */}
       {isDualPaneMode && (
-        <span className={`text-xs font-semibold px-2 py-1 rounded mr-1 ${
+        <span className={`text-xs font-semibold px-2 py-1 rounded mr-2 ${
           paneId === 'primary' 
-            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-            : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+            ? 'bg-blue-100/80 text-blue-700 dark:bg-blue-900/80 dark:text-blue-300'
+            : 'bg-green-100/80 text-green-700 dark:bg-green-900/80 dark:text-green-300'
         }`}>
           {paneId === 'primary' ? 'P' : 'S'}
         </span>
@@ -78,47 +78,47 @@ const PDFViewer = ({ pdfCanvasRef, overlayCanvasRef, pdf, paneId = 'primary' }) 
       <button
         onClick={() => goToPage(pdf.currentPage - 1, pdf.id)}
         disabled={pdf.currentPage <= 1}
-        className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed dark:hover:bg-gray-700"
+        className="p-1.5 rounded hover:bg-gray-100/80 disabled:opacity-50 disabled:cursor-not-allowed dark:hover:bg-gray-700/80"
         title="Previous page"
       >
-        <ChevronLeft size={16} />
+        <ChevronLeft size={18} />
       </button>
       
-      <span className="text-sm font-medium px-2 py-1 min-w-[60px] text-center bg-gray-50 rounded dark:bg-gray-700">
+      <span className="text-sm font-medium px-3 py-1.5 min-w-[70px] text-center bg-gray-50/80 rounded dark:bg-gray-700/80">
         {pdf.currentPage} / {pdf.totalPages}
       </span>
       
       <button
         onClick={() => goToPage(pdf.currentPage + 1, pdf.id)}
         disabled={pdf.currentPage >= pdf.totalPages}
-        className="p-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed dark:hover:bg-gray-700"
+        className="p-1.5 rounded hover:bg-gray-100/80 disabled:opacity-50 disabled:cursor-not-allowed dark:hover:bg-gray-700/80"
         title="Next page"
       >
-        <ChevronRight size={16} />
+        <ChevronRight size={18} />
       </button>
       
       {/* Divider */}
-      <div className="w-px h-4 bg-gray-300 mx-1 dark:bg-gray-600" />
+      <div className="w-px h-5 bg-gray-300/60 mx-2 dark:bg-gray-600/60" />
       
       {/* Zoom Controls */}
       <button 
         onClick={() => zoomOut(pdf.id)} 
-        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" 
+        className="p-1.5 rounded hover:bg-gray-100/80 dark:hover:bg-gray-700/80" 
         title="Zoom out"
       >
-        <ZoomOut size={16} />
+        <ZoomOut size={18} />
       </button>
       
-      <span className="text-sm font-medium px-2 py-1 min-w-[45px] text-center bg-gray-50 rounded dark:bg-gray-700">
+      <span className="text-sm font-medium px-3 py-1.5 min-w-[50px] text-center bg-gray-50/80 rounded dark:bg-gray-700/80">
         {Math.round(pdf.scale * 100)}%
       </span>
       
       <button 
         onClick={() => zoomIn(pdf.id)} 
-        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" 
+        className="p-1.5 rounded hover:bg-gray-100/80 dark:hover:bg-gray-700/80" 
         title="Zoom in"
       >
-        <ZoomIn size={16} />
+        <ZoomIn size={18} />
       </button>
     </div>
 
@@ -126,15 +126,15 @@ const PDFViewer = ({ pdfCanvasRef, overlayCanvasRef, pdf, paneId = 'primary' }) 
     <div className="relative">
       <button
         onClick={() => setLocalDropdownOpen(!localDropdownOpen)}
-        className="flex items-center gap-2 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-lg border border-gray-200 shadow-sm hover:bg-gray-100 dark:bg-gray-800/90 dark:border-gray-700 dark:hover:bg-gray-700"
+        className="flex items-center gap-2 px-3 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200/50 shadow-sm hover:bg-white/90 hover:border-gray-200 transition-all duration-200 dark:bg-gray-800/60 dark:border-gray-700/50 dark:hover:bg-gray-800/90 dark:hover:border-gray-700"
         title={`Manage ${paneId} layers`}
       >
-        <Layers size={16} />
-        <ChevronDown size={12} className="text-gray-500" />
+        <Layers size={18} />
+        <ChevronDown size={14} className="text-gray-500" />
       </button>
       
       {localDropdownOpen && canvas && (
-        <div className="absolute top-full mt-2 left-0 w-64 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg z-30 border border-gray-200 p-2 space-y-1 dark:bg-gray-800/95 dark:border-gray-700">
+        <div className="absolute bottom-full mb-2 left-0 w-64 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg z-30 border border-gray-200 p-2 space-y-1 dark:bg-gray-800/95 dark:border-gray-700">
           <div className="px-2 py-1 text-xs font-bold text-gray-500 border-b -mx-2 mb-1 pb-2 dark:text-gray-400 dark:border-gray-600">
             {isDualPaneMode && `${paneId.charAt(0).toUpperCase() + paneId.slice(1)} - `}
             Active: <span className="text-blue-600 dark:text-blue-400">{canvas.layers.find(l => l.id === canvas.activeLayer)?.name}</span>
@@ -172,14 +172,20 @@ const PDFViewer = ({ pdfCanvasRef, overlayCanvasRef, pdf, paneId = 'primary' }) 
 );
 
   return (
-    <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative overflow-auto p-4">
+    <div className="flex-1 bg-gray-50 dark:bg-gray-900 relative p-4" style={{ maxHeight: '100vh', overflow: 'auto' }}>
       {pdf ? (
         <div className="relative">
           {/* PDF Controls Overlay */}
           {renderPdfControls()}
           
-          {/* PDF Canvas Container */}
-          <div className="relative inline-block mx-auto">
+          {/* PDF Canvas Container - with height constraint */}
+          <div 
+            className="relative inline-block mx-auto" 
+            style={{ 
+              maxHeight: 'calc(100vh - 120px)', // Account for padding and controls
+              overflow: 'auto'
+            }}
+          >
             <canvas
               ref={pdfCanvasRef}
               className="block shadow-lg border border-gray-300 rounded"

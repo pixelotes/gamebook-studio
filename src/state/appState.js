@@ -34,6 +34,8 @@ export const initialState = {
   openSections: {
     session: true,
   },
+  sidebarWidth: 320,
+  primaryPaneWidth: null,
 };
 
 export function reducer(state, action) {
