@@ -20,7 +20,7 @@ const PDFPane = ({
 }) => {
   return (
     <div className="flex-1 bg-gray-50 dark:bg-gray-900 flex flex-col h-full relative">
-      {pdfs.length > 0 && (
+      {pdfs.length > 1 && (
         <TabBar
           pdfs={pdfs}
           activePdfId={activePdfId}
