@@ -1458,11 +1458,15 @@ const GamebookApp = () => {
     }
   };
 
-  const handleBookmarkNavigate = async (dest, pdfId = activePdfId) => {
+  const handleBookmarkNavigate = async (dest, pdfId) => {
     const pdf = pdfs.find(p => p.id === pdfId);
     if (!pdf) return;
-    const pageIndex = await pdf.pdfDoc.getPageIndex(dest[0]);
-    goToPage(pdfId, pageIndex + 1); 
+    try {
+      const pageIndex = await pdf.pdfDoc.getPageIndex(dest[0]);
+      goToPage(pdfId, pageIndex + 1); 
+    } catch (error) {
+      console.error('Error navigating to bookmark:', error);
+    }
   };
 
   const handleSidebarResize = useCallback((newWidth) => {
@@ -1493,22 +1497,6 @@ const GamebookApp = () => {
         secondaryPdfId: null
       } });
     }
-  };
-
-  const movePdfToPane = (pdfId, targetPane) => {
-    if (targetPane === 'primary') {
-      dispatch({ type: 'SET_STATE', payload: { activePdfId: pdfId } });
-    } else if (targetPane === 'secondary') {
-      dispatch({ type: 'SET_STATE', payload: { secondaryPdfId: pdfId } });
-    }
-  };
-
-  const onTabSelect = (pdfId) => {
-    movePdfToPane(pdfId, 'primary');
-  };
-
-  const onSecondaryTabSelect = (pdfId) => {
-    movePdfToPane(pdfId, 'secondary');
   };
 
 return (
@@ -1681,6 +1669,7 @@ return (
                 updatePdf={updatePdf}
                 onTabSelect={(pdfId) => handleTabSelect(pdfId, 'primary')}
                 onTabClose={handleTabClose}
+                onBookmarkNavigate={handleBookmarkNavigate}
               />
             </div>
             
@@ -1719,6 +1708,7 @@ return (
                   updatePdf={updatePdf}
                   onTabSelect={(pdfId) => handleTabSelect(pdfId, 'secondary')}
                   onTabClose={handleTabClose}
+                  onBookmarkNavigate={handleBookmarkNavigate}
                 />
               </div>
             )}

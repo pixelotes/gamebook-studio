@@ -9,7 +9,7 @@ const PDFControlsBar = ({
   onGoToPage,
   onZoomIn,
   onZoomOut,
-  onBookmarkNavigate // Add this new prop
+  onBookmarkNavigate
 }) => {
   const { state, dispatch } = useContext(AppContext);
   const { isDualPaneMode } = state;
@@ -123,12 +123,16 @@ const PDFControlsBar = ({
     }
   };
 
-  const handleBookmarkClick = async (bookmark) => {
+    const handleBookmarkClick = async (bookmark) => {
+    console.log('Bookmark clicked:', bookmark);
+    console.log('Bookmark dest:', bookmark.dest);
+    console.log('onBookmarkNavigate function:', onBookmarkNavigate);
+    
     if (bookmark.dest && onBookmarkNavigate) {
-      await onBookmarkNavigate(bookmark.dest, pdf.id);
+        await onBookmarkNavigate(bookmark.dest, pdf.id);
     }
     setTocDropdownOpen(false);
-  };
+    };
 
   const renderBookmarkItem = (bookmark, level = 0) => {
     const indent = level * 16;

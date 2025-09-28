@@ -8,7 +8,8 @@ const PDFViewer = ({
   overlayCanvasRef,
   pdf,
   paneId = 'primary',
-  updatePdf
+  updatePdf,
+  onBookmarkNavigate
 }) => {
   const { state, fabricCanvas, secondaryFabricCanvas, goToPage, zoomIn, zoomOut } = useContext(AppContext);
   const { selectedTool, isDualPaneMode } = state;
@@ -128,6 +129,7 @@ const PDFViewer = ({
         onGoToPage={handleGoToPage}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
+        onBookmarkNavigate={onBookmarkNavigate}
       />
     </div>
   );

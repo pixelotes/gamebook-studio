@@ -15,7 +15,8 @@ const PDFPane = ({
   updatePdf,
   // Tab management functions
   onTabSelect,
-  onTabClose
+  onTabClose,
+  onBookmarkNavigate
 }) => {
   return (
     <div className="flex-1 bg-gray-50 dark:bg-gray-900 flex flex-col h-full relative">
@@ -36,6 +37,7 @@ const PDFPane = ({
         pdf={pdf}
         paneId={paneId}
         updatePdf={updatePdf}
+        onBookmarkNavigate={onBookmarkNavigate}
       />
     </div>
   );
