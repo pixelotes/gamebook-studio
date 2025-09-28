@@ -49,8 +49,7 @@ const Sidebar = ({ children }) => {
             {[
               { id: 'sheets', icon: Users, label: '' },
               { id: 'counters', icon: Tally5, label: '' },
-              { id: 'notes', icon: StickyNote, label: '' },
-              { id: 'bookmarks', icon: Bookmark, label: '' },             
+              { id: 'notes', icon: StickyNote, label: '' },            
             ].map(tab => (
               <button
                 key={tab.id}
@@ -100,9 +99,6 @@ const Sidebar = ({ children }) => {
             {activeTab === 'notes' && <Notes />}
             {activeTab === 'counters' && (
               <Counters />
-            )}
-            {activeTab === 'bookmarks' && (
-              <Bookmarks />
             )}
           </div>
       </div>
