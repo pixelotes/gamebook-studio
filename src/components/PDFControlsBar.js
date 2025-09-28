@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Layers, Eye, EyeOff, Trash2, X, GripVertical, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Layers, Eye, EyeOff, Trash2, X, Settings, BookOpen } from 'lucide-react';
 import { AppContext } from '../state/appState';
 
 const PDFControlsBar = ({
@@ -16,12 +16,9 @@ const PDFControlsBar = ({
   
   const [localDropdownOpen, setLocalDropdownOpen] = useState(false);
   const [tocDropdownOpen, setTocDropdownOpen] = useState(false);
-  const [isHovering, setIsHovering] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState({ x: 16, y: 16 });
+  const [isExpanded, setIsExpanded] = useState(false);
   const [layersMenuStyle, setLayersMenuStyle] = useState({});
   const [tocMenuStyle, setTocMenuStyle] = useState({});
-  const dragOffset = useRef({ x: 0, y: 0 });
   const controlsRef = useRef(null);
 
   // Calculate optimal position for popups based on controls position
@@ -32,18 +29,14 @@ const PDFControlsBar = ({
     const buffer = 16;
     const newStyle = {};
 
-    // Vertical positioning
-    if (controlsRect.top < menuHeight + buffer) {
-      newStyle.top = `${controlsRect.height + 8}px`;
-    } else {
-      newStyle.bottom = `${controlsRect.height + 8}px`;
-    }
+    // Always position below the controls since they're at the top
+    newStyle.top = `${controlsRect.height + 8}px`;
+    newStyle.left = 0;
 
-    // Horizontal positioning
+    // Adjust if would go off right edge
     if (controlsRect.left + menuWidth > window.innerWidth) {
       newStyle.right = 0;
-    } else {
-      newStyle.left = 0;
+      newStyle.left = 'auto';
     }
 
     return newStyle;
@@ -53,57 +46,13 @@ const PDFControlsBar = ({
     if (localDropdownOpen) {
       setLayersMenuStyle(calculateMenuPosition(256, 200));
     }
-  }, [localDropdownOpen, position]);
+  }, [localDropdownOpen]);
 
   useEffect(() => {
     if (tocDropdownOpen) {
-      setTocMenuStyle(calculateMenuPosition(320, 300)); // Wider for TOC
+      setTocMenuStyle(calculateMenuPosition(320, 300));
     }
-  }, [tocDropdownOpen, position]);
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!isDragging) return;
-      
-      // Calculate new position relative to the document
-      const newX = e.clientX - dragOffset.current.x;
-      const newY = e.clientY - dragOffset.current.y;
-      
-      setPosition({
-        x: newX,
-        y: newY,
-      });
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      // Prevent text selection during drag
-      document.body.style.userSelect = 'none';
-    } else {
-      document.body.style.userSelect = '';
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.userSelect = '';
-    };
-  }, [isDragging]);
-
-  const handleMouseDown = (e) => {
-    setIsDragging(true);
-    const rect = controlsRef.current.getBoundingClientRect();
-    dragOffset.current = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
-    e.preventDefault(); // Prevent text selection during drag
-  };
+  }, [tocDropdownOpen]);
 
   const handleToggleVisibility = (layerId) => {
     canvas?.toggleLayerVisibility(layerId);
@@ -123,16 +72,12 @@ const PDFControlsBar = ({
     }
   };
 
-    const handleBookmarkClick = async (bookmark) => {
-    console.log('Bookmark clicked:', bookmark);
-    console.log('Bookmark dest:', bookmark.dest);
-    console.log('onBookmarkNavigate function:', onBookmarkNavigate);
-    
+  const handleBookmarkClick = async (bookmark) => {
     if (bookmark.dest && onBookmarkNavigate) {
-        await onBookmarkNavigate(bookmark.dest, pdf.id);
+      await onBookmarkNavigate(bookmark.dest, pdf.id);
     }
     setTocDropdownOpen(false);
-    };
+  };
 
   const renderBookmarkItem = (bookmark, level = 0) => {
     const indent = level * 16;
@@ -161,22 +106,26 @@ const PDFControlsBar = ({
   return (
     <div
       ref={controlsRef}
-      className={`absolute z-20 flex items-center gap-2 transition-opacity duration-200 ${
-        isHovering || isDragging || localDropdownOpen || tocDropdownOpen ? 'opacity-100' : 'opacity-30'
-      }`}
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        cursor: isDragging ? 'grabbing' : 'grab',
+      className="absolute top-4 left-4 z-20 flex items-center"
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => {
+        // Only collapse if no dropdowns are open
+        if (!localDropdownOpen && !tocDropdownOpen) {
+          setIsExpanded(false);
+        }
       }}
-      onMouseDown={handleMouseDown}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
     >
-      {/* Main Controls */}
-      <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200/50 px-2 py-1 shadow-sm transition-all duration-200 hover:bg-white/90 hover:border-gray-200 dark:bg-gray-800/70 dark:border-gray-700/50 dark:hover:bg-gray-800/90 dark:hover:border-gray-700">
-        <GripVertical size={16} className="text-gray-400" />
-        
+      {/* Gear Icon (always visible) */}
+      <div className="flex items-center bg-white/30 backdrop-blur-sm rounded-lg border border-gray-200/30 p-2 shadow-sm dark:bg-gray-800/30 dark:border-gray-700/30">
+        <Settings size={16} className="text-gray-600 dark:text-gray-400" />
+      </div>
+
+      {/* Expandable Controls */}
+      <div 
+        className={`flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200/50 ml-2 px-2 py-1 shadow-sm transition-all duration-300 dark:bg-gray-800/70 dark:border-gray-700/50 ${
+          isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'
+        }`}
+      >
         {/* Table of Contents */}
         {pdf.bookmarks && pdf.bookmarks.length > 0 && (
           <div className="relative">
@@ -193,6 +142,11 @@ const PDFControlsBar = ({
                 className="absolute w-80 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg z-30 border border-gray-200 dark:bg-gray-800/95 dark:border-gray-700"
                 style={tocMenuStyle}
                 onClick={e => e.stopPropagation()}
+                onMouseEnter={() => setIsExpanded(true)}
+                onMouseLeave={() => {
+                  setTocDropdownOpen(false);
+                  setIsExpanded(false);
+                }}
               >
                 <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between">
                   <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">
@@ -231,6 +185,11 @@ const PDFControlsBar = ({
               className="absolute w-64 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg z-30 border border-gray-200 p-2 space-y-1 dark:bg-gray-800/95 dark:border-gray-700"
               style={layersMenuStyle}
               onClick={e => e.stopPropagation()}
+              onMouseEnter={() => setIsExpanded(true)}
+              onMouseLeave={() => {
+                setLocalDropdownOpen(false);
+                setIsExpanded(false);
+              }}
             >
               <div className="px-2 py-1 text-xs font-bold text-gray-500 border-b -mx-2 mb-1 pb-2 dark:text-gray-400 dark:border-gray-600">
                 {isDualPaneMode && `${paneId.charAt(0).toUpperCase() + paneId.slice(1)} - `}
