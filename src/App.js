@@ -14,6 +14,8 @@ import { create } from 'jsondiffpatch';
 import ResizeHandle from './components/ResizeHandle';
 import pako from 'pako';
 import { crc32 } from 'crc';
+import DebugModal from './components/DebugModal';
+import { Settings } from 'lucide-react';
 
 const diffpatcher = create({
   objectHash: (obj) => obj.id,
@@ -796,6 +798,8 @@ const GamebookApp = () => {
   const sessionFileInputRef = useRef(null);
   const fabricCanvas = useRef(null);
   const secondaryFabricCanvas = useRef(null);
+
+  const [showDebugModal, setShowDebugModal] = useState(false);
   
   const activePdf = pdfs.find(p => p.id === activePdfId);
   const secondaryPdf = pdfs.find(p => p.id === secondaryPdfId);
@@ -1522,6 +1526,13 @@ return (
           onSessionCreated={handleCreateMultiplayerSession}
           onSessionJoined={handleJoinMultiplayerSession}
         />
+              {/* Add the DebugModal here with the other modals */}
+        <DebugModal
+          isOpen={showDebugModal}
+          onClose={() => setShowDebugModal(false)}
+          gameState={state}
+          gameStateVersion={gameStateVersion}
+        />
         <FloatingDice />
         
         {isSidebarVisible ? (
@@ -1656,6 +1667,17 @@ return (
                 >
                   <RotateCcw size={14} /> Clear Page Annotations
                 </button>
+                {/* Debug modal button */}
+                <button
+                  onClick={() => {
+                    setShowDebugModal(true);
+                    dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });
+                  }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <Settings size={14} /> Debug State
+                </button>
+                
               </div>
             )}
             <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileUpload} className="hidden" multiple />
