@@ -76,6 +76,8 @@ const PDFControlsBar = ({
       await onBookmarkNavigate(bookmark.dest, pdf.id);
     }
     setTocDropdownOpen(false);
+    // Force collapse after bookmark navigation
+    setIsExpanded(false);
   };
 
   const renderBookmarkItem = (bookmark, level = 0) => {
