@@ -1,10 +1,10 @@
 import React, { useReducer, useRef, useEffect, useCallback, useState } from 'react';
-import { Upload, RotateCcw, Save, Menu, FilePlus, X, Wifi, Moon, Sun, Columns, ArrowLeftRight } from 'lucide-react';
+import { Upload, RotateCcw, Save, Menu, FilePlus, Wifi, Moon, Sun, Columns } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import FloatingDice from './components/FloatingDice';
 import Sidebar from './components/Sidebar';
 import Toolbar from './components/Toolbar';
-import PDFViewer from './components/PDFViewer';
+import PDFPane from './components/PDFPane';
 import { AppContext, initialState, reducer } from './state/appState';
 import { TOKEN_SHAPES } from './data/Shapes';
 import { MultiplayerModal, MultiplayerStatus, MultiplayerNotifications } from './components/MultiplayerModal';
@@ -810,6 +810,18 @@ const GamebookApp = () => {
     }
   }, [theme]);
 
+  const handleTabSelect = (pdfId, paneId) => {
+    if (paneId === 'primary') {
+      dispatch({ type: 'SET_STATE', payload: { activePdfId: pdfId } });
+    } else {
+      dispatch({ type: 'SET_STATE', payload: { secondaryPdfId: pdfId } });
+    }
+  };
+
+  const handleTabClose = (pdfId) => {
+    closePdf(pdfId);
+  };
+
   const addNotification = (message, type = 'info', details = null) => {
     const notification = {
       id: Date.now(),
@@ -1466,13 +1478,6 @@ const GamebookApp = () => {
   const maxSidebarWidth = Math.min(600, window.innerWidth * 0.4);
   const availableWidth = window.innerWidth - sidebarWidth - 2; // -2 for resize handle
   const maxPrimaryPaneWidth = isDualPaneMode ? availableWidth * 0.8 : availableWidth;
-  
-  const truncateFileName = (name) => {
-    if (name.length > 20) {
-      return name.substring(0, 18) + '...';
-    }
-    return name;
-  };
 
   const toggleDualPane = () => {
     if (!isDualPaneMode && pdfs.length > 1) {
@@ -1496,6 +1501,14 @@ const GamebookApp = () => {
     } else if (targetPane === 'secondary') {
       dispatch({ type: 'SET_STATE', payload: { secondaryPdfId: pdfId } });
     }
+  };
+
+  const onTabSelect = (pdfId) => {
+    movePdfToPane(pdfId, 'primary');
+  };
+
+  const onSecondaryTabSelect = (pdfId) => {
+    movePdfToPane(pdfId, 'secondary');
   };
 
 return (
@@ -1648,14 +1661,14 @@ return (
           <div className={`flex-1 ${isDualPaneMode ? 'flex' : ''}`} style={{ overflow: 'hidden' }}>
             {/* Primary Pane */}
             <div 
-              className={`${isDualPaneMode ? '' : 'w-full'} flex flex-col`}
+              className={`${isDualPaneMode ? '' : 'w-full'} flex flex-col overflow-hidden`} // Add overflow-hidden
               style={{ 
                 width: isDualPaneMode 
                   ? `${primaryPaneWidth || Math.floor(availableWidth * 0.5)}px`
                   : '100%'
               }}
             >
-              <PDFViewer 
+              <PDFPane
                 pdfCanvasRef={pdfCanvasRef}
                 overlayCanvasRef={overlayCanvasRef}
                 pdf={activePdf}
@@ -1663,9 +1676,11 @@ return (
                 pdfs={pdfs}
                 activePdfId={activePdfId}
                 secondaryPdfId={secondaryPdfId}
+                isDualPaneMode={isDualPaneMode}
                 closePdf={closePdf}
-                movePdfToPane={movePdfToPane}
                 updatePdf={updatePdf}
+                onTabSelect={(pdfId) => handleTabSelect(pdfId, 'primary')}
+                onTabClose={handleTabClose}
               />
             </div>
             
@@ -1677,21 +1692,21 @@ return (
                 minSize={200}
                 maxSize={maxPrimaryPaneWidth}
                 initialSize={Math.floor(availableWidth * 0.5)}
-                className="z-20"
+                className="z-50 relative"
               />
             )}
             
             {/* Secondary Pane */}
             {isDualPaneMode && (
-              <div 
-                className="flex-1 flex flex-col"
-                style={{ 
-                  width: primaryPaneWidth 
-                    ? `${availableWidth - primaryPaneWidth - 2}px` 
-                    : `${Math.floor(availableWidth * 0.5)}px`
-                }}
-              >
-                <PDFViewer 
+            <div 
+              className="flex-1 flex flex-col overflow-hidden" // Add overflow-hidden
+              style={{ 
+                width: primaryPaneWidth 
+                  ? `${availableWidth - primaryPaneWidth - 2}px` 
+                  : `${Math.floor(availableWidth * 0.5)}px`
+              }}
+            > 
+                <PDFPane
                   pdfCanvasRef={secondaryPdfCanvasRef}
                   overlayCanvasRef={secondaryOverlayCanvasRef}
                   pdf={secondaryPdf}
@@ -1699,9 +1714,11 @@ return (
                   pdfs={pdfs}
                   activePdfId={activePdfId}
                   secondaryPdfId={secondaryPdfId}
+                  isDualPaneMode={isDualPaneMode}
                   closePdf={closePdf}
-                  movePdfToPane={movePdfToPane}
                   updatePdf={updatePdf}
+                  onTabSelect={(pdfId) => handleTabSelect(pdfId, 'secondary')}
+                  onTabClose={handleTabClose}
                 />
               </div>
             )}
