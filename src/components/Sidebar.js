@@ -1,28 +1,14 @@
 import React, { useContext } from 'react';
 import { AppContext } from '../state/appState';
-import { Users, Tally5, StickyNote, Bookmark, ChevronUp, ChevronDown, Plus } from 'lucide-react';
+import { Users, Tally5, StickyNote, Plus } from 'lucide-react';
 import CharacterSheet from './CharacterSheet';
 import Notes from './Notes';
 import Counters from './Counters';
-import Bookmarks from './Bookmarks';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
-
-const CollapsibleSection = ({ title, children, isOpen, onToggle }) => (
-  <div className="border-b border-gray-200">
-    <button
-      onClick={onToggle}
-      className="w-full flex items-center justify-between p-4 text-left font-semibold"
-    >
-      {title}
-      {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-    </button>
-    {isOpen && <div className="p-4 pt-0">{children}</div>}
-  </div>
-);
 
 const Sidebar = ({ children }) => {
   const { state, dispatch } = useContext(AppContext);
-  const { activeTab, selectedTemplate, openSections } = state;
+  const { activeTab, selectedTemplate } = state;
 
   const setActiveTab = (tabId) => {
     dispatch({ type: 'SET_STATE', payload: { activeTab: tabId } });
@@ -30,10 +16,6 @@ const Sidebar = ({ children }) => {
 
   const setSelectedTemplate = (template) => {
     dispatch({ type: 'SET_STATE', payload: { selectedTemplate: template } });
-  };
-
-  const toggleSection = (section) => {
-    dispatch({ type: 'SET_STATE', payload: { openSections: { ...openSections, [section]: !openSections[section] } } });
   };
 
   return (

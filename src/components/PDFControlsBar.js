@@ -17,6 +17,7 @@ const PDFControlsBar = ({
   const [localDropdownOpen, setLocalDropdownOpen] = useState(false);
   const [tocDropdownOpen, setTocDropdownOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
   const [layersMenuStyle, setLayersMenuStyle] = useState({});
   const [tocMenuStyle, setTocMenuStyle] = useState({});
   const controlsRef = useRef(null);
@@ -76,8 +77,18 @@ const PDFControlsBar = ({
       await onBookmarkNavigate(bookmark.dest, pdf.id);
     }
     setTocDropdownOpen(false);
-    // Force collapse after bookmark navigation
-    setIsExpanded(false);
+    // Only force collapse if not pinned
+    if (!isPinned) {
+      setIsExpanded(false);
+    }
+  };
+
+  const handleGearClick = () => {
+    setIsPinned(!isPinned);
+    if (!isPinned) {
+      // Pinning - ensure expanded
+      setIsExpanded(true);
+    }
   };
 
   const renderBookmarkItem = (bookmark, level = 0) => {
@@ -108,24 +119,43 @@ const PDFControlsBar = ({
     <div
       ref={controlsRef}
       className="absolute top-4 left-4 z-20 flex items-center"
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => {
-        // Only collapse if no dropdowns are open
-        if (!localDropdownOpen && !tocDropdownOpen) {
-          setIsExpanded(false);
-        }
-      }}
     >
-      {/* Gear Icon (always visible) */}
-      <div className="flex items-center bg-white/30 backdrop-blur-sm rounded-lg border border-gray-200/30 p-2 shadow-sm dark:bg-gray-800/30 dark:border-gray-700/30">
-        <Settings size={16} className="text-gray-600 dark:text-gray-400" />
-      </div>
+      {/* Gear Icon (always visible) - now clickable with hover */}
+      <button
+        onClick={handleGearClick}
+        onMouseEnter={() => !isPinned && setIsExpanded(true)}
+        onMouseLeave={() => {
+          // Only collapse if not pinned and no dropdowns are open
+          if (!isPinned && !localDropdownOpen && !tocDropdownOpen) {
+            setIsExpanded(false);
+          }
+        }}
+        className={`flex items-center backdrop-blur-sm rounded-lg border p-2 shadow-sm transition-colors ${
+          isPinned 
+            ? 'bg-blue-100/70 border-blue-300/50 dark:bg-blue-900/30 dark:border-blue-600/50' 
+            : 'bg-white/30 border-gray-200/30 dark:bg-gray-800/30 dark:border-gray-700/30'
+        }`}
+        title={isPinned ? "Unpin controls" : "Pin controls"}
+      >
+        <Settings size={16} className={`transition-colors ${
+          isPinned 
+            ? 'text-blue-600 dark:text-blue-400' 
+            : 'text-gray-600 dark:text-gray-400'
+        }`} />
+      </button>
 
       {/* Expandable Controls */}
       <div 
         className={`flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200/50 ml-2 px-2 py-1 shadow-sm transition-all duration-300 dark:bg-gray-800/70 dark:border-gray-700/50 ${
-          isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'
+          isExpanded || isPinned ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'
         }`}
+        onMouseEnter={() => !isPinned && setIsExpanded(true)}
+        onMouseLeave={() => {
+          // Only collapse if not pinned and no dropdowns are open
+          if (!isPinned && !localDropdownOpen && !tocDropdownOpen) {
+            setIsExpanded(false);
+          }
+        }}
       >
         {/* Table of Contents */}
         {pdf.bookmarks && pdf.bookmarks.length > 0 && (

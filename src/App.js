@@ -1603,7 +1603,7 @@ return (
                     <Wifi size={14} /> Disconnect
                   </button>
                 )}
-                {pdfs.length > 0 && (
+                {pdfs.length > 1 && (
                   <button
                     onClick={() => {
                       toggleDualPane();
