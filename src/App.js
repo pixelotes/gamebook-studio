@@ -5,6 +5,7 @@ import FloatingDice from './components/FloatingDice';
 import Sidebar from './components/Sidebar';
 import Toolbar from './components/Toolbar';
 import PDFPane from './components/PDFPane';
+import SidebarHoverTrigger from './components/SidebarHoverTrigger';
 import { AppContext, initialState, reducer } from './state/appState';
 import { TOKEN_SHAPES } from './data/Shapes';
 import { MultiplayerModal, MultiplayerStatus, MultiplayerNotifications } from './components/MultiplayerModal';
@@ -1523,7 +1524,8 @@ return (
         />
         <FloatingDice />
         
-        {isSidebarVisible && (
+        {isSidebarVisible ? (
+          // Regular visible sidebar
           <div className="flex h-full">
             <div style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: `${maxSidebarWidth}px`, height: '100%' }}>
               <Sidebar>
@@ -1548,6 +1550,21 @@ return (
               initialSize={sidebarWidth}
             />
           </div>
+        ) : (
+          // Hover trigger when sidebar is hidden
+          <SidebarHoverTrigger>
+            {multiplayerSession && (
+              <div className="p-4 border-b">        
+                <MultiplayerStatus
+                  sessionId={multiplayerSession}
+                  isHost={isHost}
+                  connectedPlayers={connectedPlayers}
+                  onLeaveSession={handleLeaveMultiplayerSession}
+                  onCopySessionId={() => addNotification('Session ID copied to clipboard', 'success')}
+                />
+              </div>
+            )}
+          </SidebarHoverTrigger>
         )}
 
         <div className="flex-1 flex flex-col relative" style={{ 

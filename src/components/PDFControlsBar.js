@@ -26,7 +26,6 @@ const PDFControlsBar = ({
     if (!controlsRef.current) return {};
     
     const controlsRect = controlsRef.current.getBoundingClientRect();
-    const buffer = 16;
     const newStyle = {};
 
     // Always position below the controls since they're at the top
