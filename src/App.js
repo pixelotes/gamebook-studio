@@ -1462,7 +1462,7 @@ const GamebookApp = () => {
     setPrimaryPaneWidth(newWidth);
   }, []);
 
-    // Calculate max widths
+  // Calculate max widths (keep existing logic)
   const maxSidebarWidth = Math.min(600, window.innerWidth * 0.4);
   const availableWidth = window.innerWidth - sidebarWidth - 2; // -2 for resize handle
   const maxPrimaryPaneWidth = isDualPaneMode ? availableWidth * 0.8 : availableWidth;
@@ -1651,7 +1651,7 @@ return (
               className={`${isDualPaneMode ? '' : 'w-full'} flex flex-col`}
               style={{ 
                 width: isDualPaneMode 
-                  ? (primaryPaneWidth || `${availableWidth * 0.5}px`)
+                  ? `${primaryPaneWidth || Math.floor(availableWidth * 0.5)}px`
                   : '100%'
               }}
             >
@@ -1671,15 +1671,14 @@ return (
             
             {/* Pane Splitter */}
             {isDualPaneMode && (
-              <div className="relative z-20">
-                <ResizeHandle 
-                  direction="horizontal"
-                  onResize={handlePaneResize}
-                  minSize={200}
-                  maxSize={maxPrimaryPaneWidth}
-                  initialSize={availableWidth * 0.5}
-                />
-              </div>
+              <ResizeHandle 
+                direction="horizontal"
+                onResize={handlePaneResize}
+                minSize={200}
+                maxSize={maxPrimaryPaneWidth}
+                initialSize={Math.floor(availableWidth * 0.5)}
+                className="z-20"
+              />
             )}
             
             {/* Secondary Pane */}
@@ -1689,7 +1688,7 @@ return (
                 style={{ 
                   width: primaryPaneWidth 
                     ? `${availableWidth - primaryPaneWidth - 2}px` 
-                    : `${availableWidth * 0.5}px`
+                    : `${Math.floor(availableWidth * 0.5)}px`
                 }}
               >
                 <PDFViewer 

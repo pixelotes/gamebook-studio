@@ -18,14 +18,51 @@ const PDFViewer = ({
   const { state, dispatch, fabricCanvas, secondaryFabricCanvas, goToPage, zoomIn, zoomOut } = useContext(AppContext);
   const { selectedTool, isDualPaneMode } = state;
   const [localDropdownOpen, setLocalDropdownOpen] = useState(false);
+  const [isHovering, setIsHovering] = useState(false);
   const scrollContainerRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 16, y: 16 });
+  const [menuStyle, setMenuStyle] = useState({});
   const dragOffset = useRef({ x: 0, y: 0 });
+  const controlsRef = useRef(null);
+
+  // Calculate optimal position for layers dropdown based on controls position
+  useEffect(() => {
+    if (localDropdownOpen && controlsRef.current) {
+      const controlsRect = controlsRef.current.getBoundingClientRect();
+      const menuWidth = 256; // w-64 = 16rem = 256px
+      const menuHeight = 200; // Estimated height for the menu
+      const buffer = 16; // Buffer from window edges
+
+      const newStyle = {};
+
+      // --- Vertical Positioning ---
+      // If there isn't enough space above the controls, place the menu below
+      if (controlsRect.top < menuHeight + buffer) {
+        newStyle.top = `${controlsRect.height + 8}px`; // 8px margin
+      } else {
+        // Otherwise, place it above
+        newStyle.bottom = `${controlsRect.height + 8}px`;
+      }
+
+      // --- Horizontal Positioning ---
+      // If the controls are too close to the right edge, align menu's right side with controls' right side
+      if (controlsRect.left + menuWidth > window.innerWidth) {
+        newStyle.right = 0;
+      } else {
+        // Otherwise, align their left sides
+        newStyle.left = 0;
+      }
+
+      setMenuStyle(newStyle);
+    }
+  }, [localDropdownOpen, position]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isDragging) return;
+      
+      // Simple position update based on mouse position and drag offset
       setPosition({
         x: e.clientX - dragOffset.current.x,
         y: e.clientY - dragOffset.current.y,
@@ -138,21 +175,27 @@ const PDFViewer = ({
 
   const handleMouseDown = (e) => {
     setIsDragging(true);
+    const rect = controlsRef.current.getBoundingClientRect();
     dragOffset.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
     };
   };
 
   const renderPdfControls = () => (
     <div
-      className="absolute z-20 flex items-center gap-2"
+      ref={controlsRef}
+      className={`absolute z-20 flex items-center gap-2 transition-opacity duration-200 ${
+        isHovering || isDragging || localDropdownOpen ? 'opacity-100' : 'opacity-30'
+      }`}
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
         cursor: isDragging ? 'grabbing' : 'grab',
       }}
       onMouseDown={handleMouseDown}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
     >
       {/* Main Controls */}
       <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200/50 px-2 py-1 shadow-sm transition-all duration-200 hover:bg-white/90 hover:border-gray-200 dark:bg-gray-800/70 dark:border-gray-700/50 dark:hover:bg-gray-800/90 dark:hover:border-gray-700">
@@ -168,7 +211,11 @@ const PDFViewer = ({
           </button>
 
           {localDropdownOpen && canvas && (
-            <div className="absolute top-full mt-2 left-0 w-64 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg z-30 border border-gray-200 p-2 space-y-1 dark:bg-gray-800/95 dark:border-gray-700">
+            <div 
+              className="absolute w-64 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg z-30 border border-gray-200 p-2 space-y-1 dark:bg-gray-800/95 dark:border-gray-700"
+              style={menuStyle}
+              onClick={e => e.stopPropagation()}
+            >
               <div className="px-2 py-1 text-xs font-bold text-gray-500 border-b -mx-2 mb-1 pb-2 dark:text-gray-400 dark:border-gray-600">
                 {isDualPaneMode && `${paneId.charAt(0).toUpperCase() + paneId.slice(1)} - `}
                 Active: <span className="text-blue-600 dark:text-blue-400">{canvas.layers.find(l => l.id === canvas.activeLayer)?.name}</span>
@@ -199,6 +246,13 @@ const PDFViewer = ({
                   </button>
                 </div>
               ))}
+              <button 
+                onClick={() => setLocalDropdownOpen(false)}
+                className="absolute -top-2 -right-2 w-6 h-6 bg-gray-200 text-gray-600 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white"
+                aria-label="Close layers panel"
+              >
+                <X size={14}/>
+              </button>
             </div>
           )}
         </div>
