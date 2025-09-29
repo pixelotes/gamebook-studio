@@ -1286,7 +1286,7 @@ const GamebookApp = () => {
           const url = URL.createObjectURL(file);
           const pdfDoc = await pdfjsLib.getDocument(url).promise;
           const pdfData = {
-            id: Date.now() + file.name,
+            id: file.name, // Use stable ID
             fileName: file.name,
             file,
             pdfDoc,
