@@ -67,13 +67,13 @@ const CharacterSheet = () => {
       {uniqueCharacters.map(char => {
         const template = CHARACTER_TEMPLATES[char.template];
         return (
-          <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg dark:bg-gray-700">
             <div className="flex items-center justify-between mb-3">
               <input
                 type="text"
                 value={char.data.name || 'Unnamed Character'}
                 onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
-                className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2"
+                className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2 dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
               />
               <div className="flex items-center gap-1">
                 <button
@@ -96,7 +96,7 @@ const CharacterSheet = () => {
                     type={field.type}
                     value={char.data[field.name] || field.default}
                     onChange={(e) => updateCharacter(char.id, field.name, field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
-                    className="w-16 p-1 border border-gray-200 rounded text-center text-xs"
+                    className="w-16 p-1 border border-gray-200 rounded text-center text-xs dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
                   />
                 </div>
               ))}
@@ -109,7 +109,7 @@ const CharacterSheet = () => {
                       type="text"
                       value={field.name}
                       onChange={(e) => updateCustomField(char.id, field.id, 'name', e.target.value)}
-                      className="flex-1 p-1 border border-gray-200 rounded text-xs"
+                      className="flex-1 p-1 border border-gray-200 rounded text-xs dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
                     />
                     <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value - 1)} className="w-6 h-6 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center">
                       <Minus size={12} />
@@ -118,7 +118,7 @@ const CharacterSheet = () => {
                       type="number"
                       value={field.value}
                       onChange={(e) => updateCustomField(char.id, field.id, 'value', parseInt(e.target.value) || 0)}
-                      className="w-12 p-1 border border-gray-200 rounded text-center text-xs"
+                      className="w-12 p-1 border border-gray-200 rounded text-center text-xs dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
                     />
                     <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value + 1)} className="w-6 h-6 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center">
                       <Plus size={12} />

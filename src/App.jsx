@@ -1517,7 +1517,7 @@ return (
       zoomIn: (pdfId = activePdfId) => zoomIn(pdfId), 
       zoomOut: (pdfId = activePdfId) => zoomOut(pdfId)
     }}>
-      <div className="flex h-screen bg-gray-100 dark:bg-gray-900" style={{ width: '100vw', overflow: 'hidden' }}>
+      <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-300" style={{ width: '100vw', overflow: 'hidden' }}>
         <MultiplayerNotifications notifications={notifications} />
         
         <MultiplayerModal

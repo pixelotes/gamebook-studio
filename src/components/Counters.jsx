@@ -53,13 +53,13 @@ const Counters = () => {
       </div>
 
       {uniqueCounters.map(counter => (
-        <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg">
+        <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg dark:bg-gray-700">
           <div className="flex items-center justify-between mb-2">
             <input
               type="text"
               value={counter.name}
               onChange={(e) => updateCounter(counter.id, 'name', e.target.value)}
-              className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2"
+              className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2 dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
             />
             <button
               onClick={() => removeCounter(counter.id)}
