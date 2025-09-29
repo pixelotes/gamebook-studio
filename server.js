@@ -18,7 +18,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3000", // React dev server
+    origin: process.env.CORS_ORIGIN || "*",
     methods: ["GET", "POST"]
   },
   maxHttpBufferSize: 50e6 // 50MB for PDF files
