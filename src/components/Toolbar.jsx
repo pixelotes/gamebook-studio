@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useRef, useEffect } from 'react';
 import { AppContext } from '../state/appState';
 import {
   PanelLeft, ChevronDown,
@@ -14,12 +14,26 @@ const Toolbar = () => {
     selectedTokenShape, selectedTokenColor, tokenSize, lineWidth
   } = state;
 
+  const [tokenSearch, setTokenSearch] = useState('');
+  const searchInputRef = useRef(null);
+
+  // This effect reliably focuses the search input when the dropdown is opened
+  useEffect(() => {
+    if (activeDropdown === 'tokenShape' && searchInputRef.current) {
+      setTimeout(() => searchInputRef.current.focus(), 0);
+    }
+  }, [activeDropdown]);
+
   const setIsSidebarVisible = (isVisible) => {
     dispatch({ type: 'SET_STATE', payload: { isSidebarVisible: isVisible } });
   };
 
   const setActiveDropdown = (dropdown) => {
-    dispatch({ type: 'SET_STATE', payload: { activeDropdown: dropdown } });
+    const newDropdown = dropdown === activeDropdown ? null : dropdown;
+    dispatch({ type: 'SET_STATE', payload: { activeDropdown: newDropdown } });
+    if (newDropdown !== 'tokenShape') {
+      setTokenSearch('');
+    }
   };
 
   const setSelectedTool = (tool) => {
@@ -64,6 +78,10 @@ const Toolbar = () => {
     { id: 'eraser', icon: Eraser, label: 'Eraser' },
   ];
 
+  const filteredTokenShapes = Object.entries(TOKEN_SHAPES).filter(([key, shape]) =>
+    shape.name.toLowerCase().includes(tokenSearch.toLowerCase())
+  );
+
   return (
     <div className="bg-white border-b border-gray-200 px-3 py-1 flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center gap-4">
@@ -82,7 +100,7 @@ const Toolbar = () => {
           {/* Tool Selection */}
           <div className="relative">
             <button
-              onClick={() => setActiveDropdown(activeDropdown === 'tools' ? null : 'tools')}
+              onClick={() => setActiveDropdown('tools')}
               className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
             >
               <span className="flex-shrink-0">
@@ -117,7 +135,7 @@ const Toolbar = () => {
           {!['select', 'eraser', 'token'].includes(selectedTool) && (
             <div className="relative">
               <button
-                onClick={() => setActiveDropdown(activeDropdown === 'color' ? null : 'color')}
+                onClick={() => setActiveDropdown('color')}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
                 title="Select color"
               >
@@ -148,7 +166,7 @@ const Toolbar = () => {
           {selectedTool === 'draw' && (
             <div className="relative">
               <button
-                onClick={() => setActiveDropdown(activeDropdown === 'lineWidth' ? null : 'lineWidth')}
+                onClick={() => setActiveDropdown('lineWidth')}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
                 title="Select line width"
               >
@@ -182,7 +200,7 @@ const Toolbar = () => {
               {/* Token Shape */}
               <div className="relative">
                 <button
-                  onClick={() => setActiveDropdown(activeDropdown === 'tokenShape' ? null : 'tokenShape')}
+                  onClick={() => setActiveDropdown('tokenShape')}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between dark:hover:bg-gray-700 dark:border-gray-600"
                   title="Select token shape"
                 >
@@ -191,17 +209,32 @@ const Toolbar = () => {
                   <ChevronDown size={14} className="text-gray-500" />
                 </button>
                 {activeDropdown === 'tokenShape' && (
-                  <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 max-h-[70vh] overflow-y-auto dark:bg-gray-800 dark:border-gray-700">
-                    {Object.entries(TOKEN_SHAPES).map(([key, shape]) => (
-                      <button 
-                        key={key} 
-                        onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); }} 
-                        className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                      >
-                        <span className="text-lg w-5 text-center">{shape.icon}</span>
-                        {shape.name}
-                      </button>
-                    ))}
+                  <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 flex flex-col">
+                    <div 
+                      className="p-2 border-b border-gray-200 dark:border-gray-700" 
+                      onMouseDown={(e) => e.preventDefault()} // Prevent blur on the input
+                    >
+                      <input
+                          ref={searchInputRef}
+                          type="text"
+                          placeholder="Search tokens..."
+                          value={tokenSearch}
+                          onChange={(e) => setTokenSearch(e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
+                      />
+                    </div>
+                    <div className="max-h-[60vh] overflow-y-auto">
+                      {filteredTokenShapes.map(([key, shape]) => (
+                        <button 
+                          key={key} 
+                          onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); setTokenSearch(''); }} 
+                          className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        >
+                          <span className="text-lg w-5 text-center">{shape.icon}</span>
+                          {shape.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -209,7 +242,7 @@ const Toolbar = () => {
               {/* Token Color */}
               <div className="relative">
                 <button
-                  onClick={() => setActiveDropdown(activeDropdown === 'tokenColor' ? null : 'tokenColor')}
+                  onClick={() => setActiveDropdown('tokenColor')}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
                   title="Select token color"
                 >
