@@ -11,7 +11,7 @@
     "crc": "^4.3.2",
     "express": "^5.1.0",
     "idb": "^8.0.3",
-    "jsondiffpatch": "^0.4.1",
+    "jsondiffpatch": "^0.7.3",
     "lodash": "^4.17.21",
     "lucide-react": "^0.544.0",
     "multer": "^2.0.2",
@@ -19,19 +19,18 @@
     "pdfjs-dist": "^5.4.149",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-scripts": "5.0.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "web-vitals": "^5.1.0",
     "zustand": "^5.0.8"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "server": "node server.js",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "node server.jsx",
     "dev": "concurrently \"npm run server\" \"npm start\"",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "test": "vitest"
   },
   "eslintConfig": {
     "extends": [
@@ -52,10 +51,12 @@
     ]
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
+    "buffer": "^6.0.3",
     "concurrently": "^9.2.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
-    "buffer": "^6.0.3"
+    "vite": "^7.1.7"
   }
 }
