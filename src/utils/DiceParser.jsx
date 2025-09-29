@@ -31,8 +31,8 @@ class DiceParser {
       cleanExpr = '+' + cleanExpr;
     }
 
-    // 2. Use a regular expression to split the string into terms (e.g., '+2d6', '+4dF', '+2').
-    const termRegex = /([+-])(\d*dF|\d*d\d+|\d+)/gi;
+    // 2. Use a regular expression to split the string into terms.
+    const termRegex = /([+-])(\d*cT|\d*dF|\d*d\d+|\d+)/gi;
     const terms = Array.from(cleanExpr.matchAll(termRegex));
 
     if (!terms || terms.length === 0) {
@@ -43,15 +43,51 @@ class DiceParser {
     const allIndividualRolls = [];
     const breakdownParts = [];
     let isFateRoll = false;
+    let isCoinToss = false;
+    let coinTossSummary = '';
 
     // 3. Process each term individually.
     for (const term of terms) {
       const sign = term[1] === '-' ? -1 : 1;
       const value = term[2];
 
-      if (value.toLowerCase().includes('df')) {
+      if (value.toLowerCase().includes('ct')) {
+        isCoinToss = true;
+        const [countStr] = value.toLowerCase().split('ct');
+        const count = countStr === '' ? 1 : parseInt(countStr);
+
+        if (isNaN(count) || count < 1 || count > 100) {
+            return { error: `Invalid coin toss count: ${value}` };
+        }
+
+        const termSymbols = [];
+        let headsCount = 0;
+        let tailsCount = 0;
+        for (let i = 0; i < count; i++) {
+            if (Math.random() < 0.5) {
+                termSymbols.push('Heads');
+                headsCount++;
+            } else {
+                termSymbols.push('Tails');
+                tailsCount++;
+            }
+        }
+        
+        // Create the summary text
+        if (count === 1) {
+            coinTossSummary = termSymbols[0];
+        } else {
+            const parts = [];
+            if (headsCount > 0) parts.push(`${headsCount} Heads`);
+            if (tailsCount > 0) parts.push(`${tailsCount} Tails`);
+            coinTossSummary = parts.join(', ');
+        }
+        
+        finalTotal += headsCount * sign;
+        breakdownParts.push({ text: `(${termSymbols.join(', ')})`, symbols: termSymbols, isFate: false });
+
+      } else if (value.toLowerCase().includes('df')) {
         isFateRoll = true;
-        // It's a Fate/Fudge dice term (e.g., '4dF')
         const [countStr] = value.toLowerCase().split('d');
         const count = countStr === '' ? 1 : parseInt(countStr);
 
@@ -63,20 +99,19 @@ class DiceParser {
         const termSymbols = [];
         let termTotal = 0;
         for (let i = 0; i < count; i++) {
-          const roll = Math.floor(Math.random() * 3) - 1; // Generates -1, 0, or 1
+          const roll = Math.floor(Math.random() * 3) - 1;
           termRolls.push(roll);
           termTotal += roll;
           if (roll === 1) termSymbols.push('[+]');
           else if (roll === -1) termSymbols.push('[-]');
-          else termSymbols.push('[]'); // The fix is here! No space inside the brackets.
+          else termSymbols.push('[]');
         }
 
         allIndividualRolls.push(...termRolls);
         finalTotal += termTotal * sign;
-        breakdownParts.push({ sign: term[1], text: `(${termSymbols.join(' ')})`, isFate: true });
+        breakdownParts.push({ sign: term[1], text: `(${termSymbols.join(' ')})`, symbols: termSymbols.map(s => s.replace(/[\[\]]/g, '')), isFate: true });
 
       } else if (value.includes('d')) {
-        // It's a dice term (e.g., '2d6')
         const [countStr, sidesStr] = value.split('d');
         const count = countStr === '' ? 1 : parseInt(countStr);
         const sides = parseInt(sidesStr);
@@ -98,7 +133,6 @@ class DiceParser {
         breakdownParts.push({ sign: term[1], text: `(${termRolls.join('+')})`, isFate: false });
 
       } else {
-        // It's a simple number modifier (e.g., '2')
         const modifier = parseInt(value);
         if (isNaN(modifier)) {
           return { error: `Invalid modifier: ${value}` };
@@ -108,22 +142,21 @@ class DiceParser {
       }
     }
 
-    // 4. Build a detailed breakdown string for the user.
-    const breakdown = breakdownParts.map(p => `${p.sign} ${p.text}`).join(' ').replace(/^[+] /, '');
+    const breakdown = breakdownParts.map(p => `${p.sign || ''} ${p.text}`).join(' ').replace(/^[+] /, '');
     
-    // 5. Create a special symbolic breakdown if it was a Fate roll
-    const symbolicBreakdown = isFateRoll ? breakdownParts
-        .filter(p => p.isFate)
-        .map(p => p.text.replace(/[()]/g, ''))
-        .join(' ') : null;
+    const symbolicBreakdown = isFateRoll || isCoinToss ? breakdownParts.flatMap(p => p.symbols || []) : null;
 
+    let type = 'standard';
+    if (isCoinToss) type = 'coin';
+    else if (isFateRoll) type = 'fate';
 
     return {
-      finalTotal: finalTotal,
+      finalTotal: isCoinToss ? coinTossSummary : finalTotal,
       results: allIndividualRolls,
-      breakdown: `${breakdown} = ${finalTotal}`,
+      breakdown: `${breakdown} = ${isCoinToss ? coinTossSummary : finalTotal}`,
       symbolicBreakdown: symbolicBreakdown,
       expression: expression,
+      type: type,
     };
   }
 }

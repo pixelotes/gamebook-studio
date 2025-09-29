@@ -7,6 +7,25 @@ const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }
   arr.slice(i * size, i * size + size)
 );
 
+// SVG Icon for "Heads"
+const HeadsCoin = () => (
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="48" fill="#feca57" stroke="#e6a22e" strokeWidth="4"/>
+        <path d="M50 25 a15 15 0 0 1 0 30 a15 15 0 0 1 0 -30" fill="#fde0a3"/>
+        <circle cx="50" cy="65" r="20" fill="#feca57"/>
+        <path d="M30 85 Q 50 70 70 85" fill="none" stroke="#e6a22e" strokeWidth="4" strokeLinecap="round"/>
+    </svg>
+);
+
+// SVG Icon for "Tails"
+const TailsCoin = () => (
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="48" fill="#d1d5db" stroke="#9ca3af" strokeWidth="4"/>
+        <path d="M50 20 L50 80 M25 50 L75 50 M35 35 L65 65 M35 65 L65 35" stroke="#9ca3af" strokeWidth="6" strokeLinecap="round"/>
+    </svg>
+);
+
+
 const FloatingDice = () => {
   const [position, setPosition] = useState({ x: window.innerWidth - 80, y: window.innerHeight - 80 });
   const [isDragging, setIsDragging] = useState(false);
@@ -14,64 +33,53 @@ const FloatingDice = () => {
   const [isResultVisible, setIsResultVisible] = useState(false);
   const [rollResult, setRollResult] = useState(null);
   const [rollSymbols, setRollSymbols] = useState(null);
-  const [diceExpression, setDiceExpression] = useState('4dF');
+  const [rollType, setRollType] = useState('standard');
+  const [diceExpression, setDiceExpression] = useState('1cT');
   const [menuStyle, setMenuStyle] = useState({});
   const [resultStyle, setResultStyle] = useState({});
 
   const nodeRef = useRef(null);
-  const menuRef = useRef(null);
-  const offsetRef = useRef({ x: 0, y: 0 });
   const dragStartPosRef = useRef(null);
+  const offsetRef = useRef({ x: 0, y: 0 });
 
-  // This effect calculates the menu's optimal position when it's opened.
   useEffect(() => {
     if (isSelectorVisible && nodeRef.current) {
       const iconRect = nodeRef.current.getBoundingClientRect();
-      const menuWidth = 192; // Corresponds to Tailwind's 'w-48' class
-      const menuHeight = 150; // An estimated height for the menu
-      const buffer = 15; // A small buffer from the window edges
-
+      const menuWidth = 224; // w-56
+      const menuHeight = 150;
+      const buffer = 15;
       const newStyle = {};
-
-      // --- Vertical Positioning ---
       if (iconRect.top < menuHeight + buffer) {
         newStyle.top = `${iconRect.height + 12}px`;
       } else {
         newStyle.bottom = `${iconRect.height + 12}px`;
       }
-
-      // --- Horizontal Positioning ---
       if (iconRect.left + menuWidth > window.innerWidth) {
         newStyle.right = 0;
       } else {
         newStyle.left = 0;
       }
-
       setMenuStyle(newStyle);
     }
   }, [isSelectorVisible]);
 
-  // This effect calculates the result popup's optimal position
   useEffect(() => {
     if (isResultVisible && nodeRef.current) {
         const iconRect = nodeRef.current.getBoundingClientRect();
-        const resultWidth = 180; // Estimated width
-        const resultHeight = 100;  // Estimated height
+        const resultWidth = 180;
+        const resultHeight = 100;
         const buffer = 15;
-
         const newStyle = {};
-
-        // Position above if possible, else below
         if (iconRect.top < resultHeight + buffer) {
             newStyle.top = `${iconRect.height + 12}px`;
         } else {
             newStyle.bottom = `${iconRect.height + 12}px`;
         }
-
-        // Center it horizontally relative to the icon
-        newStyle.left = `50%`;
-        newStyle.transform = 'translateX(-50%)';
-
+        if (iconRect.left + resultWidth > window.innerWidth) {
+            newStyle.right = 0;
+        } else {
+            newStyle.left = 0;
+        }
         setResultStyle(newStyle);
     }
 }, [isResultVisible]);
@@ -86,19 +94,24 @@ const FloatingDice = () => {
         y: e.clientY - offsetRef.current.y,
       });
     };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      setTimeout(() => {
-        dragStartPosRef.current = null;
-      }, 0);
+    
+    const handleMouseUp = (e) => {
+        if (isDragging) {
+            // Check if it was a drag or a click
+            if (dragStartPosRef.current) {
+                const dist = Math.hypot(e.clientX - dragStartPosRef.current.x, e.clientY - dragStartPosRef.current.y);
+                if (dist < 5) { // If distance is small, it's a click
+                    setIsSelectorVisible(prev => !prev);
+                }
+            }
+            setIsDragging(false);
+            dragStartPosRef.current = null;
+        }
     };
 
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
@@ -118,14 +131,6 @@ const FloatingDice = () => {
     };
   };
 
-  const handleClick = (e) => {
-    if (dragStartPosRef.current) {
-      const dist = Math.hypot(e.clientX - dragStartPosRef.current.x, e.clientY - dragStartPosRef.current.y);
-      if (dist > 5) return;
-    }
-    setIsSelectorVisible(prev => !prev);
-  };
-
   const handleRoll = (expression) => {
     const result = DiceParser.roll(expression);
     if (result.error) {
@@ -135,25 +140,24 @@ const FloatingDice = () => {
     
     setRollResult(result.finalTotal);
     setRollSymbols(result.symbolicBreakdown);
+    setRollType(result.type);
     setIsSelectorVisible(false);
 
-    // If it's a fate roll, use the popup for a few seconds
-    if (result.symbolicBreakdown) {
+    if (result.type === 'coin' || result.type === 'fate') {
         setIsResultVisible(true);
         setTimeout(() => {
             setIsResultVisible(false);
             setRollResult(null);
             setRollSymbols(null);
-        }, 5000); // 5 seconds for the result popup
+        }, 5000);
     } else {
-        // For normal rolls, show result on the button and clear after 30s
         setTimeout(() => {
             setRollResult(null);
         }, 30000);
     }
   };
 
-  const quickDice = ['1d4', '1d6', '1d8', '1d10', '1d12', '1d20', '1d100', '4dF'];
+  const quickDice = ['1d4', '1d6', '1d8', '1d10', '1d12', '1d20', '4dF', '1cT'];
 
   return (
     <div
@@ -167,41 +171,49 @@ const FloatingDice = () => {
         cursor: isDragging ? 'grabbing' : 'grab'
       }}
       onMouseDown={handleMouseDown}
-      onClick={handleClick}
     >
-      {/* Conditionally display result inside button OR default icon */}
       {rollResult !== null && !isResultVisible ? (
         <span className="text-2xl font-bold animate-pulse">{rollResult}</span>
       ) : (
         <Dice6 size={32} />
       )}
 
-      {/* The popup for Fate results */}
-        {isResultVisible && rollSymbols && (
-            <div
-                className="dice-result-popup absolute bg-white text-gray-800 rounded-lg shadow-2xl p-3 flex flex-col items-center min-w-[160px] cursor-default"
-                style={resultStyle}
-            >
-                {chunk(rollSymbols.trim().split(/\s+/), 4).map((row, rowIndex) => (
+      {isResultVisible && (
+        <div
+            className="dice-result-popup absolute bg-white text-gray-800 rounded-lg shadow-2xl p-4 flex flex-col items-center min-w-[180px] cursor-default"
+            style={resultStyle}
+        >
+            {rollType === 'fate' && rollSymbols && (
+                chunk(rollSymbols, 4).map((row, rowIndex) => (
                     <div key={rowIndex} className="flex justify-center gap-2 mb-2">
                         {row.map((symbol, colIndex) => (
                             <span key={colIndex} className="text-xl font-mono font-bold w-8 h-8 flex items-center justify-center bg-gray-100 border border-gray-300 rounded shadow-sm">
-                                {symbol.replace(/[\[\]]/g, '')}
+                                {symbol}
                             </span>
                         ))}
                     </div>
-                ))}
-                <div className="text-3xl font-bold mt-2 border-t pt-2 w-full text-center">
-                    {rollResult > 0 ? `+${rollResult}` : rollResult}
-                </div>
+                ))
+            )}
+            {rollType === 'coin' && rollSymbols && (
+                chunk(rollSymbols, 4).map((row, rowIndex) => (
+                    <div key={rowIndex} className="flex justify-center gap-2 mb-2">
+                        {row.map((symbol, colIndex) => (
+                            <div key={colIndex} className="w-10 h-10">
+                                {symbol === 'Heads' ? <HeadsCoin /> : <TailsCoin />}
+                            </div>
+                        ))}
+                    </div>
+                ))
+            )}
+            <div className="text-lg font-bold mt-2 border-t pt-2 w-full text-center">
+              {rollType === 'fate' ? (rollResult > 0 ? `+${rollResult}` : rollResult) : rollResult}
             </div>
-        )}
+        </div>
+      )}
 
-      {/* The selector menu */}
       {isSelectorVisible && (
         <div 
-          ref={menuRef}
-          className="dice-selector-popup absolute w-48 bg-white text-gray-800 rounded-lg shadow-2xl p-3 cursor-default"
+          className="dice-selector-popup absolute w-56 bg-white text-gray-800 rounded-lg shadow-2xl p-3 cursor-default"
           style={menuStyle}
           onClick={e => e.stopPropagation()}
         >
@@ -222,7 +234,7 @@ const FloatingDice = () => {
               <Dice1 size={16} />
             </button>
           </div>
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-4 gap-2">
             {quickDice.map(dice => (
               <button
                 key={dice}
