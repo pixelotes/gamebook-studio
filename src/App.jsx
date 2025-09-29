@@ -808,11 +808,17 @@ const GamebookApp = () => {
   stateRef.current = state;
   
   useEffect(() => {
+    console.log('Theme changed to:', theme); // Debug
+    
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
+    
+    // Double check it was applied
+    const hasClass = document.documentElement.classList.contains('dark');
+    console.log('Dark class applied:', hasClass); // Debug
   }, [theme]);
 
   const handleTabSelect = (pdfId, paneId) => {
@@ -1394,6 +1400,25 @@ const GamebookApp = () => {
   };
 
   const handleNewSession = () => {
+    const hasContent = pdfs.length > 0 || characters.length > 0 || notes || counters.length > 0;
+    
+    if (hasContent) {
+      const confirmed = window.confirm(
+        'Are you sure you want to start a new session?\n\n' +
+        'This will close all PDFs and reset all game state including:\n' +
+        '• All open PDFs\n' +
+        '• Character sheets\n' +
+        '• Notes\n' +
+        '• Counters\n' +
+        '• All annotations\n\n' +
+        'This action cannot be undone.'
+      );
+      
+      if (!confirmed) {
+        return;
+      }
+    }
+    
     if (socketService.isMultiplayerActive()) {
       handleLeaveMultiplayerSession();
     }

@@ -122,7 +122,6 @@ const PDFControlsBar = ({
     >
         <div
             className="flex items-center"
-            onMouseEnter={() => !isPinned && setIsExpanded(true)}
             onMouseLeave={() => {
                 if (!isPinned && !localDropdownOpen && !tocDropdownOpen) {
                     setIsExpanded(false);
@@ -132,6 +131,7 @@ const PDFControlsBar = ({
         {/* Gear Icon (always visible) - now clickable with hover */}
         <button
           onClick={handleGearClick}
+          onMouseEnter={() => !isPinned && setIsExpanded(true)}
           className={`flex items-center backdrop-blur-sm rounded-lg border p-2 shadow-sm transition-colors ${
             isPinned
               ? 'bg-blue-100/70 border-blue-300/50 dark:bg-blue-900/30 dark:border-blue-600/50'
@@ -148,6 +148,7 @@ const PDFControlsBar = ({
 
         {/* Expandable Controls */}
         <div
+          onMouseEnter={() => !isPinned && setIsExpanded(true)}
           className={`flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200/50 ml-2 px-2 py-1 shadow-sm transition-all duration-300 dark:bg-gray-800/70 dark:border-gray-700/50 ${
             isExpanded || isPinned ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'
           }`}
