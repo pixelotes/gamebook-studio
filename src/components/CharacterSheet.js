@@ -22,7 +22,7 @@ const CharacterSheet = () => {
     dispatch({ type: 'SET_STATE', payload: {
       characters: characters.map(char => {
         if (char.id === charId) {
-          const newField = { id: generateUniqueId(), name: 'New Stat', value: 0 },
+          const newField = { id: generateUniqueId(), name: 'New Stat', value: 0 };
           const customFields = char.data.customFields || [];
           return { ...char, data: { ...char.data, customFields: [...customFields, newField] } };
         }

@@ -1,28 +1,14 @@
 import React, { useContext } from 'react';
 import { AppContext } from '../state/appState';
-import { Users, Tally5, StickyNote, Bookmark, ChevronUp, ChevronDown, Plus } from 'lucide-react';
+import { Users, Tally5, StickyNote, Plus } from 'lucide-react';
 import CharacterSheet from './CharacterSheet';
 import Notes from './Notes';
 import Counters from './Counters';
-import Bookmarks from './Bookmarks';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
-
-const CollapsibleSection = ({ title, children, isOpen, onToggle }) => (
-  <div className="border-b border-gray-200">
-    <button
-      onClick={onToggle}
-      className="w-full flex items-center justify-between p-4 text-left font-semibold"
-    >
-      {title}
-      {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-    </button>
-    {isOpen && <div className="p-4 pt-0">{children}</div>}
-  </div>
-);
 
 const Sidebar = ({ children }) => {
   const { state, dispatch } = useContext(AppContext);
-  const { activeTab, selectedTemplate, openSections } = state;
+  const { activeTab, selectedTemplate } = state;
 
   const setActiveTab = (tabId) => {
     dispatch({ type: 'SET_STATE', payload: { activeTab: tabId } });
@@ -32,27 +18,20 @@ const Sidebar = ({ children }) => {
     dispatch({ type: 'SET_STATE', payload: { selectedTemplate: template } });
   };
 
-  const toggleSection = (section) => {
-    dispatch({ type: 'SET_STATE', payload: { openSections: { ...openSections, [section]: !openSections[section] } } });
-  };
-
   return (
-    <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col dark:bg-gray-800 dark:border-gray-700">
+    <div className="w-full bg-white shadow-lg border-r border-gray-200 flex flex-col dark:bg-gray-800 dark:border-gray-700 h-full">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h1 className="text-xl font-bold text-gray-800 dark:text-gray-200">Gamebook Studio</h1>
-        <p className="text-sm text-gray-600 dark:text-gray-400">Digital tabletop companion</p>
       </div>
       
       {children}
 
       <div className="flex-1 overflow-y-auto">
-        <CollapsibleSection title="Game Session" isOpen={openSections.session} onToggle={() => toggleSection('session')}>
           <div className="flex border-b border-gray-200">
             {[
               { id: 'sheets', icon: Users, label: '' },
               { id: 'counters', icon: Tally5, label: '' },
-              { id: 'notes', icon: StickyNote, label: '' },
-              { id: 'bookmarks', icon: Bookmark, label: '' },             
+              { id: 'notes', icon: StickyNote, label: '' },            
             ].map(tab => (
               <button
                 key={tab.id}
@@ -103,11 +82,7 @@ const Sidebar = ({ children }) => {
             {activeTab === 'counters' && (
               <Counters />
             )}
-            {activeTab === 'bookmarks' && (
-              <Bookmarks />
-            )}
           </div>
-        </CollapsibleSection>
       </div>
     </div>
   );
