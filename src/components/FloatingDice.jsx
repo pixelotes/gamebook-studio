@@ -2,13 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Dice1, Dice6, X } from 'lucide-react';
 import DiceParser from '../utils/DiceParser';
 
+// Helper function to chunk an array into smaller arrays of a specific size
+const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
+  arr.slice(i * size, i * size + size)
+);
+
 const FloatingDice = () => {
   const [position, setPosition] = useState({ x: window.innerWidth - 80, y: window.innerHeight - 80 });
   const [isDragging, setIsDragging] = useState(false);
   const [isSelectorVisible, setIsSelectorVisible] = useState(false);
+  const [isResultVisible, setIsResultVisible] = useState(false);
   const [rollResult, setRollResult] = useState(null);
-  const [diceExpression, setDiceExpression] = useState('1d20');
+  const [rollSymbols, setRollSymbols] = useState(null);
+  const [diceExpression, setDiceExpression] = useState('4dF');
   const [menuStyle, setMenuStyle] = useState({});
+  const [resultStyle, setResultStyle] = useState({});
 
   const nodeRef = useRef(null);
   const menuRef = useRef(null);
@@ -26,26 +34,47 @@ const FloatingDice = () => {
       const newStyle = {};
 
       // --- Vertical Positioning ---
-      // If there isn't enough space above the icon, place the menu below it.
       if (iconRect.top < menuHeight + buffer) {
-        newStyle.top = `${iconRect.height + 12}px`; // 12px margin
+        newStyle.top = `${iconRect.height + 12}px`;
       } else {
-        // Otherwise, place it above (the default).
         newStyle.bottom = `${iconRect.height + 12}px`;
       }
 
       // --- Horizontal Positioning ---
-      // If the icon is too close to the right edge, align the menu's right side with the icon's right side.
       if (iconRect.left + menuWidth > window.innerWidth) {
         newStyle.right = 0;
       } else {
-        // Otherwise, align their left sides (the default).
         newStyle.left = 0;
       }
 
       setMenuStyle(newStyle);
     }
   }, [isSelectorVisible]);
+
+  // This effect calculates the result popup's optimal position
+  useEffect(() => {
+    if (isResultVisible && nodeRef.current) {
+        const iconRect = nodeRef.current.getBoundingClientRect();
+        const resultWidth = 180; // Estimated width
+        const resultHeight = 100;  // Estimated height
+        const buffer = 15;
+
+        const newStyle = {};
+
+        // Position above if possible, else below
+        if (iconRect.top < resultHeight + buffer) {
+            newStyle.top = `${iconRect.height + 12}px`;
+        } else {
+            newStyle.bottom = `${iconRect.height + 12}px`;
+        }
+
+        // Center it horizontally relative to the icon
+        newStyle.left = `50%`;
+        newStyle.transform = 'translateX(-50%)';
+
+        setResultStyle(newStyle);
+    }
+}, [isResultVisible]);
 
 
   useEffect(() => {
@@ -77,7 +106,7 @@ const FloatingDice = () => {
   }, [isDragging]);
 
   const handleMouseDown = (e) => {
-    if (e.target.closest('.dice-selector-popup')) return;
+    if (e.target.closest('.dice-selector-popup') || e.target.closest('.dice-result-popup')) return;
     
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
     setIsDragging(true);
@@ -105,14 +134,26 @@ const FloatingDice = () => {
     }
     
     setRollResult(result.finalTotal);
+    setRollSymbols(result.symbolicBreakdown);
     setIsSelectorVisible(false);
-    
-    setTimeout(() => {
-      setRollResult(null);
-    }, 30000); // Results stay onscreen for 30 seconds
+
+    // If it's a fate roll, use the popup for a few seconds
+    if (result.symbolicBreakdown) {
+        setIsResultVisible(true);
+        setTimeout(() => {
+            setIsResultVisible(false);
+            setRollResult(null);
+            setRollSymbols(null);
+        }, 5000); // 5 seconds for the result popup
+    } else {
+        // For normal rolls, show result on the button and clear after 30s
+        setTimeout(() => {
+            setRollResult(null);
+        }, 30000);
+    }
   };
 
-  const quickDice = ['1d4', '1d6', '1d8', '1d10', '1d12', '1d20'];
+  const quickDice = ['1d4', '1d6', '1d8', '1d10', '1d12', '1d20', '1d100', '4dF'];
 
   return (
     <div
@@ -123,17 +164,40 @@ const FloatingDice = () => {
         top: `${position.y}px`,
         width: '60px',
         height: '60px',
-        cursor: isDragging ? 'grabbing' : 'grabbing'
+        cursor: isDragging ? 'grabbing' : 'grab'
       }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
     >
-      {rollResult !== null ? (
+      {/* Conditionally display result inside button OR default icon */}
+      {rollResult !== null && !isResultVisible ? (
         <span className="text-2xl font-bold animate-pulse">{rollResult}</span>
       ) : (
         <Dice6 size={32} />
       )}
 
+      {/* The popup for Fate results */}
+        {isResultVisible && rollSymbols && (
+            <div
+                className="dice-result-popup absolute bg-white text-gray-800 rounded-lg shadow-2xl p-3 flex flex-col items-center min-w-[160px] cursor-default"
+                style={resultStyle}
+            >
+                {chunk(rollSymbols.trim().split(/\s+/), 4).map((row, rowIndex) => (
+                    <div key={rowIndex} className="flex justify-center gap-2 mb-2">
+                        {row.map((symbol, colIndex) => (
+                            <span key={colIndex} className="text-xl font-mono font-bold w-8 h-8 flex items-center justify-center bg-gray-100 border border-gray-300 rounded shadow-sm">
+                                {symbol.replace(/[\[\]]/g, '')}
+                            </span>
+                        ))}
+                    </div>
+                ))}
+                <div className="text-3xl font-bold mt-2 border-t pt-2 w-full text-center">
+                    {rollResult > 0 ? `+${rollResult}` : rollResult}
+                </div>
+            </div>
+        )}
+
+      {/* The selector menu */}
       {isSelectorVisible && (
         <div 
           ref={menuRef}
@@ -158,7 +222,7 @@ const FloatingDice = () => {
               <Dice1 size={16} />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-4 gap-1">
             {quickDice.map(dice => (
               <button
                 key={dice}

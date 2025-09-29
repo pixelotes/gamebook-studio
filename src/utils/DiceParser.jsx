@@ -31,8 +31,8 @@ class DiceParser {
       cleanExpr = '+' + cleanExpr;
     }
 
-    // 2. Use a regular expression to split the string into terms (e.g., '+2d6', '+1d8', '+2').
-    const termRegex = /([+-])(\d*d\d+|\d+)/g;
+    // 2. Use a regular expression to split the string into terms (e.g., '+2d6', '+4dF', '+2').
+    const termRegex = /([+-])(\d*dF|\d*d\d+|\d+)/gi;
     const terms = Array.from(cleanExpr.matchAll(termRegex));
 
     if (!terms || terms.length === 0) {
@@ -42,13 +42,40 @@ class DiceParser {
     let finalTotal = 0;
     const allIndividualRolls = [];
     const breakdownParts = [];
+    let isFateRoll = false;
 
     // 3. Process each term individually.
     for (const term of terms) {
       const sign = term[1] === '-' ? -1 : 1;
       const value = term[2];
 
-      if (value.includes('d')) {
+      if (value.toLowerCase().includes('df')) {
+        isFateRoll = true;
+        // It's a Fate/Fudge dice term (e.g., '4dF')
+        const [countStr] = value.toLowerCase().split('d');
+        const count = countStr === '' ? 1 : parseInt(countStr);
+
+        if (isNaN(count) || count < 1 || count > 100) {
+          return { error: `Invalid Fate dice count: ${value}` };
+        }
+
+        const termRolls = [];
+        const termSymbols = [];
+        let termTotal = 0;
+        for (let i = 0; i < count; i++) {
+          const roll = Math.floor(Math.random() * 3) - 1; // Generates -1, 0, or 1
+          termRolls.push(roll);
+          termTotal += roll;
+          if (roll === 1) termSymbols.push('[+]');
+          else if (roll === -1) termSymbols.push('[-]');
+          else termSymbols.push('[]'); // The fix is here! No space inside the brackets.
+        }
+
+        allIndividualRolls.push(...termRolls);
+        finalTotal += termTotal * sign;
+        breakdownParts.push({ sign: term[1], text: `(${termSymbols.join(' ')})`, isFate: true });
+
+      } else if (value.includes('d')) {
         // It's a dice term (e.g., '2d6')
         const [countStr, sidesStr] = value.split('d');
         const count = countStr === '' ? 1 : parseInt(countStr);
@@ -68,7 +95,7 @@ class DiceParser {
 
         allIndividualRolls.push(...termRolls);
         finalTotal += termTotal * sign;
-        breakdownParts.push({ sign: term[1], text: `(${termRolls.join('+')})` });
+        breakdownParts.push({ sign: term[1], text: `(${termRolls.join('+')})`, isFate: false });
 
       } else {
         // It's a simple number modifier (e.g., '2')
@@ -77,17 +104,25 @@ class DiceParser {
           return { error: `Invalid modifier: ${value}` };
         }
         finalTotal += modifier * sign;
-        breakdownParts.push({ sign: term[1], text: `${modifier}` });
+        breakdownParts.push({ sign: term[1], text: `${modifier}`, isFate: false });
       }
     }
 
     // 4. Build a detailed breakdown string for the user.
     const breakdown = breakdownParts.map(p => `${p.sign} ${p.text}`).join(' ').replace(/^[+] /, '');
+    
+    // 5. Create a special symbolic breakdown if it was a Fate roll
+    const symbolicBreakdown = isFateRoll ? breakdownParts
+        .filter(p => p.isFate)
+        .map(p => p.text.replace(/[()]/g, ''))
+        .join(' ') : null;
+
 
     return {
       finalTotal: finalTotal,
       results: allIndividualRolls,
       breakdown: `${breakdown} = ${finalTotal}`,
+      symbolicBreakdown: symbolicBreakdown,
       expression: expression,
     };
   }
