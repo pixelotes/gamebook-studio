@@ -116,6 +116,9 @@ class MockFabricCanvas {
       color: color || this.selectedColor,
     };
     this.addObject('drawings', pointer);
+    
+    // Start animation loop if not running
+    this.startAnimationLoop();
   }
 
   handleMouseDown(e) {
@@ -626,19 +629,36 @@ class MockFabricCanvas {
 
   startAnimationLoop() {
     const loop = () => {
+      let hasPointers = false;
+      
       this.layers.forEach(layer => {
-        layer.objects = layer.objects.filter(obj => {
+        const filtered = layer.objects.filter(obj => {
           if (obj.type === 'pointer') {
-            return (Date.now() - obj.createdAt) < 10000;
+            const alive = (Date.now() - obj.createdAt) < 10000;
+            if (alive) hasPointers = true;
+            return alive;
           }
           return true;
         });
+        if (filtered.length !== layer.objects.length) {
+          layer.objects = filtered;
+        }
       });
 
       this.render();
-      this.animationFrameId = requestAnimationFrame(loop);
+      
+      // Only continue loop if there are active pointers
+      if (hasPointers) {
+        this.animationFrameId = requestAnimationFrame(loop);
+      } else {
+        this.animationFrameId = null;
+      }
     };
-    this.animationFrameId = requestAnimationFrame(loop);
+    
+    // Only start if not already running
+    if (!this.animationFrameId) {
+      this.animationFrameId = requestAnimationFrame(loop);
+    }
   }
 
   stopAnimationLoop() {
