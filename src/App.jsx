@@ -949,18 +949,19 @@ const GamebookApp = () => {
     }
   }, []);
   
+  // Initialize canvases (runs once)
   useEffect(() => {
-    // Initialize primary canvas
     if (overlayCanvasRef.current && !fabricCanvas.current) {
       fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current, handleLayerUpdate, 'primary');
     }
     
-    // Initialize secondary canvas when dual pane is enabled
     if (isDualPaneMode && secondaryOverlayCanvasRef.current && !secondaryFabricCanvas.current) {
       secondaryFabricCanvas.current = new MockFabricCanvas(secondaryOverlayCanvasRef.current, handleLayerUpdate, 'secondary');
     }
-    
-    // Update primary canvas
+  }, [isDualPaneMode, handleLayerUpdate]);
+
+  // Update canvas tool settings (NO PDF re-render)
+  useEffect(() => {
     if (fabricCanvas.current) {
       fabricCanvas.current.setTokenSize(tokenSize);
       fabricCanvas.current.setTool(selectedTool);
@@ -974,7 +975,6 @@ const GamebookApp = () => {
       }
     }
     
-    // Update secondary canvas
     if (secondaryFabricCanvas.current) {
       secondaryFabricCanvas.current.setTokenSize(tokenSize);
       secondaryFabricCanvas.current.setTool(selectedTool);
@@ -987,12 +987,17 @@ const GamebookApp = () => {
         secondaryFabricCanvas.current.setSelectedToken(selectedTokenShape, selectedTokenColor);
       }
     }
-    
+  }, [tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, lineWidth, activePdf?.id, secondaryPdf?.id]);
+  
+  // Render PDFs only when they actually change
+  useEffect(() => {
     renderPdfPage(activePdf, pdfCanvasRef, 'primary');
     if (isDualPaneMode) {
       renderPdfPage(secondaryPdf, secondaryPdfCanvasRef, 'secondary');
     }
-  }, [activePdf, secondaryPdf, isDualPaneMode, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate, lineWidth]);
+  }, [activePdf?.id, activePdf?.currentPage, activePdf?.scale, 
+      secondaryPdf?.id, secondaryPdf?.currentPage, secondaryPdf?.scale, 
+      isDualPaneMode, renderPdfPage]);
 
   // Multiplayer effect handlers (keeping the same as original)
   useEffect(() => {
