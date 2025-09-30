@@ -893,16 +893,22 @@ const GamebookApp = () => {
   const handleLayerUpdate = useCallback((pdfId, pageNum, layers) => {
     const currentPdfs = stateRef.current.pdfs;
     const newPdfs = currentPdfs.map(p => {
-        if (p.id === pdfId) {
-            const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
-            return { ...p, pageLayers: updatedPageLayers };
-        }
-        return p;
+      if (p.id === pdfId) {
+        const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
+        return { ...p, pageLayers: updatedPageLayers };
+      }
+      return p;
     });
     dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
 
+    // Debounce multiplayer updates
     if (socketService.isMultiplayerActive()) {
+      if (handleLayerUpdate.timeoutId) {
+        clearTimeout(handleLayerUpdate.timeoutId);
+      }
+      handleLayerUpdate.timeoutId = setTimeout(() => {
         socketService.updateLayers(pdfId, pageNum, layers);
+      }, 100); // Send at most every 100ms
     }
   }, []);
 
