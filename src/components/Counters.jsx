@@ -1,6 +1,7 @@
-import React, { useContext } from 'react';
+import React, { useContext, useRef, useEffect } from 'react';
 import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
+import eventLogService from '../services/EventLogService';
 
 // A simple utility to generate more unique IDs
 const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -8,27 +9,82 @@ const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(
 const Counters = () => {
   const { state, dispatch } = useContext(AppContext);
   const { counters } = state;
+  
+  // Store previous values and debounce timers
+  const previousValuesRef = useRef({});
+  const debounceTimersRef = useRef({});
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   const addCounter = () => {
+    const newCounter = { 
+      id: generateUniqueId(),
+      name: `Counter ${counters.length + 1}`, 
+      value: 0,
+      color: '#3b82f6'
+    };
+    
+    eventLogService.logCounterCreate(newCounter.name, newCounter.value);
+    
     dispatch({ type: 'SET_STATE', payload: {
-      counters: [...counters, { 
-        id: generateUniqueId(),
-        name: `Counter ${counters.length + 1}`, 
-        value: 0,
-        color: '#3b82f6'
-      }]
+      counters: [...counters, newCounter]
     }});
   };
 
   const updateCounter = (id, field, value) => {
-    dispatch({ type: 'SET_STATE', payload: {
-      counters: counters.map(counter => 
-        counter.id === id ? { ...counter, [field]: value } : counter
-      )
-    }});
+    const counter = counters.find(c => c.id === id);
+    const key = `${id}-${field}`;
+    
+    if (counter && field === 'value') {
+      // Store the old value on first change
+      if (previousValuesRef.current[key] === undefined) {
+        previousValuesRef.current[key] = counter.value;
+      }
+      
+      // Clear existing timer
+      if (debounceTimersRef.current[key]) {
+        clearTimeout(debounceTimersRef.current[key]);
+      }
+      
+      // Update the counter immediately
+      dispatch({ type: 'SET_STATE', payload: {
+        counters: counters.map(counter => 
+          counter.id === id ? { ...counter, [field]: value } : counter
+        )
+      }});
+      
+      // Debounce the logging
+      debounceTimersRef.current[key] = setTimeout(() => {
+        if (previousValuesRef.current[key] !== undefined) {
+          const oldValue = previousValuesRef.current[key];
+          if (oldValue !== value) {
+            eventLogService.logCounterChange(counter.name, oldValue, value);
+          }
+          delete previousValuesRef.current[key];
+        }
+      }, 500); // 500ms debounce for counter values
+    } else {
+      // For non-value fields (like name), update without debouncing
+      dispatch({ type: 'SET_STATE', payload: {
+        counters: counters.map(counter => 
+          counter.id === id ? { ...counter, [field]: value } : counter
+        )
+      }});
+    }
   };
 
   const removeCounter = (id) => {
+    const counter = counters.find(c => c.id === id);
+    
+    if (counter) {
+      eventLogService.logCounterDelete(counter.name);
+    }
+    
     dispatch({ type: 'SET_STATE', payload: {
       counters: counters.filter(counter => counter.id !== id)
     }});
@@ -53,13 +109,13 @@ const Counters = () => {
       </div>
 
       {uniqueCounters.map(counter => (
-        <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg">
+        <div key={counter.id} className="mb-3 p-3 bg-gray-50 rounded-lg dark:bg-gray-700">
           <div className="flex items-center justify-between mb-2">
             <input
               type="text"
               value={counter.name}
               onChange={(e) => updateCounter(counter.id, 'name', e.target.value)}
-              className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2"
+              className="flex-1 p-1 border border-gray-200 rounded text-sm font-medium mr-2 dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
             />
             <button
               onClick={() => removeCounter(counter.id)}

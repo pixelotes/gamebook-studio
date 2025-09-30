@@ -688,6 +688,8 @@ class MockFabricCanvas {
       this.renderHeart(x, y, size);
     } else if (shape === 'star') {
       this.renderStar(x, y, size);
+    } else if (shape === 'meeple') {
+        this.renderMeeple(x, y, size);
     } else {
       const icon = TOKEN_SHAPES[shape]?.icon;
       if (icon) {
@@ -771,6 +773,48 @@ class MockFabricCanvas {
     this.ctx.fill();
     this.ctx.stroke();
   }
+  
+renderMeeple(x, y, size) {
+  const scale = size / 25; // base scaling factor
+  this.ctx.save();
+  this.ctx.translate(x, y);
+  this.ctx.scale(scale, scale);
+  this.ctx.translate(-25, -25); // center drawing on (x,y)
+
+  this.ctx.beginPath();
+
+  // Head
+  this.ctx.arc(25, 10, 6, 0, Math.PI * 2);
+
+  // Left arm
+  this.ctx.moveTo(19, 16);
+  this.ctx.lineTo(10, 25);
+  this.ctx.lineTo(15, 32);
+
+  // Left leg
+  this.ctx.lineTo(15, 45);
+  this.ctx.lineTo(22, 45);
+
+  // Crotch / gap between legs
+  this.ctx.lineTo(22, 38);
+  this.ctx.lineTo(28, 38);
+  this.ctx.lineTo(28, 45);
+
+  // Right leg
+  this.ctx.lineTo(35, 45);
+  this.ctx.lineTo(35, 32);
+
+  // Right arm
+  this.ctx.lineTo(40, 25);
+  this.ctx.lineTo(31, 16);
+
+  this.ctx.closePath();
+  this.ctx.fill();
+  this.ctx.stroke();
+
+  this.ctx.restore();
+}
+
 }
 
 const GamebookApp = () => {
@@ -808,11 +852,17 @@ const GamebookApp = () => {
   stateRef.current = state;
   
   useEffect(() => {
+    console.log('Theme changed to:', theme); // Debug
+
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
+
+    // Double check it was applied
+    const hasClass = document.documentElement.classList.contains('dark');
+    console.log('Dark class applied:', hasClass); // Debug
   }, [theme]);
 
   const handleTabSelect = (pdfId, paneId) => {
@@ -1394,6 +1444,24 @@ const GamebookApp = () => {
   };
 
   const handleNewSession = () => {
+    const hasContent = pdfs.length > 0 || characters.length > 0 || notes || counters.length > 0;
+    
+    if (hasContent) {
+      const confirmed = window.confirm(
+        'Are you sure you want to start a new session?\n\n' +
+        'This will close all PDFs and reset all game state including:\n' +
+        '• All open PDFs\n' +
+        '• Character sheets\n' +
+        '• Notes\n' +
+        '• Counters\n' +
+        '• All annotations\n\n' +
+        'This action cannot be undone.'
+      );
+      
+      if (!confirmed) {
+        return;
+      }
+    }
     if (socketService.isMultiplayerActive()) {
       handleLeaveMultiplayerSession();
     }
@@ -1517,7 +1585,7 @@ return (
       zoomIn: (pdfId = activePdfId) => zoomIn(pdfId), 
       zoomOut: (pdfId = activePdfId) => zoomOut(pdfId)
     }}>
-      <div className="flex h-screen bg-gray-100 dark:bg-gray-900" style={{ width: '100vw', overflow: 'hidden' }}>
+      <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-300" style={{ width: '100vw', overflow: 'hidden' }}>
         <MultiplayerNotifications notifications={notifications} />
         
         <MultiplayerModal

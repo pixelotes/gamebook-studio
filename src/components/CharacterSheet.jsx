@@ -1,7 +1,8 @@
-import React, { useContext } from 'react';
+import React, { useContext, useRef, useEffect } from 'react';
 import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
+import eventLogService from '../services/EventLogService';
 
 // A simple utility to generate more unique IDs
 const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -9,12 +10,57 @@ const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(
 const CharacterSheet = () => {
   const { state, dispatch } = useContext(AppContext);
   const { characters } = state;
+  
+  // Store previous values and debounce timers
+  const previousValuesRef = useRef({});
+  const debounceTimersRef = useRef({});
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   const updateCharacter = (id, field, value) => {
+    const character = characters.find(c => c.id === id);
+    const key = `${id}-${field}`;
+    
+    // Store the old value on first change
+    if (previousValuesRef.current[key] === undefined && character) {
+      previousValuesRef.current[key] = character.data[field];
+    }
+    
+    // Clear existing timer
+    if (debounceTimersRef.current[key]) {
+      clearTimeout(debounceTimersRef.current[key]);
+    }
+    
+    // Update the character immediately
     dispatch({ type: 'UPDATE_CHARACTER', payload: { id, field, value } });
+    
+    // Debounce the logging
+    debounceTimersRef.current[key] = setTimeout(() => {
+      if (character && previousValuesRef.current[key] !== undefined) {
+        const oldValue = previousValuesRef.current[key];
+        if (oldValue !== value) {
+          eventLogService.logCharacterUpdate(
+            character.data.name || 'Unnamed',
+            field,
+            oldValue,
+            value
+          );
+        }
+        delete previousValuesRef.current[key];
+      }
+    }, 1000); // 1 second debounce for text fields
   };
 
   const removeCharacter = (id) => {
+    const character = characters.find(c => c.id === id);
+    if (character) {
+      eventLogService.logCharacterDelete(character.data.name || 'Unnamed');
+    }
     dispatch({ type: 'SET_STATE', payload: { characters: characters.filter(char => char.id !== id) } });
   };
 
@@ -32,17 +78,64 @@ const CharacterSheet = () => {
   };
 
   const updateCustomField = (charId, fieldId, fieldProp, value) => {
-    dispatch({ type: 'SET_STATE', payload: {
-      characters: characters.map(char => {
-        if (char.id === charId) {
-          const updatedFields = char.data.customFields.map(field => 
-            field.id === fieldId ? { ...field, [fieldProp]: value } : field
-          );
-          return { ...char, data: { ...char.data, customFields: updatedFields } };
+    const character = characters.find(c => c.id === charId);
+    const key = `${charId}-${fieldId}-${fieldProp}`;
+    
+    if (character && fieldProp === 'value') {
+      const field = character.data.customFields?.find(f => f.id === fieldId);
+      
+      // Store the old value on first change
+      if (previousValuesRef.current[key] === undefined && field) {
+        previousValuesRef.current[key] = field.value;
+      }
+      
+      // Clear existing timer
+      if (debounceTimersRef.current[key]) {
+        clearTimeout(debounceTimersRef.current[key]);
+      }
+      
+      // Update immediately
+      dispatch({ type: 'SET_STATE', payload: {
+        characters: characters.map(char => {
+          if (char.id === charId) {
+            const updatedFields = char.data.customFields.map(field => 
+              field.id === fieldId ? { ...field, [fieldProp]: value } : field
+            );
+            return { ...char, data: { ...char.data, customFields: updatedFields } };
+          }
+          return char;
+        })
+      }});
+      
+      // Debounce the logging
+      debounceTimersRef.current[key] = setTimeout(() => {
+        if (field && previousValuesRef.current[key] !== undefined) {
+          const oldValue = previousValuesRef.current[key];
+          if (oldValue !== value) {
+            eventLogService.logCharacterUpdate(
+              character.data.name || 'Unnamed',
+              field.name,
+              oldValue,
+              value
+            );
+          }
+          delete previousValuesRef.current[key];
         }
-        return char;
-      })
-    }});
+      }, 500); // 500ms for number fields
+    } else {
+      // For non-value fields (like name changes), update immediately without logging
+      dispatch({ type: 'SET_STATE', payload: {
+        characters: characters.map(char => {
+          if (char.id === charId) {
+            const updatedFields = char.data.customFields.map(field => 
+              field.id === fieldId ? { ...field, [fieldProp]: value } : field
+            );
+            return { ...char, data: { ...char.data, customFields: updatedFields } };
+          }
+          return char;
+        })
+      }});
+    }
   };
 
   const removeCustomField = (charId, fieldId) => {
@@ -67,13 +160,13 @@ const CharacterSheet = () => {
       {uniqueCharacters.map(char => {
         const template = CHARACTER_TEMPLATES[char.template];
         return (
-          <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div key={char.id} className="mb-4 p-3 bg-gray-50 rounded-lg dark:bg-gray-700">
             <div className="flex items-center justify-between mb-3">
               <input
                 type="text"
                 value={char.data.name || 'Unnamed Character'}
                 onChange={(e) => updateCharacter(char.id, 'name', e.target.value)}
-                className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2"
+                className="flex-1 p-2 border border-gray-200 rounded font-semibold mr-2 dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
               />
               <div className="flex items-center gap-1">
                 <button
@@ -96,7 +189,7 @@ const CharacterSheet = () => {
                     type={field.type}
                     value={char.data[field.name] || field.default}
                     onChange={(e) => updateCharacter(char.id, field.name, field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
-                    className="w-16 p-1 border border-gray-200 rounded text-center text-xs"
+                    className="w-16 p-1 border border-gray-200 rounded text-center text-xs dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
                   />
                 </div>
               ))}
@@ -109,7 +202,7 @@ const CharacterSheet = () => {
                       type="text"
                       value={field.name}
                       onChange={(e) => updateCustomField(char.id, field.id, 'name', e.target.value)}
-                      className="flex-1 p-1 border border-gray-200 rounded text-xs"
+                      className="flex-1 p-1 border border-gray-200 rounded text-xs dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
                     />
                     <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value - 1)} className="w-6 h-6 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center">
                       <Minus size={12} />
@@ -118,7 +211,7 @@ const CharacterSheet = () => {
                       type="number"
                       value={field.value}
                       onChange={(e) => updateCustomField(char.id, field.id, 'value', parseInt(e.target.value) || 0)}
-                      className="w-12 p-1 border border-gray-200 rounded text-center text-xs"
+                      className="w-12 p-1 border border-gray-200 rounded text-center text-xs dark:bg-gray-600 dark:border-gray-500 dark:text-gray-200"
                     />
                     <button onClick={() => updateCustomField(char.id, field.id, 'value', field.value + 1)} className="w-6 h-6 bg-green-500 text-white rounded hover:bg-green-600 flex items-center justify-center">
                       <Plus size={12} />

@@ -1,4 +1,3 @@
-// src/components/ResizeHandle.js
 import React, { useEffect, useRef, useState } from 'react';
 
 const ResizeHandle = ({

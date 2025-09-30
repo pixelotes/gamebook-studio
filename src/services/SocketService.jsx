@@ -17,7 +17,7 @@ class SocketService {
     this.sessionId = null;
     this.isHost = false;
     this.listeners = new Map();
-    this.serverUrl = process.env.REACT_APP_SOCKET_SERVER_URL || 'http://localhost:3001';
+    this.serverUrl = import.meta.env.VITE_SOCKET_SERVER_URL || 'http://localhost:3001';
     this.debounceTimers = {};
     this.layerUpdateTimer = null; // Timer specifically for layer updates
   }

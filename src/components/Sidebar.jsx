@@ -1,14 +1,25 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { AppContext } from '../state/appState';
-import { Users, Tally5, StickyNote, Plus } from 'lucide-react';
+import { Users, Tally5, StickyNote, Plus, Clock } from 'lucide-react';
 import CharacterSheet from './CharacterSheet';
 import Notes from './Notes';
 import Counters from './Counters';
+import EventLog from './EventLog';
+import eventLogService from '../services/EventLogService';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
 
 const Sidebar = ({ children }) => {
   const { state, dispatch } = useContext(AppContext);
   const { activeTab, selectedTemplate } = state;
+  const [events, setEvents] = useState([]);
+
+  useEffect(() => {
+    // Subscribe to event log updates
+    const unsubscribe = eventLogService.subscribe(setEvents);
+    // Initialize with current events
+    setEvents(eventLogService.getEvents());
+    return unsubscribe;
+  }, []);
 
   const setActiveTab = (tabId) => {
     dispatch({ type: 'SET_STATE', payload: { activeTab: tabId } });
@@ -16,6 +27,12 @@ const Sidebar = ({ children }) => {
 
   const setSelectedTemplate = (template) => {
     dispatch({ type: 'SET_STATE', payload: { selectedTemplate: template } });
+  };
+
+  const handleClearLog = () => {
+    if (window.confirm('Are you sure you want to clear the event log?')) {
+      eventLogService.clearEvents();
+    }
   };
 
   return (
@@ -31,15 +48,16 @@ const Sidebar = ({ children }) => {
             {[
               { id: 'sheets', icon: Users, label: '' },
               { id: 'counters', icon: Tally5, label: '' },
-              { id: 'notes', icon: StickyNote, label: '' },            
+              { id: 'notes', icon: StickyNote, label: '' },
+              { id: 'log', icon: Clock, label: '' },
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 flex items-center justify-center gap-1 py-2 px-3 text-sm transition-colors ${
-                  activeTab === tab.id 
-                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
-                    : 'text-gray-600 hover:text-gray-800'
+                  activeTab === tab.id
+                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500'
+                    : 'text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
                 }`}
               >
                 <tab.icon size={14} />
@@ -52,7 +70,7 @@ const Sidebar = ({ children }) => {
             {activeTab === 'sheets' && (
               <div>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">
                     Character Template
                   </label>
                   <select
@@ -81,6 +99,9 @@ const Sidebar = ({ children }) => {
             {activeTab === 'notes' && <Notes />}
             {activeTab === 'counters' && (
               <Counters />
+            )}
+            {activeTab === 'log' && (
+              <EventLog events={events} onClear={handleClearLog} />
             )}
           </div>
       </div>
