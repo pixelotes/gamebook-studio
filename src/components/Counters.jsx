@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useRef, useEffect } from 'react';
 import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 import eventLogService from '../services/EventLogService';
@@ -9,6 +9,17 @@ const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(
 const Counters = () => {
   const { state, dispatch } = useContext(AppContext);
   const { counters } = state;
+  
+  // Store previous values and debounce timers
+  const previousValuesRef = useRef({});
+  const debounceTimersRef = useRef({});
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   const addCounter = () => {
     const newCounter = { 
@@ -27,16 +38,44 @@ const Counters = () => {
 
   const updateCounter = (id, field, value) => {
     const counter = counters.find(c => c.id === id);
+    const key = `${id}-${field}`;
     
     if (counter && field === 'value') {
-      eventLogService.logCounterChange(counter.name, counter.value, value);
+      // Store the old value on first change
+      if (previousValuesRef.current[key] === undefined) {
+        previousValuesRef.current[key] = counter.value;
+      }
+      
+      // Clear existing timer
+      if (debounceTimersRef.current[key]) {
+        clearTimeout(debounceTimersRef.current[key]);
+      }
+      
+      // Update the counter immediately
+      dispatch({ type: 'SET_STATE', payload: {
+        counters: counters.map(counter => 
+          counter.id === id ? { ...counter, [field]: value } : counter
+        )
+      }});
+      
+      // Debounce the logging
+      debounceTimersRef.current[key] = setTimeout(() => {
+        if (previousValuesRef.current[key] !== undefined) {
+          const oldValue = previousValuesRef.current[key];
+          if (oldValue !== value) {
+            eventLogService.logCounterChange(counter.name, oldValue, value);
+          }
+          delete previousValuesRef.current[key];
+        }
+      }, 500); // 500ms debounce for counter values
+    } else {
+      // For non-value fields (like name), update without debouncing
+      dispatch({ type: 'SET_STATE', payload: {
+        counters: counters.map(counter => 
+          counter.id === id ? { ...counter, [field]: value } : counter
+        )
+      }});
     }
-    
-    dispatch({ type: 'SET_STATE', payload: {
-      counters: counters.map(counter => 
-        counter.id === id ? { ...counter, [field]: value } : counter
-      )
-    }});
   };
 
   const removeCounter = (id) => {

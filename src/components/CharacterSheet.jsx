@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useRef, useEffect } from 'react';
 import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
@@ -10,19 +10,50 @@ const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(
 const CharacterSheet = () => {
   const { state, dispatch } = useContext(AppContext);
   const { characters } = state;
+  
+  // Store previous values and debounce timers
+  const previousValuesRef = useRef({});
+  const debounceTimersRef = useRef({});
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   const updateCharacter = (id, field, value) => {
     const character = characters.find(c => c.id === id);
-    if (character) {
-      const oldValue = character.data[field];
-      eventLogService.logCharacterUpdate(
-        character.data.name || 'Unnamed',
-        field,
-        oldValue,
-        value
-      );
+    const key = `${id}-${field}`;
+    
+    // Store the old value on first change
+    if (previousValuesRef.current[key] === undefined && character) {
+      previousValuesRef.current[key] = character.data[field];
     }
+    
+    // Clear existing timer
+    if (debounceTimersRef.current[key]) {
+      clearTimeout(debounceTimersRef.current[key]);
+    }
+    
+    // Update the character immediately
     dispatch({ type: 'UPDATE_CHARACTER', payload: { id, field, value } });
+    
+    // Debounce the logging
+    debounceTimersRef.current[key] = setTimeout(() => {
+      if (character && previousValuesRef.current[key] !== undefined) {
+        const oldValue = previousValuesRef.current[key];
+        if (oldValue !== value) {
+          eventLogService.logCharacterUpdate(
+            character.data.name || 'Unnamed',
+            field,
+            oldValue,
+            value
+          );
+        }
+        delete previousValuesRef.current[key];
+      }
+    }, 1000); // 1 second debounce for text fields
   };
 
   const removeCharacter = (id) => {
@@ -48,29 +79,63 @@ const CharacterSheet = () => {
 
   const updateCustomField = (charId, fieldId, fieldProp, value) => {
     const character = characters.find(c => c.id === charId);
+    const key = `${charId}-${fieldId}-${fieldProp}`;
+    
     if (character && fieldProp === 'value') {
       const field = character.data.customFields?.find(f => f.id === fieldId);
-      if (field) {
-        eventLogService.logCharacterUpdate(
-          character.data.name || 'Unnamed',
-          field.name,
-          field.value,
-          value
-        );
+      
+      // Store the old value on first change
+      if (previousValuesRef.current[key] === undefined && field) {
+        previousValuesRef.current[key] = field.value;
       }
-    }
-    
-    dispatch({ type: 'SET_STATE', payload: {
-      characters: characters.map(char => {
-        if (char.id === charId) {
-          const updatedFields = char.data.customFields.map(field => 
-            field.id === fieldId ? { ...field, [fieldProp]: value } : field
-          );
-          return { ...char, data: { ...char.data, customFields: updatedFields } };
+      
+      // Clear existing timer
+      if (debounceTimersRef.current[key]) {
+        clearTimeout(debounceTimersRef.current[key]);
+      }
+      
+      // Update immediately
+      dispatch({ type: 'SET_STATE', payload: {
+        characters: characters.map(char => {
+          if (char.id === charId) {
+            const updatedFields = char.data.customFields.map(field => 
+              field.id === fieldId ? { ...field, [fieldProp]: value } : field
+            );
+            return { ...char, data: { ...char.data, customFields: updatedFields } };
+          }
+          return char;
+        })
+      }});
+      
+      // Debounce the logging
+      debounceTimersRef.current[key] = setTimeout(() => {
+        if (field && previousValuesRef.current[key] !== undefined) {
+          const oldValue = previousValuesRef.current[key];
+          if (oldValue !== value) {
+            eventLogService.logCharacterUpdate(
+              character.data.name || 'Unnamed',
+              field.name,
+              oldValue,
+              value
+            );
+          }
+          delete previousValuesRef.current[key];
         }
-        return char;
-      })
-    }});
+      }, 500); // 500ms for number fields
+    } else {
+      // For non-value fields (like name changes), update immediately without logging
+      dispatch({ type: 'SET_STATE', payload: {
+        characters: characters.map(char => {
+          if (char.id === charId) {
+            const updatedFields = char.data.customFields.map(field => 
+              field.id === fieldId ? { ...field, [fieldProp]: value } : field
+            );
+            return { ...char, data: { ...char.data, customFields: updatedFields } };
+          }
+          return char;
+        })
+      }});
+    }
   };
 
   const removeCustomField = (charId, fieldId) => {
