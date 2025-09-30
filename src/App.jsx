@@ -1,6 +1,7 @@
 import React, { useReducer, useRef, useEffect, useCallback, useState } from 'react';
 import { Upload, RotateCcw, Save, Menu, FilePlus, Wifi, Moon, Sun, Columns } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+import JSZip from 'jszip';
 import FloatingDice from './components/FloatingDice';
 import Sidebar from './components/Sidebar';
 import Toolbar from './components/Toolbar';
@@ -15,6 +16,7 @@ import ResizeHandle from './components/ResizeHandle';
 import pako from 'pako';
 import { crc32 } from 'crc';
 import DebugModal from './components/DebugModal';
+import GameMetadataModal from './components/GameMetadataModal';
 import { Settings } from 'lucide-react';
 
 const diffpatcher = create({
@@ -59,7 +61,8 @@ class MockFabricCanvas {
     this.currentPdfId = null;
     this.animationFrameId = null;
     this.lineWidth = 3;
-    this.paneId = paneId; // Track which pane this canvas belongs to
+    this.paneId = paneId;
+    this.pendingRender = false;
     this.setupEvents();
     this.startAnimationLoop();
   }
@@ -458,7 +461,15 @@ class MockFabricCanvas {
       const lastObj = drawingsLayer.objects[drawingsLayer.objects.length - 1];
       if (lastObj && lastObj.type === 'path') {
         lastObj.points.push({ x, y });
-        this.render();
+        
+        // Throttle rendering during drawing
+        if (!this.pendingRender) {
+          this.pendingRender = true;
+          requestAnimationFrame(() => {
+            this.render();
+            this.pendingRender = false;
+          });
+        }
       }
     }
   }
@@ -794,47 +805,46 @@ class MockFabricCanvas {
     this.ctx.stroke();
   }
   
-renderMeeple(x, y, size) {
-  const scale = size / 25; // base scaling factor
-  this.ctx.save();
-  this.ctx.translate(x, y);
-  this.ctx.scale(scale, scale);
-  this.ctx.translate(-25, -25); // center drawing on (x,y)
+  renderMeeple(x, y, size) {
+    const scale = size / 25;
+    this.ctx.save();
+    this.ctx.translate(x, y);
+    this.ctx.scale(scale, scale);
+    this.ctx.translate(-25, -25);
 
-  this.ctx.beginPath();
+    this.ctx.beginPath();
 
-  // Head
-  this.ctx.arc(25, 10, 6, 0, Math.PI * 2);
+    // Head
+    this.ctx.arc(25, 10, 6, 0, Math.PI * 2);
 
-  // Left arm
-  this.ctx.moveTo(19, 16);
-  this.ctx.lineTo(10, 25);
-  this.ctx.lineTo(15, 32);
+    // Left arm
+    this.ctx.moveTo(19, 16);
+    this.ctx.lineTo(10, 25);
+    this.ctx.lineTo(15, 32);
 
-  // Left leg
-  this.ctx.lineTo(15, 45);
-  this.ctx.lineTo(22, 45);
+    // Left leg
+    this.ctx.lineTo(15, 45);
+    this.ctx.lineTo(22, 45);
 
-  // Crotch / gap between legs
-  this.ctx.lineTo(22, 38);
-  this.ctx.lineTo(28, 38);
-  this.ctx.lineTo(28, 45);
+    // Crotch / gap between legs
+    this.ctx.lineTo(22, 38);
+    this.ctx.lineTo(28, 38);
+    this.ctx.lineTo(28, 45);
 
-  // Right leg
-  this.ctx.lineTo(35, 45);
-  this.ctx.lineTo(35, 32);
+    // Right leg
+    this.ctx.lineTo(35, 45);
+    this.ctx.lineTo(35, 32);
 
-  // Right arm
-  this.ctx.lineTo(40, 25);
-  this.ctx.lineTo(31, 16);
+    // Right arm
+    this.ctx.lineTo(40, 25);
+    this.ctx.lineTo(31, 16);
 
-  this.ctx.closePath();
-  this.ctx.fill();
-  this.ctx.stroke();
+    this.ctx.closePath();
+    this.ctx.fill();
+    this.ctx.stroke();
 
-  this.ctx.restore();
-}
-
+    this.ctx.restore();
+  }
 }
 
 const GamebookApp = () => {
@@ -853,6 +863,7 @@ const GamebookApp = () => {
   const [gameStateVersion, setGameStateVersion] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(state.sidebarWidth);
   const [primaryPaneWidth, setPrimaryPaneWidth] = useState(null);
+  const [showMetadataModal, setShowMetadataModal] = useState(false);
 
   const pdfCanvasRef = useRef(null);
   const overlayCanvasRef = useRef(null);
@@ -860,6 +871,7 @@ const GamebookApp = () => {
   const secondaryOverlayCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const sessionFileInputRef = useRef(null);
+  const gbsFileInputRef = useRef(null);
   const fabricCanvas = useRef(null);
   const secondaryFabricCanvas = useRef(null);
 
@@ -872,17 +884,11 @@ const GamebookApp = () => {
   stateRef.current = state;
   
   useEffect(() => {
-    console.log('Theme changed to:', theme); // Debug
-
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-
-    // Double check it was applied
-    const hasClass = document.documentElement.classList.contains('dark');
-    console.log('Dark class applied:', hasClass); // Debug
   }, [theme]);
 
   const handleTabSelect = (pdfId, paneId) => {
@@ -913,22 +919,22 @@ const GamebookApp = () => {
   const handleLayerUpdate = useCallback((pdfId, pageNum, layers) => {
     const currentPdfs = stateRef.current.pdfs;
     const newPdfs = currentPdfs.map(p => {
-      if (p.id === pdfId) {
-        const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
-        return { ...p, pageLayers: updatedPageLayers };
-      }
-      return p;
+        if (p.id === pdfId) {
+            const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
+            return { ...p, pageLayers: updatedPageLayers };
+        }
+        return p;
     });
     dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
 
-    // Debounce multiplayer updates
     if (socketService.isMultiplayerActive()) {
-      if (handleLayerUpdate.timeoutId) {
-        clearTimeout(handleLayerUpdate.timeoutId);
-      }
-      handleLayerUpdate.timeoutId = setTimeout(() => {
-        socketService.updateLayers(pdfId, pageNum, layers);
-      }, 100); // Send at most every 100ms
+        // Debounce multiplayer updates
+        if (handleLayerUpdate.timeoutId) {
+            clearTimeout(handleLayerUpdate.timeoutId);
+        }
+        handleLayerUpdate.timeoutId = setTimeout(() => {
+            socketService.updateLayers(pdfId, pageNum, layers);
+        }, 100);
     }
   }, []);
 
@@ -975,7 +981,7 @@ const GamebookApp = () => {
     }
   }, []);
   
-  // Initialize canvases (runs once)
+  // Initialize canvases
   useEffect(() => {
     if (overlayCanvasRef.current && !fabricCanvas.current) {
       fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current, handleLayerUpdate, 'primary');
@@ -1014,7 +1020,7 @@ const GamebookApp = () => {
       }
     }
   }, [tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, lineWidth, activePdf?.id, secondaryPdf?.id]);
-  
+
   // Render PDFs only when they actually change
   useEffect(() => {
     renderPdfPage(activePdf, pdfCanvasRef, 'primary');
@@ -1025,7 +1031,7 @@ const GamebookApp = () => {
       secondaryPdf?.id, secondaryPdf?.currentPage, secondaryPdf?.scale, 
       isDualPaneMode, renderPdfPage]);
 
-  // Multiplayer effect handlers (keeping the same as original)
+  // Multiplayer effect handlers
   useEffect(() => {
     const handleGameStateDelta = async (data) => {
         if (data.fromVersion !== gameStateVersion) {
@@ -1224,7 +1230,6 @@ const GamebookApp = () => {
     };
   }, [gameStateVersion]);
 
-  // Keep the same multiplayer state sync effects
   const prevCharacters = usePrevious(characters);
   useEffect(() => {
     if (socketService.isMultiplayerActive() && JSON.stringify(prevCharacters) !== JSON.stringify(characters)) {
@@ -1367,7 +1372,7 @@ const GamebookApp = () => {
           const url = URL.createObjectURL(file);
           const pdfDoc = await pdfjsLib.getDocument(url).promise;
           const pdfData = {
-            id: file.name, // Use stable ID
+            id: file.name,
             fileName: file.name,
             file,
             pdfDoc,
@@ -1452,6 +1457,141 @@ const GamebookApp = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportGBS = async (metadata) => {
+    const zip = new JSZip();
+    
+    // Add game metadata
+    zip.file('game.json', JSON.stringify(metadata, null, 2));
+    
+    // Add session data
+    const sessionData = {
+      pdfs: pdfs.map(p => ({
+        id: p.id,
+        fileName: p.fileName,
+        currentPage: p.currentPage,
+        scale: p.scale,
+        pageLayers: p.pageLayers,
+        totalPages: p.totalPages,
+        bookmarks: p.bookmarks,
+      })),
+      activePdfId,
+      secondaryPdfId,
+      isDualPaneMode,
+      characters,
+      notes,
+      counters,
+      version: gameStateVersion
+    };
+    
+    zip.file('session.json', JSON.stringify(sessionData, null, 2));
+    
+    // Add PDFs
+    const pdfFolder = zip.folder('pdfs');
+    for (const pdf of pdfs) {
+      if (pdf.file) {
+        pdfFolder.file(pdf.fileName, pdf.file);
+      } else {
+        console.warn(`Skipping PDF without file: ${pdf.fileName}`);
+      }
+    }
+    
+    // Generate and download with game name
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileName = metadata.name 
+      ? `${metadata.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.gbs`
+      : 'session.gbs';
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // Store metadata in state
+    dispatch({ type: 'SET_STATE', payload: { gameMetadata: metadata } });
+    
+    addNotification(`Game exported as ${fileName}`, 'success');
+  };
+
+  const handleLoadGBS = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !file.name.endsWith('.gbs')) {
+      alert('Please select a valid .gbs file');
+      return;
+    }
+    
+    try {
+      const zip = await JSZip.loadAsync(file);
+      
+      // Read game metadata
+      let gameMetadata = {
+        name: '',
+        year: '',
+        author: '',
+        description: '',
+        players: '',
+        length: ''
+      };
+      
+      const gameJsonFile = zip.file('game.json');
+      if (gameJsonFile) {
+        const gameJson = await gameJsonFile.async('string');
+        gameMetadata = JSON.parse(gameJson);
+      }
+      
+      // Read session.json
+      const sessionJson = await zip.file('session.json').async('string');
+      const sessionData = JSON.parse(sessionJson);
+      
+      // Load PDFs
+      const pdfFolder = zip.folder('pdfs');
+      const loadedPdfs = [];
+      
+      for (const pdfInfo of sessionData.pdfs) {
+        const pdfFile = pdfFolder.file(pdfInfo.fileName);
+        if (pdfFile) {
+          const pdfBlob = await pdfFile.async('blob');
+          const pdfUrl = URL.createObjectURL(pdfBlob);
+          const pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+          
+          loadedPdfs.push({
+            ...pdfInfo,
+            pdfDoc,
+            file: new File([pdfBlob], pdfInfo.fileName, { type: 'application/pdf' })
+          });
+        } else {
+          console.warn(`PDF not found in archive: ${pdfInfo.fileName}`);
+        }
+      }
+      
+      // Restore full state including metadata
+      dispatch({ 
+        type: 'SET_STATE', 
+        payload: {
+          pdfs: loadedPdfs,
+          activePdfId: sessionData.activePdfId,
+          secondaryPdfId: sessionData.secondaryPdfId,
+          isDualPaneMode: sessionData.isDualPaneMode,
+          characters: sessionData.characters,
+          notes: sessionData.notes,
+          counters: sessionData.counters,
+          gameMetadata: gameMetadata
+        }
+      });
+      
+      setGameStateVersion(sessionData.version || 0);
+      
+      const gameName = gameMetadata.name ? ` "${gameMetadata.name}"` : '';
+      addNotification(`Game${gameName} loaded successfully`, 'success');
+      
+    } catch (error) {
+      console.error('Error loading .gbs file:', error);
+      alert('Failed to load .gbs file. It may be corrupt or invalid.');
+    }
   };
   
   const handleLoadSession = (event) => {
@@ -1582,20 +1722,17 @@ const GamebookApp = () => {
     setPrimaryPaneWidth(newWidth);
   }, []);
 
-  // Calculate max widths (keep existing logic)
   const maxSidebarWidth = Math.min(600, window.innerWidth * 0.4);
-  const availableWidth = window.innerWidth - sidebarWidth - 2; // -2 for resize handle
+  const availableWidth = window.innerWidth - sidebarWidth - 2;
   const maxPrimaryPaneWidth = isDualPaneMode ? availableWidth * 0.8 : availableWidth;
 
   const toggleDualPane = () => {
     if (!isDualPaneMode && pdfs.length > 1) {
-      // Enable dual pane with the second PDF
       dispatch({ type: 'SET_STATE', payload: { 
         isDualPaneMode: true,
         secondaryPdfId: pdfs.find(p => p.id !== activePdfId)?.id || null
       } });
     } else {
-      // Disable dual pane
       dispatch({ type: 'SET_STATE', payload: { 
         isDualPaneMode: false,
         secondaryPdfId: null
@@ -1625,17 +1762,24 @@ return (
           onSessionCreated={handleCreateMultiplayerSession}
           onSessionJoined={handleJoinMultiplayerSession}
         />
-              {/* Add the DebugModal here with the other modals */}
+        
+        <GameMetadataModal
+          isOpen={showMetadataModal}
+          onClose={() => setShowMetadataModal(false)}
+          onSave={handleExportGBS}
+          initialData={state.gameMetadata}
+        />
+        
         <DebugModal
           isOpen={showDebugModal}
           onClose={() => setShowDebugModal(false)}
           gameState={state}
           gameStateVersion={gameStateVersion}
         />
+        
         <FloatingDice />
         
         {isSidebarVisible ? (
-          // Regular visible sidebar
           <div className="flex h-full">
             <div style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: `${maxSidebarWidth}px`, height: '100%' }}>
               <Sidebar>
@@ -1661,7 +1805,6 @@ return (
             />
           </div>
         ) : (
-          // Hover trigger when sidebar is hidden
           <SidebarHoverTrigger>
             {multiplayerSession && (
               <div className="p-4 border-b">        
@@ -1758,6 +1901,21 @@ return (
                 </button>
                 <button
                   onClick={() => { 
+                    setShowMetadataModal(true); 
+                    dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); 
+                  }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <Save size={14} /> Export as .gbs
+                </button>
+                <button
+                  onClick={() => { gbsFileInputRef.current?.click(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
+                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <Upload size={14} /> Load .gbs File
+                </button>
+                <button
+                  onClick={() => { 
                     fabricCanvas.current?.clear(); 
                     if (isDualPaneMode) secondaryFabricCanvas.current?.clear();
                     dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); 
@@ -1766,7 +1924,6 @@ return (
                 >
                   <RotateCcw size={14} /> Clear Page Annotations
                 </button>
-                {/* Debug modal button */}
                 <button
                   onClick={() => {
                     setShowDebugModal(true);
@@ -1776,18 +1933,16 @@ return (
                 >
                   <Settings size={14} /> Debug State
                 </button>
-                
               </div>
             )}
             <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileUpload} className="hidden" multiple />
             <input ref={sessionFileInputRef} type="file" accept=".json" onChange={handleLoadSession} className="hidden" />
+            <input ref={gbsFileInputRef} type="file" accept=".gbs" onChange={handleLoadGBS} className="hidden" />
           </div>
 
-          {/* PDF Viewer Area */}
           <div className={`flex-1 ${isDualPaneMode ? 'flex' : ''}`} style={{ overflow: 'hidden' }}>
-            {/* Primary Pane */}
             <div 
-              className={`${isDualPaneMode ? '' : 'w-full'} flex flex-col overflow-hidden`} // Add overflow-hidden
+              className={`${isDualPaneMode ? '' : 'w-full'} flex flex-col overflow-hidden`}
               style={{ 
                 width: isDualPaneMode 
                   ? `${primaryPaneWidth || Math.floor(availableWidth * 0.5)}px`
@@ -1811,7 +1966,6 @@ return (
               />
             </div>
             
-            {/* Pane Splitter */}
             {isDualPaneMode && (
               <ResizeHandle 
                 direction="horizontal"
@@ -1823,10 +1977,9 @@ return (
               />
             )}
             
-            {/* Secondary Pane */}
             {isDualPaneMode && (
             <div 
-              className="flex-1 flex flex-col overflow-hidden" // Add overflow-hidden
+              className="flex-1 flex flex-col overflow-hidden"
               style={{ 
                 width: primaryPaneWidth 
                   ? `${availableWidth - primaryPaneWidth - 2}px` 
@@ -1856,6 +2009,5 @@ return (
     </AppContext.Provider>
   );
 };
-
 
 export default GamebookApp;
