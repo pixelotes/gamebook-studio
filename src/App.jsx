@@ -870,8 +870,6 @@ const GamebookApp = () => {
   const secondaryPdfCanvasRef = useRef(null);
   const secondaryOverlayCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
-  const sessionFileInputRef = useRef(null);
-  const gbsFileInputRef = useRef(null);
   const fabricCanvas = useRef(null);
   const secondaryFabricCanvas = useRef(null);
 
@@ -937,6 +935,50 @@ const GamebookApp = () => {
         }, 100);
     }
   }, []);
+
+  const handleUnifiedLoad = async (event) => {
+    const files = event.target.files;
+    if (files.length === 0) return;
+
+    const pdfFiles = [];
+    let jsonFile = null;
+    let gbsFile = null;
+
+    // Categorize files by type
+    for (const file of files) {
+      if (file.name.endsWith('.pdf')) {
+        pdfFiles.push(file);
+      } else if (file.name.endsWith('.json')) {
+        jsonFile = file;
+      } else if (file.name.endsWith('.gbs')) {
+        gbsFile = file;
+      }
+    }
+
+    // Priority: GBS > JSON > PDFs
+    // GBS files are complete packages, so they take precedence
+    if (gbsFile) {
+      await handleLoadGBS({ target: { files: [gbsFile] } });
+      return;
+    }
+
+    // JSON session files need PDFs to be loaded separately
+    if (jsonFile) {
+      handleLoadSession({ target: { files: [jsonFile] } });
+      // If PDFs were also selected, they'll be loaded as part of session restoration
+      return;
+    }
+
+    // Just PDFs - regular file upload
+    if (pdfFiles.length > 0) {
+      const dt = new DataTransfer();
+      pdfFiles.forEach(f => dt.items.add(f));
+      await handleFileUpload({ target: { files: dt.files } });
+    }
+
+    // Reset the input
+    event.target.value = '';
+  };
 
   const renderPdfPage = useCallback(async (pdfData, canvasRef, paneId = 'primary') => {
     if (!pdfData || !canvasRef.current) return;
@@ -1885,13 +1927,7 @@ return (
                   onClick={() => { fileInputRef.current?.click(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
-                  <Upload size={14} /> Load PDFs
-                </button>
-                <button
-                  onClick={() => { sessionFileInputRef.current?.click(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  <Upload size={14} /> Load Session
+                  <Upload size={14} /> Load Files
                 </button>
                 <button
                   onClick={() => { handleSaveSession(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
@@ -1907,12 +1943,6 @@ return (
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <Save size={14} /> Export as .gbs
-                </button>
-                <button
-                  onClick={() => { gbsFileInputRef.current?.click(); dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); }}
-                  className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  <Upload size={14} /> Load .gbs File
                 </button>
                 <button
                   onClick={() => { 
@@ -1935,9 +1965,14 @@ return (
                 </button>
               </div>
             )}
-            <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileUpload} className="hidden" multiple />
-            <input ref={sessionFileInputRef} type="file" accept=".json" onChange={handleLoadSession} className="hidden" />
-            <input ref={gbsFileInputRef} type="file" accept=".gbs" onChange={handleLoadGBS} className="hidden" />
+            <input 
+              ref={fileInputRef} 
+              type="file" 
+              accept=".pdf,.json,.gbs" 
+              onChange={handleUnifiedLoad} 
+              className="hidden" 
+              multiple 
+            />
           </div>
 
           <div className={`flex-1 ${isDualPaneMode ? 'flex' : ''}`} style={{ overflow: 'hidden' }}>
