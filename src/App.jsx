@@ -116,6 +116,9 @@ class MockFabricCanvas {
       color: color || this.selectedColor,
     };
     this.addObject('drawings', pointer);
+    
+    // Start animation loop if not running
+    this.startAnimationLoop();
   }
 
   handleMouseDown(e) {
@@ -626,19 +629,36 @@ class MockFabricCanvas {
 
   startAnimationLoop() {
     const loop = () => {
+      let hasPointers = false;
+      
       this.layers.forEach(layer => {
-        layer.objects = layer.objects.filter(obj => {
+        const filtered = layer.objects.filter(obj => {
           if (obj.type === 'pointer') {
-            return (Date.now() - obj.createdAt) < 10000;
+            const alive = (Date.now() - obj.createdAt) < 10000;
+            if (alive) hasPointers = true;
+            return alive;
           }
           return true;
         });
+        if (filtered.length !== layer.objects.length) {
+          layer.objects = filtered;
+        }
       });
 
       this.render();
-      this.animationFrameId = requestAnimationFrame(loop);
+      
+      // Only continue loop if there are active pointers
+      if (hasPointers) {
+        this.animationFrameId = requestAnimationFrame(loop);
+      } else {
+        this.animationFrameId = null;
+      }
     };
-    this.animationFrameId = requestAnimationFrame(loop);
+    
+    // Only start if not already running
+    if (!this.animationFrameId) {
+      this.animationFrameId = requestAnimationFrame(loop);
+    }
   }
 
   stopAnimationLoop() {
@@ -893,16 +913,22 @@ const GamebookApp = () => {
   const handleLayerUpdate = useCallback((pdfId, pageNum, layers) => {
     const currentPdfs = stateRef.current.pdfs;
     const newPdfs = currentPdfs.map(p => {
-        if (p.id === pdfId) {
-            const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
-            return { ...p, pageLayers: updatedPageLayers };
-        }
-        return p;
+      if (p.id === pdfId) {
+        const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
+        return { ...p, pageLayers: updatedPageLayers };
+      }
+      return p;
     });
     dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
 
+    // Debounce multiplayer updates
     if (socketService.isMultiplayerActive()) {
+      if (handleLayerUpdate.timeoutId) {
+        clearTimeout(handleLayerUpdate.timeoutId);
+      }
+      handleLayerUpdate.timeoutId = setTimeout(() => {
         socketService.updateLayers(pdfId, pageNum, layers);
+      }, 100); // Send at most every 100ms
     }
   }, []);
 
@@ -949,18 +975,19 @@ const GamebookApp = () => {
     }
   }, []);
   
+  // Initialize canvases (runs once)
   useEffect(() => {
-    // Initialize primary canvas
     if (overlayCanvasRef.current && !fabricCanvas.current) {
       fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current, handleLayerUpdate, 'primary');
     }
     
-    // Initialize secondary canvas when dual pane is enabled
     if (isDualPaneMode && secondaryOverlayCanvasRef.current && !secondaryFabricCanvas.current) {
       secondaryFabricCanvas.current = new MockFabricCanvas(secondaryOverlayCanvasRef.current, handleLayerUpdate, 'secondary');
     }
-    
-    // Update primary canvas
+  }, [isDualPaneMode, handleLayerUpdate]);
+
+  // Update canvas tool settings (NO PDF re-render)
+  useEffect(() => {
     if (fabricCanvas.current) {
       fabricCanvas.current.setTokenSize(tokenSize);
       fabricCanvas.current.setTool(selectedTool);
@@ -974,7 +1001,6 @@ const GamebookApp = () => {
       }
     }
     
-    // Update secondary canvas
     if (secondaryFabricCanvas.current) {
       secondaryFabricCanvas.current.setTokenSize(tokenSize);
       secondaryFabricCanvas.current.setTool(selectedTool);
@@ -987,12 +1013,17 @@ const GamebookApp = () => {
         secondaryFabricCanvas.current.setSelectedToken(selectedTokenShape, selectedTokenColor);
       }
     }
-    
+  }, [tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, lineWidth, activePdf?.id, secondaryPdf?.id]);
+  
+  // Render PDFs only when they actually change
+  useEffect(() => {
     renderPdfPage(activePdf, pdfCanvasRef, 'primary');
     if (isDualPaneMode) {
       renderPdfPage(secondaryPdf, secondaryPdfCanvasRef, 'secondary');
     }
-  }, [activePdf, secondaryPdf, isDualPaneMode, tokenSize, selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, renderPdfPage, handleLayerUpdate, lineWidth]);
+  }, [activePdf?.id, activePdf?.currentPage, activePdf?.scale, 
+      secondaryPdf?.id, secondaryPdf?.currentPage, secondaryPdf?.scale, 
+      isDualPaneMode, renderPdfPage]);
 
   // Multiplayer effect handlers (keeping the same as original)
   useEffect(() => {
