@@ -13,6 +13,7 @@
     "express": "^5.1.0",
     "idb": "^8.0.3",
     "jsondiffpatch": "^0.7.3",
+    "jszip": "^3.10.1",
     "lodash": "^4.17.21",
     "lucide-react": "^0.544.0",
     "multer": "^2.0.2",
