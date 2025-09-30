@@ -72,7 +72,7 @@ const FloatingDice = () => {
   const [rollResult, setRollResult] = useState(null);
   const [rollSymbols, setRollSymbols] = useState(null);
   const [rollType, setRollType] = useState('standard');
-  const [diceExpression, setDiceExpression] = useState('1cT');
+  const [diceExpression, setDiceExpression] = useState('4dF+2');
   const [menuStyle, setMenuStyle] = useState({});
   const [resultStyle, setResultStyle] = useState({});
   const [detailedRolls, setDetailedRolls] = useState([]);
@@ -228,50 +228,46 @@ const FloatingDice = () => {
             className="dice-result-popup absolute bg-white text-gray-800 rounded-lg shadow-2xl p-4 flex flex-col items-center min-w-[180px] cursor-default"
             style={resultStyle}
         >
+          <div className="flex flex-wrap justify-center items-center gap-2">
             {rollType === 'standard' && detailedRolls.length > 0 && (
-                <div className="flex flex-wrap justify-center items-center gap-2">
-                    {detailedRolls.map((roll, index) => (
-                        <Die key={index} value={roll.value} sides={roll.sides} />
-                    ))}
-                    {modifier !== 0 && (
-                        <div className="flex items-center">
-                            <span className="text-2xl font-bold mx-2">{modifier > 0 ? '+' : ''}</span>
-                            <span className="text-3xl font-bold">{modifier}</span>
-                        </div>
-                    )}
-                </div>
+                detailedRolls.map((roll, index) => (
+                    <Die key={index} value={roll.value} sides={roll.sides} />
+                ))
             )}
             {rollType === 'fate' && rollSymbols && (
-                <div className="flex flex-wrap justify-center items-center gap-2">
-                    {chunk(rollSymbols, 4).map((row, rowIndex) => (
-                        <div key={rowIndex} className="flex justify-center gap-2 mb-2">
-                            {row.map((symbol, colIndex) => (
-                                <span key={colIndex} className="text-xl font-mono font-bold w-8 h-8 flex items-center justify-center bg-gray-100 border border-gray-300 rounded shadow-sm">
-                                    {symbol}
-                                </span>
-                            ))}
-                        </div>
-                    ))}
+              chunk(rollSymbols, 4).map((row, rowIndex) => (
+                <div key={rowIndex} className="flex justify-center gap-2">
+                  {row.map((symbol, colIndex) => (
+                    <span key={colIndex} className="text-xl font-mono font-bold w-8 h-8 flex items-center justify-center bg-gray-100 border border-gray-300 rounded shadow-sm">
+                      {symbol}
+                    </span>
+                  ))}
                 </div>
+              ))
             )}
             {rollType === 'coin' && rollSymbols && (
-              <>
-                <div className="flex flex-wrap justify-center items-center gap-2">
-                    {chunk(rollSymbols, 4).map((row, rowIndex) => (
-                        <div key={rowIndex} className="flex justify-center gap-2 mb-2">
-                            {row.map((symbol, colIndex) => (
-                                <div key={colIndex} className="w-10 h-10">
-                                    {symbol === 'Heads' ? <HeadsCoin /> : <TailsCoin />}
-                                </div>
-                            ))}
-                        </div>
-                    ))}
+              chunk(rollSymbols, 4).map((row, rowIndex) => (
+                <div key={rowIndex} className="flex justify-center gap-2">
+                  {row.map((symbol, colIndex) => (
+                    <div key={colIndex} className="w-10 h-10">
+                      {symbol === 'Heads' ? <HeadsCoin /> : <TailsCoin />}
+                    </div>
+                  ))}
                 </div>
-                <div className="text-lg font-bold mt-2 border-t pt-2 w-full text-center">
-                  {rollResult}
-                </div>
-              </>
+              ))
             )}
+            {modifier !== 0 && (
+                <div className="flex items-center">
+                    <span className="text-2xl font-bold mx-2">{modifier > 0 ? '+' : ''}</span>
+                    <span className="text-3xl font-bold">{modifier}</span>
+                </div>
+            )}
+          </div>
+          {rollType === 'coin' && (
+            <div className="text-lg font-bold mt-2 border-t pt-2 w-full text-center">
+              {rollResult}
+            </div>
+          )}
         </div>
       )}
 
