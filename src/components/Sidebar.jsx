@@ -1,14 +1,25 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { AppContext } from '../state/appState';
-import { Users, Tally5, StickyNote, Plus } from 'lucide-react';
+import { Users, Tally5, StickyNote, Plus, Clock } from 'lucide-react';
 import CharacterSheet from './CharacterSheet';
 import Notes from './Notes';
 import Counters from './Counters';
+import EventLog from './EventLog';
+import eventLogService from '../services/EventLogService';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
 
 const Sidebar = ({ children }) => {
   const { state, dispatch } = useContext(AppContext);
   const { activeTab, selectedTemplate } = state;
+  const [events, setEvents] = useState([]);
+
+  useEffect(() => {
+    // Subscribe to event log updates
+    const unsubscribe = eventLogService.subscribe(setEvents);
+    // Initialize with current events
+    setEvents(eventLogService.getEvents());
+    return unsubscribe;
+  }, []);
 
   const setActiveTab = (tabId) => {
     dispatch({ type: 'SET_STATE', payload: { activeTab: tabId } });
@@ -16,6 +27,12 @@ const Sidebar = ({ children }) => {
 
   const setSelectedTemplate = (template) => {
     dispatch({ type: 'SET_STATE', payload: { selectedTemplate: template } });
+  };
+
+  const handleClearLog = () => {
+    if (window.confirm('Are you sure you want to clear the event log?')) {
+      eventLogService.clearEvents();
+    }
   };
 
   return (
@@ -31,7 +48,8 @@ const Sidebar = ({ children }) => {
             {[
               { id: 'sheets', icon: Users, label: '' },
               { id: 'counters', icon: Tally5, label: '' },
-              { id: 'notes', icon: StickyNote, label: '' },            
+              { id: 'notes', icon: StickyNote, label: '' },
+              { id: 'log', icon: Clock, label: '' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -81,6 +99,9 @@ const Sidebar = ({ children }) => {
             {activeTab === 'notes' && <Notes />}
             {activeTab === 'counters' && (
               <Counters />
+            )}
+            {activeTab === 'log' && (
+              <EventLog events={events} onClear={handleClearLog} />
             )}
           </div>
       </div>
