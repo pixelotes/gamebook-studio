@@ -2,6 +2,7 @@ import React, { useContext } from 'react';
 import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
+import eventLogService from '../services/EventLogService';
 
 // A simple utility to generate more unique IDs
 const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -11,10 +12,24 @@ const CharacterSheet = () => {
   const { characters } = state;
 
   const updateCharacter = (id, field, value) => {
+    const character = characters.find(c => c.id === id);
+    if (character) {
+      const oldValue = character.data[field];
+      eventLogService.logCharacterUpdate(
+        character.data.name || 'Unnamed',
+        field,
+        oldValue,
+        value
+      );
+    }
     dispatch({ type: 'UPDATE_CHARACTER', payload: { id, field, value } });
   };
 
   const removeCharacter = (id) => {
+    const character = characters.find(c => c.id === id);
+    if (character) {
+      eventLogService.logCharacterDelete(character.data.name || 'Unnamed');
+    }
     dispatch({ type: 'SET_STATE', payload: { characters: characters.filter(char => char.id !== id) } });
   };
 
@@ -32,6 +47,19 @@ const CharacterSheet = () => {
   };
 
   const updateCustomField = (charId, fieldId, fieldProp, value) => {
+    const character = characters.find(c => c.id === charId);
+    if (character && fieldProp === 'value') {
+      const field = character.data.customFields?.find(f => f.id === fieldId);
+      if (field) {
+        eventLogService.logCharacterUpdate(
+          character.data.name || 'Unnamed',
+          field.name,
+          field.value,
+          value
+        );
+      }
+    }
+    
     dispatch({ type: 'SET_STATE', payload: {
       characters: characters.map(char => {
         if (char.id === charId) {

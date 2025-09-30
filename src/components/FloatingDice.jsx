@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Dice1, Dice6, X } from 'lucide-react';
 import DiceParser from '../utils/DiceParser';
+import eventLogService from '../services/EventLogService';
 
 // Helper function to chunk an array into smaller arrays of a specific size
 const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
@@ -137,6 +138,13 @@ const FloatingDice = () => {
       alert(result.error);
       return;
     }
+    
+    // Log the dice roll
+    eventLogService.logDiceRoll(
+      expression,
+      result.individualRolls || result.symbolicBreakdown || [result.finalTotal],
+      result.finalTotal
+    );
     
     setRollResult(result.finalTotal);
     setRollSymbols(result.symbolicBreakdown);

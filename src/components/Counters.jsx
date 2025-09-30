@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { AppContext } from '../state/appState';
 import { Plus, Minus, Trash2 } from 'lucide-react';
+import eventLogService from '../services/EventLogService';
 
 // A simple utility to generate more unique IDs
 const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -10,17 +11,27 @@ const Counters = () => {
   const { counters } = state;
 
   const addCounter = () => {
+    const newCounter = { 
+      id: generateUniqueId(),
+      name: `Counter ${counters.length + 1}`, 
+      value: 0,
+      color: '#3b82f6'
+    };
+    
+    eventLogService.logCounterCreate(newCounter.name, newCounter.value);
+    
     dispatch({ type: 'SET_STATE', payload: {
-      counters: [...counters, { 
-        id: generateUniqueId(),
-        name: `Counter ${counters.length + 1}`, 
-        value: 0,
-        color: '#3b82f6'
-      }]
+      counters: [...counters, newCounter]
     }});
   };
 
   const updateCounter = (id, field, value) => {
+    const counter = counters.find(c => c.id === id);
+    
+    if (counter && field === 'value') {
+      eventLogService.logCounterChange(counter.name, counter.value, value);
+    }
+    
     dispatch({ type: 'SET_STATE', payload: {
       counters: counters.map(counter => 
         counter.id === id ? { ...counter, [field]: value } : counter
@@ -29,6 +40,12 @@ const Counters = () => {
   };
 
   const removeCounter = (id) => {
+    const counter = counters.find(c => c.id === id);
+    
+    if (counter) {
+      eventLogService.logCounterDelete(counter.name);
+    }
+    
     dispatch({ type: 'SET_STATE', payload: {
       counters: counters.filter(counter => counter.id !== id)
     }});
