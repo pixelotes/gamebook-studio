@@ -3,7 +3,7 @@ class DiceParser {
   static parse(expression) {
     const cleanExpr = expression.replace(/\s/g, '').toLowerCase();
     const match = cleanExpr.match(/^(\d+)?d(\d+)([+-]\d+)?$/);
-    
+
     if (!match) {
       const num = parseInt(cleanExpr);
       if (!isNaN(num)) {
@@ -45,6 +45,7 @@ class DiceParser {
     let isFateRoll = false;
     let isCoinToss = false;
     let coinTossSummary = '';
+    let modifier = 0;
 
     // 3. Process each term individually.
     for (const term of terms) {
@@ -72,7 +73,7 @@ class DiceParser {
                 tailsCount++;
             }
         }
-        
+
         // Create the summary text
         if (count === 1) {
             coinTossSummary = termSymbols[0];
@@ -82,7 +83,7 @@ class DiceParser {
             if (tailsCount > 0) parts.push(`${tailsCount} Tails`);
             coinTossSummary = parts.join(', ');
         }
-        
+
         finalTotal += headsCount * sign;
         breakdownParts.push({ text: `(${termSymbols.join(', ')})`, symbols: termSymbols, isFate: false });
 
@@ -106,8 +107,8 @@ class DiceParser {
           else if (roll === -1) termSymbols.push('[-]');
           else termSymbols.push('[]');
         }
+        allIndividualRolls.push(...termRolls.map(roll => ({ value: roll, sides: 0 })));
 
-        allIndividualRolls.push(...termRolls);
         finalTotal += termTotal * sign;
         breakdownParts.push({ sign: term[1], text: `(${termSymbols.join(' ')})`, symbols: termSymbols.map(s => s.replace(/[\[\]]/g, '')), isFate: true });
 
@@ -125,25 +126,26 @@ class DiceParser {
         for (let i = 0; i < count; i++) {
           const roll = Math.floor(Math.random() * sides) + 1;
           termRolls.push(roll);
+          allIndividualRolls.push({ value: roll, sides: sides });
           termTotal += roll;
         }
 
-        allIndividualRolls.push(...termRolls);
         finalTotal += termTotal * sign;
         breakdownParts.push({ sign: term[1], text: `(${termRolls.join('+')})`, isFate: false });
 
       } else {
-        const modifier = parseInt(value);
-        if (isNaN(modifier)) {
+        const mod = parseInt(value);
+        if (isNaN(mod)) {
           return { error: `Invalid modifier: ${value}` };
         }
-        finalTotal += modifier * sign;
-        breakdownParts.push({ sign: term[1], text: `${modifier}`, isFate: false });
+        modifier += mod * sign;
+        finalTotal += mod * sign;
+        breakdownParts.push({ sign: term[1], text: `${mod}`, isFate: false });
       }
     }
 
     const breakdown = breakdownParts.map(p => `${p.sign || ''} ${p.text}`).join(' ').replace(/^[+] /, '');
-    
+
     const symbolicBreakdown = isFateRoll || isCoinToss ? breakdownParts.flatMap(p => p.symbols || []) : null;
 
     let type = 'standard';
@@ -153,6 +155,7 @@ class DiceParser {
     return {
       finalTotal: isCoinToss ? coinTossSummary : finalTotal,
       results: allIndividualRolls,
+      modifier: modifier,
       breakdown: `${breakdown} = ${isCoinToss ? coinTossSummary : finalTotal}`,
       symbolicBreakdown: symbolicBreakdown,
       expression: expression,

@@ -26,6 +26,43 @@ const TailsCoin = () => (
     </svg>
 );
 
+const Die = ({ value, sides }) => {
+  const baseClasses = "w-10 h-10 flex items-center justify-center text-white font-bold text-lg";
+
+  if (sides <= 4) {
+    // Triangle
+    return (
+      <div className="relative w-10 h-10">
+        <svg viewBox="0 0 100 100" className="w-full h-full">
+          <polygon points="50,10 95,85 5,85" fill="#8b5cf6" />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-lg">
+          {value}
+        </div>
+      </div>
+    );
+  } else if (sides <= 6) {
+    // Square
+    return (
+      <div className={`bg-purple-500 rounded ${baseClasses}`}>
+        {value}
+      </div>
+    );
+  } else {
+    // Hexagon
+    return (
+      <div className="relative w-10 h-10">
+        <svg viewBox="0 0 100 100" className="w-full h-full">
+          <polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5" fill="#6d28d9" />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-lg">
+          {value}
+        </div>
+      </div>
+    );
+  }
+};
+
 
 const FloatingDice = () => {
   const [position, setPosition] = useState({ x: window.innerWidth - 80, y: window.innerHeight - 80 });
@@ -38,6 +75,8 @@ const FloatingDice = () => {
   const [diceExpression, setDiceExpression] = useState('1cT');
   const [menuStyle, setMenuStyle] = useState({});
   const [resultStyle, setResultStyle] = useState({});
+  const [detailedRolls, setDetailedRolls] = useState([]);
+  const [modifier, setModifier] = useState(0);
 
   const nodeRef = useRef(null);
   const dragStartPosRef = useRef(null);
@@ -95,7 +134,7 @@ const FloatingDice = () => {
         y: e.clientY - offsetRef.current.y,
       });
     };
-    
+
     const handleMouseUp = (e) => {
         if (isDragging) {
             // Check if it was a drag or a click
@@ -112,7 +151,7 @@ const FloatingDice = () => {
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-    
+
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
@@ -121,10 +160,10 @@ const FloatingDice = () => {
 
   const handleMouseDown = (e) => {
     if (e.target.closest('.dice-selector-popup') || e.target.closest('.dice-result-popup')) return;
-    
+
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
     setIsDragging(true);
-    
+
     const rect = nodeRef.current.getBoundingClientRect();
     offsetRef.current = {
       x: e.clientX - rect.left,
@@ -138,31 +177,29 @@ const FloatingDice = () => {
       alert(result.error);
       return;
     }
-    
+
     // Log the dice roll
     eventLogService.logDiceRoll(
       expression,
-      result.individualRolls || result.symbolicBreakdown || [result.finalTotal],
+      result.type === 'coin' ? result.symbolicBreakdown : result.results.map(r => r.value),
       result.finalTotal
     );
-    
+
     setRollResult(result.finalTotal);
     setRollSymbols(result.symbolicBreakdown);
     setRollType(result.type);
+    setDetailedRolls(result.results);
+    setModifier(result.modifier);
     setIsSelectorVisible(false);
 
-    if (result.type === 'coin' || result.type === 'fate') {
-        setIsResultVisible(true);
-        setTimeout(() => {
-            setIsResultVisible(false);
-            setRollResult(null);
-            setRollSymbols(null);
-        }, 5000);
-    } else {
-        setTimeout(() => {
-            setRollResult(null);
-        }, 30000);
-    }
+    setIsResultVisible(true);
+    setTimeout(() => {
+        setIsResultVisible(false);
+        setRollResult(null);
+        setRollSymbols(null);
+        setDetailedRolls([]);
+        setModifier(0);
+    }, 5000);
   };
 
   const quickDice = ['1d4', '1d6', '1d8', '1d10', '1d12', '1d20', '4dF', '1cT'];
@@ -180,7 +217,7 @@ const FloatingDice = () => {
       }}
       onMouseDown={handleMouseDown}
     >
-      {rollResult !== null && !isResultVisible ? (
+      {rollResult !== null && rollType !== 'coin' ? (
         <span className="text-2xl font-bold animate-pulse">{rollResult}</span>
       ) : (
         <Dice6 size={32} />
@@ -191,36 +228,55 @@ const FloatingDice = () => {
             className="dice-result-popup absolute bg-white text-gray-800 rounded-lg shadow-2xl p-4 flex flex-col items-center min-w-[180px] cursor-default"
             style={resultStyle}
         >
+            {rollType === 'standard' && detailedRolls.length > 0 && (
+                <div className="flex flex-wrap justify-center items-center gap-2">
+                    {detailedRolls.map((roll, index) => (
+                        <Die key={index} value={roll.value} sides={roll.sides} />
+                    ))}
+                    {modifier !== 0 && (
+                        <div className="flex items-center">
+                            <span className="text-2xl font-bold mx-2">{modifier > 0 ? '+' : ''}</span>
+                            <span className="text-3xl font-bold">{modifier}</span>
+                        </div>
+                    )}
+                </div>
+            )}
             {rollType === 'fate' && rollSymbols && (
-                chunk(rollSymbols, 4).map((row, rowIndex) => (
-                    <div key={rowIndex} className="flex justify-center gap-2 mb-2">
-                        {row.map((symbol, colIndex) => (
-                            <span key={colIndex} className="text-xl font-mono font-bold w-8 h-8 flex items-center justify-center bg-gray-100 border border-gray-300 rounded shadow-sm">
-                                {symbol}
-                            </span>
-                        ))}
-                    </div>
-                ))
+                <div className="flex flex-wrap justify-center items-center gap-2">
+                    {chunk(rollSymbols, 4).map((row, rowIndex) => (
+                        <div key={rowIndex} className="flex justify-center gap-2 mb-2">
+                            {row.map((symbol, colIndex) => (
+                                <span key={colIndex} className="text-xl font-mono font-bold w-8 h-8 flex items-center justify-center bg-gray-100 border border-gray-300 rounded shadow-sm">
+                                    {symbol}
+                                </span>
+                            ))}
+                        </div>
+                    ))}
+                </div>
             )}
             {rollType === 'coin' && rollSymbols && (
-                chunk(rollSymbols, 4).map((row, rowIndex) => (
-                    <div key={rowIndex} className="flex justify-center gap-2 mb-2">
-                        {row.map((symbol, colIndex) => (
-                            <div key={colIndex} className="w-10 h-10">
-                                {symbol === 'Heads' ? <HeadsCoin /> : <TailsCoin />}
-                            </div>
-                        ))}
-                    </div>
-                ))
+              <>
+                <div className="flex flex-wrap justify-center items-center gap-2">
+                    {chunk(rollSymbols, 4).map((row, rowIndex) => (
+                        <div key={rowIndex} className="flex justify-center gap-2 mb-2">
+                            {row.map((symbol, colIndex) => (
+                                <div key={colIndex} className="w-10 h-10">
+                                    {symbol === 'Heads' ? <HeadsCoin /> : <TailsCoin />}
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+                <div className="text-lg font-bold mt-2 border-t pt-2 w-full text-center">
+                  {rollResult}
+                </div>
+              </>
             )}
-            <div className="text-lg font-bold mt-2 border-t pt-2 w-full text-center">
-              {rollType === 'fate' ? (rollResult > 0 ? `+${rollResult}` : rollResult) : rollResult}
-            </div>
         </div>
       )}
 
       {isSelectorVisible && (
-        <div 
+        <div
           className="dice-selector-popup absolute w-56 bg-white text-gray-800 rounded-lg shadow-2xl p-3 cursor-default"
           style={menuStyle}
           onClick={e => e.stopPropagation()}
@@ -256,7 +312,7 @@ const FloatingDice = () => {
               </button>
             ))}
           </div>
-          <button 
+          <button
             onClick={() => setIsSelectorVisible(false)}
             className="absolute -top-2 -right-2 w-6 h-6 bg-gray-200 text-gray-600 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white"
             aria-label="Close dice selector"
