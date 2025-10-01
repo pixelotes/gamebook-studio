@@ -18,7 +18,7 @@ import { crc32 } from 'crc';
 import DebugModal from './components/DebugModal';
 import GameMetadataModal from './components/GameMetadataModal';
 import { Settings } from 'lucide-react';
-import { renderIcon } from './data/Shapes';
+import { renderIcon } from './data/Shapes'; // Add this import
 
 const diffpatcher = create({
   objectHash: (obj) => obj.id,
@@ -76,7 +76,7 @@ class MockFabricCanvas {
     this.pageLayers[this.currentPage] = layers;
     this.render();
   }
-  
+
   get layers() {
     return this.pageLayers[this.currentPage] || [];
   }
@@ -88,7 +88,7 @@ class MockFabricCanvas {
     this.canvas.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
     this.canvas.addEventListener('mouseleave', (e) => this.handleMouseLeave(e));
   }
-  
+
   loadPageLayers(pageLayers) {
     this.pageLayers = pageLayers;
   }
@@ -109,7 +109,7 @@ class MockFabricCanvas {
     this.scale = scale;
     this.render();
   }
-  
+
   addPointer(x, y, color) {
     const pointer = {
       type: 'pointer',
@@ -120,7 +120,7 @@ class MockFabricCanvas {
       color: color || this.selectedColor,
     };
     this.addObject('drawings', pointer);
-    
+
     // Start animation loop if not running
     this.startAnimationLoop();
   }
@@ -233,7 +233,7 @@ class MockFabricCanvas {
     if (this.isDrawing && this.tool === 'rectangle' && this.startPos) {
         const endX = (e.clientX - rect.left) / this.scale;
         const endY = (e.clientY - rect.top) / this.scale;
-        
+
         this.previewRect = {
             x: Math.min(this.startPos.x, endX),
             y: Math.min(this.startPos.y, endY),
@@ -254,7 +254,7 @@ class MockFabricCanvas {
 
   handleMouseUp(e) {
     if (this.isDrawing && this.tool === 'rectangle') {
-        if (this.previewRect && this.previewRect.width > 2 && this.previewRect.height > 2) { 
+        if (this.previewRect && this.previewRect.width > 2 && this.previewRect.height > 2) {
             this.addObject('drawings', {
                 type: 'rectangle',
                 ...this.previewRect,
@@ -283,7 +283,7 @@ class MockFabricCanvas {
             const width = Math.abs(this.startPos.x - endX);
             const height = Math.abs(this.startPos.y - endY);
 
-            if (width > 2 && height > 2) { 
+            if (width > 2 && height > 2) {
                 this.addObject('drawings', {
                     type: 'rectangle',
                     x, y, width, height,
@@ -292,7 +292,7 @@ class MockFabricCanvas {
                 });
             }
         }
-        
+
         const newLayers = JSON.parse(JSON.stringify(this.layers));
         if (this.onLayerUpdate && this.currentPdfId) {
             this.onLayerUpdate(this.currentPdfId, this.currentPage, newLayers);
@@ -338,7 +338,7 @@ class MockFabricCanvas {
     }
     return null;
   }
-  
+
   removeObjectAt(x, y) {
     let changed = false;
     const newLayers = this.layers.map(layer => {
@@ -378,7 +378,7 @@ class MockFabricCanvas {
                 const scaledY = obj.y * this.scale;
                 const scaledWidth = obj.width * this.scale;
                 const scaledHeight = obj.height * this.scale;
-                
+
                 return (
                     x < scaledX ||
                     x > scaledX + scaledWidth ||
@@ -422,7 +422,7 @@ class MockFabricCanvas {
     this.selectedToken = { shape: shape, color: color };
     this.setTool('token');
   }
-  
+
   setTokenSize(size) {
     this.tokenSize = size;
   }
@@ -462,7 +462,7 @@ class MockFabricCanvas {
       const lastObj = drawingsLayer.objects[drawingsLayer.objects.length - 1];
       if (lastObj && lastObj.type === 'path') {
         lastObj.points.push({ x, y });
-        
+
         // Throttle rendering during drawing
         if (!this.pendingRender) {
           this.pendingRender = true;
@@ -520,7 +520,7 @@ class MockFabricCanvas {
 
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    
+
     this.ctx.save();
     this.ctx.scale(this.scale, this.scale);
 
@@ -528,7 +528,7 @@ class MockFabricCanvas {
       if (!layer.visible) return;
       layer.objects.forEach(obj => {
         this.ctx.save();
-        
+
         if (obj.type === 'gameToken') {
           this.renderGameToken(obj);
         } else if (obj.type === 'pointer') {
@@ -539,7 +539,7 @@ class MockFabricCanvas {
           this.ctx.lineWidth = obj.width || 3;
           this.ctx.lineCap = 'round';
           this.ctx.lineJoin = 'round';
-          
+
           if (obj.points && obj.points.length > 1) {
             this.ctx.moveTo(obj.points[0].x, obj.points[0].y);
             for (let i = 1; i < obj.points.length; i++) {
@@ -556,7 +556,7 @@ class MockFabricCanvas {
             this.ctx.font = obj.font || '16px Arial';
             this.ctx.fillText(obj.content, obj.x, obj.y);
         }
-        
+
         this.ctx.restore();
       });
     });
@@ -568,14 +568,14 @@ class MockFabricCanvas {
         this.ctx.strokeRect(this.previewRect.x, this.previewRect.y, this.previewRect.width, this.previewRect.height);
         this.ctx.restore();
     }
-    
+
     if (this.previewToken) {
         this.ctx.save();
         this.ctx.globalAlpha = 0.6;
         this.renderGameToken(this.previewToken);
         this.ctx.restore();
     }
-    
+
     this.ctx.restore();
 
     if (this.isMeasuring && this.rulerStart && this.rulerEnd) {
@@ -599,19 +599,19 @@ class MockFabricCanvas {
       const textPadding = 5;
       const textX = end.x + 10;
       const textY = end.y;
-      
+
       this.ctx.font = '12px Arial';
       const textWidth = this.ctx.measureText(text).width;
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       this.ctx.fillRect(textX - textPadding, textY - 12 - textPadding, textWidth + textPadding * 2, 12 + textPadding * 2);
-      
+
       this.ctx.fillStyle = 'white';
       this.ctx.fillText(text, textX, textY);
 
       this.ctx.restore();
     }
   }
-  
+
   renderPointer(pointer) {
     const life = (Date.now() - pointer.createdAt) / 1000;
     if (life > 10) return;
@@ -626,7 +626,7 @@ class MockFabricCanvas {
 
     this.ctx.strokeStyle = pointer.color;
     this.ctx.lineWidth = 3;
-    
+
     this.ctx.translate(x, y);
     this.ctx.rotate(rotation * Math.PI / 180);
     this.ctx.scale(scale, scale);
@@ -642,7 +642,7 @@ class MockFabricCanvas {
   startAnimationLoop() {
     const loop = () => {
       let hasPointers = false;
-      
+
       this.layers.forEach(layer => {
         const filtered = layer.objects.filter(obj => {
           if (obj.type === 'pointer') {
@@ -658,7 +658,7 @@ class MockFabricCanvas {
       });
 
       this.render();
-      
+
       // Only continue loop if there are active pointers
       if (hasPointers) {
         this.animationFrameId = requestAnimationFrame(loop);
@@ -666,7 +666,7 @@ class MockFabricCanvas {
         this.animationFrameId = null;
       }
     };
-    
+
     // Only start if not already running
     if (!this.animationFrameId) {
       this.animationFrameId = requestAnimationFrame(loop);
@@ -686,11 +686,11 @@ class MockFabricCanvas {
     const color = token.color;
     const strokeColor = token.strokeColor;
     const shape = token.shape;
-    
+
     this.ctx.fillStyle = color;
     this.ctx.strokeStyle = strokeColor;
     this.ctx.lineWidth = 2;
-    
+
     if (shape === 'circle') {
       this.ctx.beginPath();
       this.ctx.arc(x, y, size, 0, 2 * Math.PI);
@@ -748,7 +748,7 @@ class MockFabricCanvas {
     const bottomCurveHeight = h * 0.7;
 
     this.ctx.beginPath();
-    
+
     this.ctx.moveTo(x, y + bottomCurveHeight / 2);
 
     this.ctx.bezierCurveTo(
@@ -805,7 +805,7 @@ class MockFabricCanvas {
     this.ctx.fill();
     this.ctx.stroke();
   }
-  
+
   renderMeeple(x, y, size) {
     const scale = size / 25;
     this.ctx.save();
@@ -875,13 +875,13 @@ const GamebookApp = () => {
   const secondaryFabricCanvas = useRef(null);
 
   const [showDebugModal, setShowDebugModal] = useState(false);
-  
+
   const activePdf = pdfs.find(p => p.id === activePdfId);
   const secondaryPdf = pdfs.find(p => p.id === secondaryPdfId);
 
   const stateRef = useRef(state);
   stateRef.current = state;
-  
+
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -938,78 +938,58 @@ const GamebookApp = () => {
   }, []);
 
   const handleUnifiedLoad = async (event) => {
-    const files = event.target.files;
+    const files = Array.from(event.target.files);
     if (files.length === 0) return;
 
-    const pdfFiles = [];
-    let jsonFile = null;
-    let gbsFile = null;
+    // We process one file at a time for simplicity with these formats
+    const file = files[0];
 
-    // Categorize files by type
-    for (const file of files) {
-      if (file.name.endsWith('.pdf')) {
-        pdfFiles.push(file);
-      } else if (file.name.endsWith('.json')) {
-        jsonFile = file;
-      } else if (file.name.endsWith('.gbs')) {
-        gbsFile = file;
-      }
+    if (file.name.endsWith('.gbs')) {
+        await handleLoadGBS(file);
+    } else if (file.name.endsWith('.gbtk')) {
+        await handleLoadGbtk(file);
+    } else if (file.name.endsWith('.json')) {
+        handleLoadSession(file);
+    } else {
+        // Handle multiple PDF uploads
+        const pdfFiles = files.filter(f => f.name.endsWith('.pdf'));
+        if (pdfFiles.length > 0) {
+            await handleFileUpload(pdfFiles);
+        }
     }
 
-    // Priority: GBS > JSON > PDFs
-    // GBS files are complete packages, so they take precedence
-    if (gbsFile) {
-      await handleLoadGBS({ target: { files: [gbsFile] } });
-      return;
-    }
-
-    // JSON session files need PDFs to be loaded separately
-    if (jsonFile) {
-      handleLoadSession({ target: { files: [jsonFile] } });
-      // If PDFs were also selected, they'll be loaded as part of session restoration
-      return;
-    }
-
-    // Just PDFs - regular file upload
-    if (pdfFiles.length > 0) {
-      const dt = new DataTransfer();
-      pdfFiles.forEach(f => dt.items.add(f));
-      await handleFileUpload({ target: { files: dt.files } });
-    }
-
-    // Reset the input
-    event.target.value = '';
+    event.target.value = ''; // Reset input after processing
   };
 
   const renderPdfPage = useCallback(async (pdfData, canvasRef, paneId = 'primary') => {
     if (!pdfData || !canvasRef.current) return;
-  
+
     const { pdfDoc, currentPage, scale, pageLayers } = pdfData;
-  
+
     try {
       const page = await pdfDoc.getPage(currentPage);
       const viewport = page.getViewport({ scale: scale });
-      
+
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
-      
+
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
       context.clearRect(0, 0, canvas.width, canvas.height);
-      
+
       const renderContext = {
         canvasContext: context,
         viewport: viewport,
         background: 'white',
         transform: null
       };
-  
+
       await page.render(renderContext).promise;
-  
+
       const overlayCanvas = paneId === 'primary' ? overlayCanvasRef.current : secondaryOverlayCanvasRef.current;
       const canvas_fabric = paneId === 'primary' ? fabricCanvas.current : secondaryFabricCanvas.current;
-      
+
       if (overlayCanvas) {
         overlayCanvas.width = viewport.width;
         overlayCanvas.height = viewport.height;
@@ -1023,13 +1003,13 @@ const GamebookApp = () => {
       console.error('Error rendering page:', error);
     }
   }, []);
-  
+
   // Initialize canvases
   useEffect(() => {
     if (overlayCanvasRef.current && !fabricCanvas.current) {
       fabricCanvas.current = new MockFabricCanvas(overlayCanvasRef.current, handleLayerUpdate, 'primary');
     }
-    
+
     if (isDualPaneMode && secondaryOverlayCanvasRef.current && !secondaryFabricCanvas.current) {
       secondaryFabricCanvas.current = new MockFabricCanvas(secondaryOverlayCanvasRef.current, handleLayerUpdate, 'secondary');
     }
@@ -1049,7 +1029,7 @@ const GamebookApp = () => {
         fabricCanvas.current.setSelectedToken(selectedTokenShape, selectedTokenColor);
       }
     }
-    
+
     if (secondaryFabricCanvas.current) {
       secondaryFabricCanvas.current.setTokenSize(tokenSize);
       secondaryFabricCanvas.current.setTool(selectedTool);
@@ -1070,8 +1050,8 @@ const GamebookApp = () => {
     if (isDualPaneMode) {
       renderPdfPage(secondaryPdf, secondaryPdfCanvasRef, 'secondary');
     }
-  }, [activePdf?.id, activePdf?.currentPage, activePdf?.scale, 
-      secondaryPdf?.id, secondaryPdf?.currentPage, secondaryPdf?.scale, 
+  }, [activePdf?.id, activePdf?.currentPage, activePdf?.scale,
+      secondaryPdf?.id, secondaryPdf?.currentPage, secondaryPdf?.scale,
       isDualPaneMode, renderPdfPage]);
 
   // Multiplayer effect handlers
@@ -1094,7 +1074,7 @@ const GamebookApp = () => {
         }
 
         const newState = diffpatcher.patch({ ...stateRef.current }, data.delta);
-        
+
         const serverCrc = data.crc;
         const pageLayersForCrc = {};
         newState.pdfs.forEach(p => {
@@ -1112,7 +1092,7 @@ const GamebookApp = () => {
             bookmarks: p.bookmarks || [],
             pageLayers: p.pageLayers || {},
         }));
-        
+
         const finalClientStateForCrc = {
             pdfs: pdfsForCrc,
             activePdfId: newState.activePdfId,
@@ -1121,7 +1101,7 @@ const GamebookApp = () => {
             counters: newState.counters,
             pageLayers: pageLayersForCrc
         };
-        
+
         const clientCrc = crc32(JSON.stringify(finalClientStateForCrc)).toString(16);
 
         if (clientCrc === serverCrc) {
@@ -1144,7 +1124,7 @@ const GamebookApp = () => {
         );
         dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
     };
-    
+
     const handleLayersUpdated = (data) => {
         const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
 
@@ -1154,7 +1134,7 @@ const GamebookApp = () => {
         if (secondaryFabricCanvas.current && decompressedData.pdfId === stateRef.current.secondaryPdfId && decompressedData.pageNum === stateRef.current.pdfs.find(p=>p.id === decompressedData.pdfId)?.currentPage) {
             secondaryFabricCanvas.current.updateLayersFromMultiplayer(decompressedData.layers);
         }
-        
+
         const currentPdfs = stateRef.current.pdfs;
         const newPdfs = currentPdfs.map(pdf => {
             if (pdf.id === decompressedData.pdfId) {
@@ -1165,11 +1145,11 @@ const GamebookApp = () => {
         });
         dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
     };
-    
+
     const handlePointerEvent = (data) => {
       const activePdf = stateRef.current.pdfs.find(p => p.id === stateRef.current.activePdfId);
       const secondaryPdf = stateRef.current.pdfs.find(p => p.id === stateRef.current.secondaryPdfId);
-      
+
       if (
         fabricCanvas.current &&
         data.pdfId === activePdf?.id &&
@@ -1177,7 +1157,7 @@ const GamebookApp = () => {
       ) {
         fabricCanvas.current.addPointer(data.x, data.y, data.color);
       }
-      
+
       if (
         secondaryFabricCanvas.current &&
         data.pdfId === secondaryPdf?.id &&
@@ -1219,12 +1199,12 @@ const GamebookApp = () => {
                     }
                 });
             } else {
-                dispatch({ 
-                    type: 'SET_STATE', 
-                    payload: { 
+                dispatch({
+                    type: 'SET_STATE',
+                    payload: {
                         pdfs: [...currentPdfs, newPdf],
                         activePdfId: newPdf.id
-                    } 
+                    }
                 });
             }
 
@@ -1240,16 +1220,16 @@ const GamebookApp = () => {
         const newPdfs = currentPdfs.filter(p => p.id !== pdfId);
         let newActivePdfId = stateRef.current.activePdfId;
         let newSecondaryPdfId = stateRef.current.secondaryPdfId;
-        
+
         if (newActivePdfId === pdfId) {
             newActivePdfId = newPdfs.length > 0 ? newPdfs[0].id : null;
         }
         if (newSecondaryPdfId === pdfId) {
             newSecondaryPdfId = null;
         }
-        
-        dispatch({ type: 'SET_STATE', payload: { 
-            pdfs: newPdfs, 
+
+        dispatch({ type: 'SET_STATE', payload: {
+            pdfs: newPdfs,
             activePdfId: newActivePdfId,
             secondaryPdfId: newSecondaryPdfId
         } });
@@ -1299,7 +1279,7 @@ const GamebookApp = () => {
     setIsHost(true);
     setConnectedPlayers(1);
     addNotification(`Multiplayer session created: ${sessionId}`, 'success');
-    
+
     const uploadPromises = pdfs
         .filter(pdf => pdf.file)
         .map(pdf => socketService.uploadPdfToSession(pdf.file, {
@@ -1318,7 +1298,7 @@ const GamebookApp = () => {
         bookmarks: p.bookmarks,
         pageLayers: p.pageLayers,
     }));
-    
+
     socketService.updateGameState({
         pdfs: pdfsForSession,
         characters,
@@ -1331,7 +1311,7 @@ const GamebookApp = () => {
     setMultiplayerSession(response.sessionId || socketService.getSessionInfo().sessionId);
     setIsHost(response.isHost);
     setConnectedPlayers(response.clientCount);
-    
+
     if (response.gameState) {
       setGameStateVersion(response.version);
       const { activePdfId, ...restOfGameState } = response.gameState;
@@ -1345,7 +1325,7 @@ const GamebookApp = () => {
             const pdfResponse = await fetch(pdfUrl);
             const arrayBuffer = await pdfResponse.arrayBuffer();
             const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
-            
+
             loadedPdfs.push({
               ...pdfData,
               pdfDoc,
@@ -1362,7 +1342,7 @@ const GamebookApp = () => {
         dispatch({ type: 'SET_STATE', payload });
       }
     }
-    
+
     addNotification(`Joined multiplayer session`, 'success');
   };
 
@@ -1374,25 +1354,23 @@ const GamebookApp = () => {
     addNotification('Left multiplayer session', 'info');
   };
 
-  const handleFileUpload = async (event) => {
-    const files = event.target.files;
+  const handleFileUpload = async (files) => {
     if (files.length === 0) return;
 
     if (multiplayerSession && !isHost) {
       addNotification("Only the session host can open PDFs", "error");
-      event.target.value = '';
       return;
     }
-  
+
     const newPdfsData = [];
     for (const file of files) {
       if (file.type !== 'application/pdf') continue;
-  
+
       if (pdfs.some(p => p.fileName === file.name)) {
         console.warn(`Skipping duplicate file: ${file.name}`);
         continue;
       }
-  
+
       if (sessionToRestore) {
         const matchingPdfInSession = sessionToRestore.pdfs.find(p => p.fileName === file.name);
         if (matchingPdfInSession) {
@@ -1432,7 +1410,7 @@ const GamebookApp = () => {
         }
       }
     }
-  
+
     if (sessionToRestore) {
       if (newPdfsData.length === sessionToRestore.pdfs.length) {
         dispatch({ type: 'SET_STATE', payload: {
@@ -1455,7 +1433,7 @@ const GamebookApp = () => {
           pdfs: [...pdfs, ...newPdfsData],
           activePdfId: newPdfsData[0].id,
         }});
-        
+
         if (socketService.isMultiplayerActive()) {
           for (const pdfData of newPdfsData) {
             try {
@@ -1469,7 +1447,7 @@ const GamebookApp = () => {
       }
     }
   };
-  
+
   const handleSaveSession = () => {
     const sessionData = {
       pdfs: pdfs.map(p => ({
@@ -1489,7 +1467,7 @@ const GamebookApp = () => {
       counters,
       version: gameStateVersion
     };
-  
+
     const jsonString = JSON.stringify(sessionData, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1526,7 +1504,8 @@ const GamebookApp = () => {
       notes,
       counters,
       version: gameStateVersion,
-      customTokens: state.customTokens.map(t => ({ name: t.name, fileName: t.fileName })),
+      // MODIFIED: Convert object back to array for saving
+      customTokens: Object.values(state.customTokens).map(t => ({ name: t.name, fileName: t.fileName })),
     };
 
     zip.file('session.json', JSON.stringify(sessionData, null, 2));
@@ -1542,9 +1521,9 @@ const GamebookApp = () => {
     }
 
     // Add Custom Tokens
-    if (state.customTokens.length > 0) {
+    if (Object.keys(state.customTokens).length > 0) {
       const tokenFolder = zip.folder('tokens');
-      for (const token of state.customTokens) {
+      for (const token of Object.values(state.customTokens)) {
         if (token.file) {
           tokenFolder.file(token.fileName, token.file);
         }
@@ -1571,8 +1550,7 @@ const GamebookApp = () => {
     addNotification(`Game exported as ${fileName}`, 'success');
   };
 
-  const handleLoadGBS = async (event) => {
-    const file = event.target.files[0];
+  const handleLoadGBS = async (file) => {
     if (!file || !file.name.endsWith('.gbs')) {
       alert('Please select a valid .gbs file');
       return;
@@ -1602,7 +1580,7 @@ const GamebookApp = () => {
       const sessionData = JSON.parse(sessionJson);
 
       // Load Custom Tokens
-      const loadedCustomTokens = [];
+      const loadedCustomTokens = {};
       if (sessionData.customTokens && zip.folder('tokens')) {
         const tokenFolder = zip.folder('tokens');
         for (const tokenInfo of sessionData.customTokens) {
@@ -1610,12 +1588,13 @@ const GamebookApp = () => {
           if (tokenFile) {
             const tokenBlob = await tokenFile.async('blob');
             const tokenUrl = URL.createObjectURL(tokenBlob);
-            loadedCustomTokens.push({
+            const tokenKey = tokenInfo.name.toLowerCase().replace(/\s/g, '_');
+            loadedCustomTokens[tokenKey] = {
               ...tokenInfo,
               type: 'image',
               icon: tokenUrl,
               file: new File([tokenBlob], tokenInfo.fileName),
-            });
+            };
           }
         }
       }
@@ -1667,9 +1646,78 @@ const GamebookApp = () => {
       alert('Failed to load .gbs file. It may be corrupt or invalid.');
     }
   };
-  
-  const handleLoadSession = (event) => {
-    const file = event.target.files[0];
+
+  const handleLoadGbtk = async (file) => {
+    if (!file) {
+      console.error("[DEBUG] handleLoadGbtk called with no file.");
+      alert('An internal error occurred. Please try again.');
+      return;
+    }
+    console.log(`[DEBUG] 1. Starting to load .gbtk file: ${file.name}`);
+
+    try {
+      console.log('[DEBUG] 2. Reading file into JSZip...');
+      const zip = await JSZip.loadAsync(file);
+      console.log('[DEBUG] 3. ZIP archive loaded successfully. Files found:', Object.keys(zip.files));
+
+      const packJsonFile = zip.file('pack.json');
+      if (!packJsonFile) {
+        throw new Error('pack.json not found in the archive.');
+      }
+      console.log('[DEBUG] 4. Found pack.json.');
+
+      const packJson = await packJsonFile.async('string');
+      const packData = JSON.parse(packJson);
+      console.log('[DEBUG] 5. Parsed pack.json data:', packData);
+
+      const tokenFolder = zip.folder('tokens');
+      if (!tokenFolder) {
+        throw new Error('tokens/ folder not found in the archive.');
+      }
+      console.log('[DEBUG] 6. Found tokens/ folder.');
+
+      const newTokens = {};
+      for (const tokenInfo of packData.tokens) {
+        console.log(`[DEBUG] 7. Processing token: ${tokenInfo.name} (${tokenInfo.fileName})`);
+        
+        // JSZip's file() method can find files in subdirectories
+        const tokenFile = zip.file(`tokens/${tokenInfo.fileName}`);
+
+        if (tokenFile) {
+          console.log(`[DEBUG]   7a. File found in archive.`);
+          const tokenBlob = await tokenFile.async('blob');
+          const tokenUrl = URL.createObjectURL(tokenBlob);
+          const tokenKey = tokenInfo.name.toLowerCase().replace(/\s/g, '_');
+          newTokens[tokenKey] = {
+            ...tokenInfo,
+            type: 'image',
+            icon: tokenUrl,
+            file: new File([tokenBlob], tokenInfo.fileName),
+          };
+           console.log(`[DEBUG]   7b. Successfully created token object for ${tokenKey}`);
+        } else {
+           console.error(`[DEBUG]   7c. File NOT FOUND for token: tokens/${tokenInfo.fileName}`);
+        }
+      }
+
+      console.log('[DEBUG] 8. New tokens to be added:', newTokens);
+
+      // Merge new tokens with existing custom tokens
+      const mergedTokens = { ...state.customTokens, ...newTokens };
+      console.log('[DEBUG] 9. Merged tokens:', mergedTokens);
+
+      dispatch({ type: 'SET_STATE', payload: { customTokens: mergedTokens } });
+      addNotification(`Token pack "${packData.name}" loaded successfully`, 'success');
+      console.log('[DEBUG] 10. Token pack loading complete.');
+
+    } catch (error) {
+      console.error('--- ERROR DURING .GBTK LOADING ---', error);
+      alert('Failed to load token pack. It may be corrupt or invalid. Check console for details.');
+    }
+  };
+
+
+  const handleLoadSession = (file) => {
     if (file && file.type === 'application/json') {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -1690,7 +1738,7 @@ const GamebookApp = () => {
 
   const handleNewSession = () => {
     const hasContent = pdfs.length > 0 || characters.length > 0 || notes || counters.length > 0;
-    
+
     if (hasContent) {
       const confirmed = window.confirm(
         'Are you sure you want to start a new session?\n\n' +
@@ -1702,7 +1750,7 @@ const GamebookApp = () => {
         '• All annotations\n\n' +
         'This action cannot be undone.'
       );
-      
+
       if (!confirmed) {
         return;
       }
@@ -1724,21 +1772,21 @@ const GamebookApp = () => {
     const newPdfs = pdfs.filter(p => p.id !== pdfId);
     let newActivePdfId = activePdfId;
     let newSecondaryPdfId = secondaryPdfId;
-    
+
     if (activePdfId === pdfId) {
         newActivePdfId = newPdfs.length > 0 ? newPdfs[0].id : null;
     }
     if (secondaryPdfId === pdfId) {
         newSecondaryPdfId = null;
     }
-    
-    dispatch({ type: 'SET_STATE', payload: { 
-        pdfs: newPdfs, 
+
+    dispatch({ type: 'SET_STATE', payload: {
+        pdfs: newPdfs,
         activePdfId: newActivePdfId,
         secondaryPdfId: newSecondaryPdfId
     } });
   };
-  
+
   const updatePdf = (pdfId, updates) => {
     const newPdfs = pdfs.map(p => p.id === pdfId ? { ...p, ...updates } : p);
     dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs }});
@@ -1764,7 +1812,7 @@ const GamebookApp = () => {
       }
     }
   };
-  
+
   const zoomOut = (pdfId) => {
     const pdf = pdfs.find(p => p.id === pdfId);
     if (pdf) {
@@ -1781,7 +1829,7 @@ const GamebookApp = () => {
     if (!pdf) return;
     try {
       const pageIndex = await pdf.pdfDoc.getPageIndex(dest[0]);
-      goToPage(pdfId, pageIndex + 1); 
+      goToPage(pdfId, pageIndex + 1);
     } catch (error) {
       console.error('Error navigating to bookmark:', error);
     }
@@ -1802,12 +1850,12 @@ const GamebookApp = () => {
 
   const toggleDualPane = () => {
     if (!isDualPaneMode && pdfs.length > 1) {
-      dispatch({ type: 'SET_STATE', payload: { 
+      dispatch({ type: 'SET_STATE', payload: {
         isDualPaneMode: true,
         secondaryPdfId: pdfs.find(p => p.id !== activePdfId)?.id || null
       } });
     } else {
-      dispatch({ type: 'SET_STATE', payload: { 
+      dispatch({ type: 'SET_STATE', payload: {
         isDualPaneMode: false,
         secondaryPdfId: null
       } });
@@ -1815,50 +1863,50 @@ const GamebookApp = () => {
   };
 
 return (
-    <AppContext.Provider value={{ 
-      state, 
-      dispatch, 
-      fabricCanvas, 
+    <AppContext.Provider value={{
+      state,
+      dispatch,
+      fabricCanvas,
       secondaryFabricCanvas,
-      handleBookmarkNavigate, 
-      activePdf, 
+      handleBookmarkNavigate,
+      activePdf,
       secondaryPdf,
-      goToPage: (pageNum, pdfId = activePdfId) => goToPage(pdfId, pageNum), 
-      zoomIn: (pdfId = activePdfId) => zoomIn(pdfId), 
+      goToPage: (pageNum, pdfId = activePdfId) => goToPage(pdfId, pageNum),
+      zoomIn: (pdfId = activePdfId) => zoomIn(pdfId),
       zoomOut: (pdfId = activePdfId) => zoomOut(pdfId)
     }}>
       <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-300" style={{ width: '100vw', overflow: 'hidden' }}>
         <MultiplayerNotifications notifications={notifications} />
-        
+
         <MultiplayerModal
           isOpen={showMultiplayerModal}
           onClose={() => setShowMultiplayerModal(false)}
           onSessionCreated={handleCreateMultiplayerSession}
           onSessionJoined={handleJoinMultiplayerSession}
         />
-        
+
         <GameMetadataModal
           isOpen={showMetadataModal}
           onClose={() => setShowMetadataModal(false)}
           onSave={handleExportGBS}
           initialData={state.gameMetadata}
         />
-        
+
         <DebugModal
           isOpen={showDebugModal}
           onClose={() => setShowDebugModal(false)}
           gameState={state}
           gameStateVersion={gameStateVersion}
         />
-        
+
         <FloatingDice />
-        
+
         {isSidebarVisible ? (
           <div className="flex h-full">
             <div style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: `${maxSidebarWidth}px`, height: '100%' }}>
               <Sidebar>
                 {multiplayerSession && (
-                  <div className="p-4 border-b">        
+                  <div className="p-4 border-b">
                     <MultiplayerStatus
                       sessionId={multiplayerSession}
                       isHost={isHost}
@@ -1870,7 +1918,7 @@ return (
                 )}
               </Sidebar>
             </div>
-            <ResizeHandle 
+            <ResizeHandle
               direction="horizontal"
               onResize={handleSidebarResize}
               minSize={200}
@@ -1881,7 +1929,7 @@ return (
         ) : (
           <SidebarHoverTrigger>
             {multiplayerSession && (
-              <div className="p-4 border-b">        
+              <div className="p-4 border-b">
                 <MultiplayerStatus
                   sessionId={multiplayerSession}
                   isHost={isHost}
@@ -1894,9 +1942,9 @@ return (
           </SidebarHoverTrigger>
         )}
 
-        <div className="flex-1 flex flex-col relative" style={{ 
+        <div className="flex-1 flex flex-col relative" style={{
           width: isSidebarVisible ? `${window.innerWidth - sidebarWidth - 2}px` : '100vw',
-          overflow: 'hidden' 
+          overflow: 'hidden'
         }}>
           <Toolbar />
 
@@ -1938,7 +1986,7 @@ return (
                     }}
                     className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                   >
-                    <Columns size={14} /> 
+                    <Columns size={14} />
                     {isDualPaneMode ? 'Single Pane' : 'Dual Pane'}
                   </button>
                 )}
@@ -1968,19 +2016,19 @@ return (
                   <Save size={14} /> Save Session
                 </button>
                 <button
-                  onClick={() => { 
-                    setShowMetadataModal(true); 
-                    dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); 
+                  onClick={() => {
+                    setShowMetadataModal(true);
+                    dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });
                   }}
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <Save size={14} /> Export as .gbs
                 </button>
                 <button
-                  onClick={() => { 
-                    fabricCanvas.current?.clear(); 
+                  onClick={() => {
+                    fabricCanvas.current?.clear();
                     if (isDualPaneMode) secondaryFabricCanvas.current?.clear();
-                    dispatch({ type: 'SET_STATE', payload: { menuOpen: false } }); 
+                    dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });
                   }}
                   className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
@@ -1997,21 +2045,21 @@ return (
                 </button>
               </div>
             )}
-            <input 
-              ref={fileInputRef} 
-              type="file" 
-              accept=".pdf,.json,.gbs" 
-              onChange={handleUnifiedLoad} 
-              className="hidden" 
-              multiple 
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.json,.gbs,.gbtk"
+              onChange={handleUnifiedLoad}
+              className="hidden"
+              multiple
             />
           </div>
 
           <div className={`flex-1 ${isDualPaneMode ? 'flex' : ''}`} style={{ overflow: 'hidden' }}>
-            <div 
+            <div
               className={`${isDualPaneMode ? '' : 'w-full'} flex flex-col overflow-hidden`}
-              style={{ 
-                width: isDualPaneMode 
+              style={{
+                width: isDualPaneMode
                   ? `${primaryPaneWidth || Math.floor(availableWidth * 0.5)}px`
                   : '100%'
               }}
@@ -2032,9 +2080,9 @@ return (
                 onBookmarkNavigate={handleBookmarkNavigate}
               />
             </div>
-            
+
             {isDualPaneMode && (
-              <ResizeHandle 
+              <ResizeHandle
                 direction="horizontal"
                 onResize={handlePaneResize}
                 minSize={200}
@@ -2043,16 +2091,16 @@ return (
                 className="z-50 relative"
               />
             )}
-            
+
             {isDualPaneMode && (
-            <div 
+            <div
               className="flex-1 flex flex-col overflow-hidden"
-              style={{ 
-                width: primaryPaneWidth 
-                  ? `${availableWidth - primaryPaneWidth - 2}px` 
+              style={{
+                width: primaryPaneWidth
+                  ? `${availableWidth - primaryPaneWidth - 2}px`
                   : `${Math.floor(availableWidth * 0.5)}px`
               }}
-            > 
+            >
                 <PDFPane
                   pdfCanvasRef={secondaryPdfCanvasRef}
                   overlayCanvasRef={secondaryOverlayCanvasRef}
