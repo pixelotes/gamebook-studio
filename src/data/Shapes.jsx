@@ -8,10 +8,10 @@ const MeepleIcon = () => (
     style={{ width: '1em', height: '1em', display: 'inline-block', verticalAlign: 'middle' }}
   >
     <path
-      d="M50 10 C 40 10, 40 25, 50 25 C 60 25, 60 10, 50 10 z 
-         M 30 35 L 70 35 L 70 60 C 70 65, 65 65, 65 60 
-         L 60 60 L 60 85 L 75 90 L 75 95 
-         L 25 95 L 25 90 L 40 85 L 40 60 
+      d="M50 10 C 40 10, 40 25, 50 25 C 60 25, 60 10, 50 10 z
+         M 30 35 L 70 35 L 70 60 C 70 65, 65 65, 65 60
+         L 60 60 L 60 85 L 75 90 L 75 95
+         L 25 95 L 25 90 L 40 85 L 40 60
          L 35 60 C 35 65, 30 65, 30 60 z"
       fill="currentColor"
     />
@@ -20,12 +20,16 @@ const MeepleIcon = () => (
 
 // --- Render helper ---
 export function renderIcon(shape) {
+  if (!shape) return null;
   if (shape.type === 'text') {
     return <span>{shape.icon}</span>;
   }
   if (shape.type === 'component') {
     const Comp = shape.icon;
     return <Comp />;
+  }
+  if (shape.type === 'image') {
+    return <img src={shape.icon} alt={shape.name} className="w-full h-full" />;
   }
   return null;
 }
@@ -50,7 +54,7 @@ export const TOKEN_SHAPES = {
   check: { name: 'Check', type: 'text', icon: '✔' },
   cross: { name: 'Cross', type: 'text', icon: '✘' },
   monster: { name: 'Monster', type: 'text', icon: '🦇' },
-  
+
   // --- Treasure & Items ---
   chest: { name: 'Treasure Chest', type: 'text', icon: '📦' },
   gold: { name: 'Gold', type: 'text', icon: '💰' },

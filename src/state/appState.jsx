@@ -36,6 +36,7 @@ export const initialState = {
   },
   sidebarWidth: 320,
   primaryPaneWidth: null,
+  customTokens: [], // NEW: For game-specific custom tokens
 };
 
 export function reducer(state, action) {

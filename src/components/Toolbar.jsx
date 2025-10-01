@@ -6,16 +6,20 @@ import {
 } from 'lucide-react';
 import { TOKEN_SHAPES } from '../data/Shapes';
 import { TOKEN_COLORS } from '../data/Colors';
+import { renderIcon } from '../data/Shapes';
 
 const Toolbar = () => {
   const { state, dispatch } = useContext(AppContext);
   const {
     isSidebarVisible, activeDropdown, selectedTool, selectedColor,
-    selectedTokenShape, selectedTokenColor, tokenSize, lineWidth
+    selectedTokenShape, selectedTokenColor, tokenSize, lineWidth, customTokens
   } = state;
 
   const [tokenSearch, setTokenSearch] = useState('');
   const searchInputRef = useRef(null);
+
+  // Combine custom tokens and default tokens
+  const allTokenShapes = { ...customTokens, ...TOKEN_SHAPES };
 
   // This effect reliably focuses the search input when the dropdown is opened
   useEffect(() => {
@@ -59,7 +63,7 @@ const Toolbar = () => {
   const setLineWidth = (width) => {
     dispatch({ type: 'SET_STATE', payload: { lineWidth: width } });
   };
-  
+
   const lineWidths = [
     { value: 1, label: 'Thin' },
     { value: 3, label: 'Normal' },
@@ -78,7 +82,7 @@ const Toolbar = () => {
     { id: 'eraser', icon: Eraser, label: 'Eraser' },
   ];
 
-  const filteredTokenShapes = Object.entries(TOKEN_SHAPES).filter(([key, shape]) =>
+  const filteredTokenShapes = Object.entries(allTokenShapes).filter(([key, shape]) =>
     shape.name.toLowerCase().includes(tokenSearch.toLowerCase())
   );
 
@@ -204,14 +208,14 @@ const Toolbar = () => {
                   className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between dark:hover:bg-gray-700 dark:border-gray-600"
                   title="Select token shape"
                 >
-                  <span className="text-lg">{TOKEN_SHAPES[selectedTokenShape].icon}</span>
-                  <span className="font-medium capitalize">{TOKEN_SHAPES[selectedTokenShape].name}</span>
+                  <span className="text-lg">{renderIcon(allTokenShapes[selectedTokenShape])}</span>
+                  <span className="font-medium capitalize">{allTokenShapes[selectedTokenShape].name}</span>
                   <ChevronDown size={14} className="text-gray-500" />
                 </button>
                 {activeDropdown === 'tokenShape' && (
                   <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 flex flex-col">
-                    <div 
-                      className="p-2 border-b border-gray-200 dark:border-gray-700" 
+                    <div
+                      className="p-2 border-b border-gray-200 dark:border-gray-700"
                       onMouseDown={(e) => e.preventDefault()} // Prevent blur on the input
                     >
                       <input
@@ -225,12 +229,12 @@ const Toolbar = () => {
                     </div>
                     <div className="max-h-[60vh] overflow-y-auto">
                       {filteredTokenShapes.map(([key, shape]) => (
-                        <button 
-                          key={key} 
-                          onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); setTokenSearch(''); }} 
+                        <button
+                          key={key}
+                          onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); setTokenSearch(''); }}
                           className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                         >
-                          <span className="text-lg w-5 text-center">{shape.icon}</span>
+                          <span className="text-lg w-5 text-center">{renderIcon(shape)}</span>
                           {shape.name}
                         </button>
                       ))}
@@ -238,7 +242,7 @@ const Toolbar = () => {
                   </div>
                 )}
               </div>
-              
+
               {/* Token Color */}
               <div className="relative">
                 <button
@@ -252,8 +256,8 @@ const Toolbar = () => {
                 {activeDropdown === 'tokenColor' && (
                   <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                     {TOKEN_COLORS.map(color => (
-                      <button 
-                        key={color.value} 
+                      <button
+                        key={color.value}
                         onClick={() => { setSelectedTokenColor(color.value); setActiveDropdown(null); }}
                         className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                       >
@@ -264,7 +268,7 @@ const Toolbar = () => {
                   </div>
                 )}
               </div>
-              
+
               {/* Token Size Slider */}
               <div className="flex items-center gap-2">
                 <Circle size={14} className="text-gray-500" />

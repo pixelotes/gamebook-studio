@@ -18,6 +18,7 @@ import { crc32 } from 'crc';
 import DebugModal from './components/DebugModal';
 import GameMetadataModal from './components/GameMetadataModal';
 import { Settings } from 'lucide-react';
+import { renderIcon } from './data/Shapes';
 
 const diffpatcher = create({
   objectHash: (obj) => obj.id,
@@ -1503,10 +1504,10 @@ const GamebookApp = () => {
 
   const handleExportGBS = async (metadata) => {
     const zip = new JSZip();
-    
+
     // Add game metadata
     zip.file('game.json', JSON.stringify(metadata, null, 2));
-    
+
     // Add session data
     const sessionData = {
       pdfs: pdfs.map(p => ({
@@ -1524,11 +1525,12 @@ const GamebookApp = () => {
       characters,
       notes,
       counters,
-      version: gameStateVersion
+      version: gameStateVersion,
+      customTokens: state.customTokens.map(t => ({ name: t.name, fileName: t.fileName })),
     };
-    
+
     zip.file('session.json', JSON.stringify(sessionData, null, 2));
-    
+
     // Add PDFs
     const pdfFolder = zip.folder('pdfs');
     for (const pdf of pdfs) {
@@ -1538,13 +1540,23 @@ const GamebookApp = () => {
         console.warn(`Skipping PDF without file: ${pdf.fileName}`);
       }
     }
-    
+
+    // Add Custom Tokens
+    if (state.customTokens.length > 0) {
+      const tokenFolder = zip.folder('tokens');
+      for (const token of state.customTokens) {
+        if (token.file) {
+          tokenFolder.file(token.fileName, token.file);
+        }
+      }
+    }
+
     // Generate and download with game name
     const blob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const fileName = metadata.name 
+    const fileName = metadata.name
       ? `${metadata.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.gbs`
       : 'session.gbs';
     a.download = fileName;
@@ -1552,10 +1564,10 @@ const GamebookApp = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     // Store metadata in state
     dispatch({ type: 'SET_STATE', payload: { gameMetadata: metadata } });
-    
+
     addNotification(`Game exported as ${fileName}`, 'success');
   };
 
@@ -1565,10 +1577,10 @@ const GamebookApp = () => {
       alert('Please select a valid .gbs file');
       return;
     }
-    
+
     try {
       const zip = await JSZip.loadAsync(file);
-      
+
       // Read game metadata
       let gameMetadata = {
         name: '',
@@ -1578,28 +1590,47 @@ const GamebookApp = () => {
         players: '',
         length: ''
       };
-      
+
       const gameJsonFile = zip.file('game.json');
       if (gameJsonFile) {
         const gameJson = await gameJsonFile.async('string');
         gameMetadata = JSON.parse(gameJson);
       }
-      
+
       // Read session.json
       const sessionJson = await zip.file('session.json').async('string');
       const sessionData = JSON.parse(sessionJson);
-      
+
+      // Load Custom Tokens
+      const loadedCustomTokens = [];
+      if (sessionData.customTokens && zip.folder('tokens')) {
+        const tokenFolder = zip.folder('tokens');
+        for (const tokenInfo of sessionData.customTokens) {
+          const tokenFile = tokenFolder.file(tokenInfo.fileName);
+          if (tokenFile) {
+            const tokenBlob = await tokenFile.async('blob');
+            const tokenUrl = URL.createObjectURL(tokenBlob);
+            loadedCustomTokens.push({
+              ...tokenInfo,
+              type: 'image',
+              icon: tokenUrl,
+              file: new File([tokenBlob], tokenInfo.fileName),
+            });
+          }
+        }
+      }
+
       // Load PDFs
       const pdfFolder = zip.folder('pdfs');
       const loadedPdfs = [];
-      
+
       for (const pdfInfo of sessionData.pdfs) {
         const pdfFile = pdfFolder.file(pdfInfo.fileName);
         if (pdfFile) {
           const pdfBlob = await pdfFile.async('blob');
           const pdfUrl = URL.createObjectURL(pdfBlob);
           const pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
-          
+
           loadedPdfs.push({
             ...pdfInfo,
             pdfDoc,
@@ -1609,10 +1640,10 @@ const GamebookApp = () => {
           console.warn(`PDF not found in archive: ${pdfInfo.fileName}`);
         }
       }
-      
-      // Restore full state including metadata
-      dispatch({ 
-        type: 'SET_STATE', 
+
+      // Restore full state including metadata and custom tokens
+      dispatch({
+        type: 'SET_STATE',
         payload: {
           pdfs: loadedPdfs,
           activePdfId: sessionData.activePdfId,
@@ -1621,15 +1652,16 @@ const GamebookApp = () => {
           characters: sessionData.characters,
           notes: sessionData.notes,
           counters: sessionData.counters,
-          gameMetadata: gameMetadata
+          gameMetadata: gameMetadata,
+          customTokens: loadedCustomTokens,
         }
       });
-      
+
       setGameStateVersion(sessionData.version || 0);
-      
+
       const gameName = gameMetadata.name ? ` "${gameMetadata.name}"` : '';
       addNotification(`Game${gameName} loaded successfully`, 'success');
-      
+
     } catch (error) {
       console.error('Error loading .gbs file:', error);
       alert('Failed to load .gbs file. It may be corrupt or invalid.');
