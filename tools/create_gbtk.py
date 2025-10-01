@@ -133,7 +133,7 @@ def create_gbtk_archive(pack_dir, pack_data):
     print(f"\nCreating archive at: {archive_path}")
 
     try:
-        with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_STORED) as zf:
             # 1. Write the pack.json to the root of the archive
             pack_json_str = json.dumps(pack_data, indent=2)
             zf.writestr('pack.json', pack_json_str)
