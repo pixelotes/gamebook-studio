@@ -17,35 +17,31 @@ const PDFViewer = ({
 
   useEffect(() => {
     const calculateInitialScale = async () => {
-      // Check if pdf exists, initial scale hasn't been set, and the container is rendered
-      if (pdf && pdf.initialScaleSet === false && scrollContainerRef.current) {
+      // FIXED: Check initialScaleSet more carefully
+      if (pdf && pdf.initialScaleSet !== true && scrollContainerRef.current) {
         const viewerHeight = scrollContainerRef.current.clientHeight;
 
-        // Ensure we have a valid height to prevent division by zero
         if (viewerHeight > 0) {
           try {
-            const page = await pdf.pdfDoc.getPage(1); // Get page 1 for dimensions
+            const page = await pdf.pdfDoc.getPage(1);
             const viewport = page.getViewport({ scale: 1 });
-            const verticalPadding = 32; // Add some padding so it's not edge-to-edge
+            const verticalPadding = 32;
             
-            // Calculate scale and ensure it's not excessively large
             const newScale = Math.min(2, (viewerHeight - verticalPadding) / viewport.height);
 
             updatePdf(pdf.id, { scale: newScale, initialScaleSet: true });
           } catch (error) {
             console.error("Error calculating initial PDF scale:", error);
-            // If something goes wrong, mark it as set to avoid loops
             updatePdf(pdf.id, { initialScaleSet: true });
           }
         }
       }
     };
 
-    // Delay calculation to ensure DOM has settled, then clear timeout
     const timerId = setTimeout(calculateInitialScale, 100);
     return () => clearTimeout(timerId);
 
-  }, [pdf, updatePdf]);
+  }, [pdf?.id, pdf?.initialScaleSet, updatePdf]);
 
   // Get the appropriate canvas
   const canvas = paneId === 'primary' ? fabricCanvas.current : secondaryFabricCanvas.current;
