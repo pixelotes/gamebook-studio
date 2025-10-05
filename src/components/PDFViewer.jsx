@@ -16,32 +16,31 @@ const PDFViewer = ({
   const scrollContainerRef = useRef(null);
 
   useEffect(() => {
-    const calculateInitialScale = async () => {
-      // FIXED: Check initialScaleSet more carefully
-      if (pdf && pdf.initialScaleSet !== true && scrollContainerRef.current) {
-        const viewerHeight = scrollContainerRef.current.clientHeight;
+      const calculateInitialScale = async () => {
+        if (pdf && pdf.initialScaleSet !== true && scrollContainerRef.current) {
+          const viewerHeight = scrollContainerRef.current.clientHeight;
 
-        if (viewerHeight > 0) {
-          try {
-            const page = await pdf.pdfDoc.getPage(1);
-            const viewport = page.getViewport({ scale: 1 });
-            const verticalPadding = 32;
-            
-            const newScale = Math.min(2, (viewerHeight - verticalPadding) / viewport.height);
+          if (viewerHeight > 0) {
+            try {
+              const page = await pdf.pdfDoc.getPage(1);
+              const viewport = page.getViewport({ scale: 1 });
+              const verticalPadding = 32;
+              
+              const newScale = Math.min(2, (viewerHeight - verticalPadding) / viewport.height);
 
-            updatePdf(pdf.id, { scale: newScale, initialScaleSet: true });
-          } catch (error) {
-            console.error("Error calculating initial PDF scale:", error);
-            updatePdf(pdf.id, { initialScaleSet: true });
+              updatePdf(pdf.id, { scale: newScale, initialScaleSet: true });
+            } catch (error) {
+              console.error("Error calculating initial PDF scale:", error);
+              updatePdf(pdf.id, { initialScaleSet: true });
+            }
           }
         }
-      }
-    };
+      };
 
-    const timerId = setTimeout(calculateInitialScale, 100);
-    return () => clearTimeout(timerId);
+      const timerId = setTimeout(calculateInitialScale, 100);
+      return () => clearTimeout(timerId);
 
-  }, [pdf?.id, pdf?.initialScaleSet, updatePdf]);
+    }, [pdf?.id]);
 
   // Get the appropriate canvas
   const canvas = paneId === 'primary' ? fabricCanvas.current : secondaryFabricCanvas.current;
