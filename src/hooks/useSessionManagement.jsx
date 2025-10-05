@@ -128,16 +128,22 @@ export const useSessionManagement = ({
     }
     const newPdfsData = [];
     for (const file of files) {
-      // Logic for both new PDFs and restoring from a session file
-      // This is a simplified version of the logic in App.jsx
       try {
         const url = URL.createObjectURL(file);
         const pdfDoc = await pdfjsLib.getDocument(url).promise;
         const bookmarks = await pdfDoc.getOutline().catch(() => []) || [];
         const pdfData = {
-          id: file.name, fileName: file.name, file, pdfDoc,
-          totalPages: pdfDoc.numPages, currentPage: 1, scale: 1,
-          initialScaleSet: false, pageLayers: {}, bookmarks,
+          // Usamos un ID más robusto basado en el nombre y tamaño para evitar colisiones
+          id: `${file.name}-${file.size}`, 
+          fileName: file.name, 
+          file, 
+          pdfDoc,
+          totalPages: pdfDoc.numPages, 
+          currentPage: 1, 
+          scale: 1,
+          initialScaleSet: false, 
+          pageLayers: {}, 
+          bookmarks,
         };
         newPdfsData.push(pdfData);
       } catch (error) {
@@ -146,11 +152,25 @@ export const useSessionManagement = ({
     }
 
     if (newPdfsData.length > 0) {
-      dispatch({ type: 'SET_STATE', payload: { pdfs: [...pdfs, ...newPdfsData], activePdfId: newPdfsData[0].id } });
+      const updatedPdfs = [...pdfs, ...newPdfsData];
+      dispatch({ type: 'SET_STATE', payload: { pdfs: updatedPdfs, activePdfId: newPdfsData[0].id } });
+      
+      // --- INICIO DEL CAMBIO IMPORTANTE ---
       if (socketService.isMultiplayerActive()) {
+        // 1. Subir los archivos PDF al servidor
         for (const pdfData of newPdfsData) {
           await socketService.uploadPdfToSession(pdfData.file, pdfData);
         }
+        
+        // 2. Notificar a todos los clientes del nuevo estado de la lista de PDFs
+        //    (sin los objetos pesados como pdfDoc o file)
+        const pdfsForStateUpdate = updatedPdfs.map(p => {
+          const { file, pdfDoc, ...rest } = p;
+          return rest;
+        });
+        
+        socketService.updateGameState({ pdfs: pdfsForStateUpdate });
+        // --- FIN DEL CAMBIO IMPORTANTE ---
       }
     }
   };

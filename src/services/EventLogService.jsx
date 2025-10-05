@@ -1,19 +1,21 @@
-// This service manages event logging with a simple API
+import socketService from './SocketService';
 
 class EventLogService {
   constructor() {
     this.events = [];
     this.listeners = [];
-    this.currentPlayer = localStorage.getItem('playerName') || 'Player 1';
+    // Player name is now managed by SocketService
   }
 
   setPlayerName(name) {
-    this.currentPlayer = name;
+    // This is now primarily handled by the multiplayer hook,
+    // but we can keep it for non-multiplayer context.
+    socketService.playerName = name;
     localStorage.setItem('playerName', name);
   }
 
   getPlayerName() {
-    return this.currentPlayer;
+    return socketService.isMultiplayerActive() ? socketService.getSessionInfo().playerName : (localStorage.getItem('playerName') || 'Player 1');
   }
 
   addEvent(type, message, details = null, player = null) {
@@ -23,12 +25,36 @@ class EventLogService {
       type,
       message,
       details,
-      player: player || this.currentPlayer
+      player: player || this.getPlayerName()
     };
-
-    this.events.push(event);
-    this.notifyListeners();
+    
+    if (socketService.isMultiplayerActive()) {
+      // Send to server to be broadcasted
+      // The server will add the player name
+      const { player, ...eventToServer } = event;
+      socketService.logEvent(eventToServer);
+    } else {
+      // Add locally for single player
+      this.events.push(event);
+      this.notifyListeners();
+    }
+    
     return event;
+  }
+  
+  // This method is called by the multiplayer hook when an event is received
+  receiveEvent(event) {
+    this.events.push(event);
+    if (this.events.length > 100) {
+      this.events.shift();
+    }
+    this.notifyListeners();
+  }
+  
+  // Load events from game state when joining a session
+  loadEvents(events) {
+    this.events = events || [];
+    this.notifyListeners();
   }
 
   // Specific event methods for convenience
@@ -144,6 +170,7 @@ class EventLogService {
   }
 
   logPlayerJoin(playerName) {
+    // This will now be triggered by a server event
     return this.addEvent(
       'player_join',
       `${playerName} joined the session`,

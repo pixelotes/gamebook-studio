@@ -33,7 +33,7 @@ export const MultiplayerModal = ({ isOpen, onClose, onSessionCreated, onSessionJ
 
     try {
       const response = await socketService.createSession();
-      onSessionCreated(response.sessionId);
+      onSessionCreated(response); // Corregido: pasar el objeto de respuesta completo
       onClose();
     } catch (error) {
       setError(error.message);

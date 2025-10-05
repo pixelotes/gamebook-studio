@@ -49,27 +49,43 @@ class GameSession {
   constructor(sessionId, hostSocketId) {
     this.id = sessionId;
     this.hostSocketId = hostSocketId;
-    this.clients = new Set();
+    this.clients = new Map(); // Use a Map to store socketId -> playerInfo
     this.gameState = {
       pdfs: [],
       activePdfId: null,
       characters: [],
       notes: '',
       counters: [],
-      pageLayers: {}
+      pageLayers: {},
+      eventLog: [] // Add event log to game state
     };
     this.pdfFiles = new Map(); // Store actual PDF file data
     this.stateVersion = 0;
     this.stateHistory = []; // Keep recent states for late-joining clients
+    this.nextPlayerNumber = 1;
   }
 
   addClient(socketId) {
-    this.clients.add(socketId);
+    const playerName = `Player ${this.nextPlayerNumber++}`;
+    this.clients.set(socketId, { name: playerName });
+    return playerName;
   }
 
   removeClient(socketId) {
     this.clients.delete(socketId);
+    if (this.clients.size === 0) {
+      this.nextPlayerNumber = 1; // Reset when session is empty
+    }
     return this.clients.size === 0; // Return true if session is empty
+  }
+  
+  addEvent(event) {
+    this.gameState.eventLog.push(event);
+    if (this.gameState.eventLog.length > 100) { // Limit log size
+        this.gameState.eventLog.shift();
+    }
+    // Broadcast the new event to all clients
+    io.to(this.id).emit('event-logged', event);
   }
 
   updateGameState(updates) {
@@ -184,16 +200,16 @@ io.on('connection', (socket) => {
     let session = gameSessions.get(sessionId);
     
     if (!session) {
-      // Create new session if it doesn't exist
-      session = new GameSession(sessionId, socket.id);
-      gameSessions.set(sessionId, session);
+        return callback({ success: false, error: 'Session not found' });
     }
 
-    session.addClient(socket.id);
+    const playerName = session.addClient(socket.id);
     socket.join(sessionId);
     socket.sessionId = sessionId;
+    socket.playerName = playerName;
 
-    console.log(`User ${socket.id} joined session ${sessionId}`);
+
+    console.log(`User ${socket.id} (${playerName}) joined session ${sessionId}`);
 
     // Send current game state to the joining user
     callback({
@@ -201,12 +217,14 @@ io.on('connection', (socket) => {
       gameState: session.gameState,
       isHost: session.hostSocketId === socket.id,
       clientCount: session.clients.size,
-      version: session.stateVersion
+      version: session.stateVersion,
+      playerName: playerName
     });
 
     // Notify other clients about new player
     socket.to(sessionId).emit('player-joined', {
       socketId: socket.id,
+      name: playerName,
       clientCount: session.clients.size
     });
   });
@@ -217,11 +235,13 @@ io.on('connection', (socket) => {
     const session = new GameSession(sessionId, socket.id);
     gameSessions.set(sessionId, session);
     
-    session.addClient(socket.id);
+    const playerName = session.addClient(socket.id);
     socket.join(sessionId);
     socket.sessionId = sessionId;
+    socket.playerName = playerName;
 
-    console.log(`User ${socket.id} created session ${sessionId}`);
+
+    console.log(`User ${socket.id} (${playerName}) created session ${sessionId}`);
 
     callback({
       success: true,
@@ -229,7 +249,8 @@ io.on('connection', (socket) => {
       gameState: session.gameState,
       isHost: true,
       clientCount: 1,
-      version: session.stateVersion
+      version: session.stateVersion,
+      playerName: playerName
     });
   });
 
@@ -254,6 +275,17 @@ io.on('connection', (socket) => {
         });
         console.log(`Game state delta sent for version ${version} in session ${socket.sessionId}`);
     }
+  });
+  
+  // New event for logging
+  socket.on('log-event', (eventData) => {
+      if (!socket.sessionId) return;
+      const session = gameSessions.get(socket.sessionId);
+      if (session) {
+          // Assign the player name from the socket
+          const eventWithPlayer = { ...eventData, player: socket.playerName };
+          session.addEvent(eventWithPlayer);
+      }
   });
 
   socket.on('request-missing-updates', ({ fromVersion }, callback) => {
@@ -374,8 +406,8 @@ io.on('connection', (socket) => {
 
           // If the host left, assign a new host
           if (session.hostSocketId === socket.id && session.clients.size > 0) {
-            session.hostSocketId = session.clients.values().next().value;
-            socket.to(socket.sessionId).emit('host-changed', {
+            session.hostSocketId = Array.from(session.clients.keys())[0];
+            io.to(socket.sessionId).emit('host-changed', {
               newHostId: session.hostSocketId
             });
           }
