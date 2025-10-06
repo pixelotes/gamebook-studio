@@ -47,7 +47,7 @@ To get a local copy up and running, follow these simple steps.
 
 ### Prerequisites
 
-* Node.js (v16 or later)
+* Node.js (v20 or later)
 * npm
 
 ### Installation & Launch
