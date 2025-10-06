@@ -123,6 +123,7 @@ class FabricCanvas {
         this.isDragging = true;
         this.dragTarget = clickedToken;
         this.dragOffset = { x: x - clickedToken.x * this.scale, y: y - clickedToken.y * this.scale };
+        this.startAnimationLoop(); // Start loop for dragging
         return;
       }
     } else if (this.tool === 'eraser') {
@@ -147,9 +148,11 @@ class FabricCanvas {
     } else if (this.tool === 'draw') {
       this.isDrawing = true;
       this.startPath(x / this.scale, y / this.scale);
+      this.startAnimationLoop(); // Start loop for drawing
     } else if (this.tool === 'rectangle') {
       this.isDrawing = true;
       this.startPos = { x: x / this.scale, y: y / this.scale };
+      this.startAnimationLoop(); // Start loop for rectangle preview
     } else if (this.tool === 'text') {
       const text = prompt('Enter text:');
       if (text) {
@@ -168,6 +171,7 @@ class FabricCanvas {
 
   handleMouseLeave(e) {
     this.previewToken = null;
+    this.render(); // Render one last time to clear the preview
   }
 
   handleMouseMove(e) {
@@ -185,9 +189,12 @@ class FabricCanvas {
         color: this.selectedToken.color,
         strokeColor: this.selectedToken.color === '#ffffff' ? '#000000' : '#ffffff',
       };
-      return;
+      this.startAnimationLoop(); // Start loop to show token preview on hover
     } else {
-      this.previewToken = null;
+      if (this.previewToken) {
+        this.previewToken = null; 
+        this.render(); // Clear the last preview render
+      }
     }
 
     if (this.isMeasuring) {
@@ -206,13 +213,14 @@ class FabricCanvas {
             width: Math.abs(this.startPos.x - endX),
             height: Math.abs(this.startPos.y - endY)
         };
+        // The running animation loop will render the preview
         return;
     }
 
     if (this.isDragging && this.dragTarget) {
       this.dragTarget.x = (x - this.dragOffset.x) / this.scale;
       this.dragTarget.y = (y - this.dragOffset.y) / this.scale;
-      this.render();
+      // The running animation loop will render the drag
     } else if (this.isDrawing && this.tool === 'draw') {
       this.continuePath(x / this.scale, y / this.scale);
     }
@@ -577,24 +585,34 @@ class FabricCanvas {
   }
 
   startAnimationLoop() {
+    if (this.animationFrameId) return; // Loop is already running
+
     const loop = () => {
-      let hasPointers = false;
+      // First, clean up any expired pointers
+      let hasActivePointers = false;
       this.layers.forEach(layer => {
-        const filtered = layer.objects.filter(obj => {
+        const originalObjectCount = layer.objects.length;
+        layer.objects = layer.objects.filter(obj => {
           if (obj.type === 'pointer') {
-            const alive = (Date.now() - obj.createdAt) < 10000;
-            if (alive) hasPointers = true;
-            return alive;
+            const isAlive = (Date.now() - obj.createdAt) < 10000;
+            if (isAlive) hasActivePointers = true;
+            return isAlive;
           }
           return true;
         });
-        if (filtered.length !== layer.objects.length) layer.objects = filtered;
       });
+
       this.render();
-      if (hasPointers) this.animationFrameId = requestAnimationFrame(loop);
-      else this.animationFrameId = null;
+
+      // Decide if the loop should continue
+      if (hasActivePointers || this.isDrawing || this.isDragging || this.previewToken) {
+        this.animationFrameId = requestAnimationFrame(loop);
+      } else {
+        this.animationFrameId = null; // Stop the loop
+      }
     };
-    if (!this.animationFrameId) this.animationFrameId = requestAnimationFrame(loop);
+
+    this.animationFrameId = requestAnimationFrame(loop);
   }
 
   stopAnimationLoop() {
