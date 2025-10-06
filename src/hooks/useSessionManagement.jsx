@@ -46,7 +46,7 @@ export const useSessionManagement = ({
     URL.revokeObjectURL(url);
     addNotification('Session saved successfully', 'success');
   };
-  
+
   const handleExportGBS = async (metadata) => {
     const zip = new JSZip();
     zip.file('game.json', JSON.stringify(metadata, null, 2));
@@ -89,17 +89,17 @@ export const useSessionManagement = ({
     };
     reader.readAsText(file);
   };
-  
+
   const handleLoadGBS = async (file) => {
     try {
       const zip = await JSZip.loadAsync(file);
       const gameJsonFile = zip.file('game.json');
       let gameMetadata = {};
       if (gameJsonFile) gameMetadata = JSON.parse(await gameJsonFile.async('string'));
-      
+
       const sessionJson = await zip.file('session.json').async('string');
       const sessionData = JSON.parse(sessionJson);
-      
+
       const pdfFolder = zip.folder('pdfs');
       const loadedPdfs = [];
       for (const pdfInfo of sessionData.pdfs) {
@@ -134,15 +134,15 @@ export const useSessionManagement = ({
         const bookmarks = await pdfDoc.getOutline().catch(() => []) || [];
         const pdfData = {
           // Usamos un ID más robusto basado en el nombre y tamaño para evitar colisiones
-          id: `${file.name}-${file.size}`, 
-          fileName: file.name, 
-          file, 
+          id: `${file.name}-${file.size}`,
+          fileName: file.name,
+          file,
           pdfDoc,
-          totalPages: pdfDoc.numPages, 
-          currentPage: 1, 
+          totalPages: pdfDoc.numPages,
+          currentPage: 1,
           scale: 1,
-          initialScaleSet: false, 
-          pageLayers: {}, 
+          initialScaleSet: false,
+          pageLayers: {},
           bookmarks,
         };
         newPdfsData.push(pdfData);
@@ -154,21 +154,21 @@ export const useSessionManagement = ({
     if (newPdfsData.length > 0) {
       const updatedPdfs = [...pdfs, ...newPdfsData];
       dispatch({ type: 'SET_STATE', payload: { pdfs: updatedPdfs, activePdfId: newPdfsData[0].id } });
-      
+
       // --- INICIO DEL CAMBIO IMPORTANTE ---
       if (socketService.isMultiplayerActive()) {
         // 1. Subir los archivos PDF al servidor
         for (const pdfData of newPdfsData) {
           await socketService.uploadPdfToSession(pdfData.file, pdfData);
         }
-        
+
         // 2. Notificar a todos los clientes del nuevo estado de la lista de PDFs
         //    (sin los objetos pesados como pdfDoc o file)
         const pdfsForStateUpdate = updatedPdfs.map(p => {
           const { file, pdfDoc, ...rest } = p;
           return rest;
         });
-        
+
         socketService.updateGameState({ pdfs: pdfsForStateUpdate });
         // --- FIN DEL CAMBIO IMPORTANTE ---
       }
