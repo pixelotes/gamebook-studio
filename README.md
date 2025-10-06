@@ -1,98 +1,90 @@
-# Gamebook Studio
+# 📖 Gamebook Studio
 
-A digital tabletop companion for playing gamebooks and print-and-play board games, featuring real-time multiplayer and a rich set of annotation tools.
+**Gamebook Studio** is a modern, web-based digital tabletop for playing gamebooks and print-and-play board games. Featuring real-time multiplayer, a rich set of annotation tools, and an intuitive interface, it's designed to bring your favorite tabletop experiences into the digital realm with ease and style.
 
-
-
-## Key Features
-
-* **Advanced PDF Viewer**: Load and render multiple PDF files which serve as your digital game board.
-* **Rich Annotation Toolkit**:
-    * **Game Tokens**: Place and move tokens with a wide variety of shapes and colors. Includes a live preview for accurate placement.
-    * **Drawing & Shapes**: A freehand drawing tool with selectable line widths and a rectangle tool with a live preview.
-    * **Text Tool**: Add text notes directly onto the PDF with selectable font sizes.
-    * **Versatile Eraser**: A smart eraser that removes any object type, including tokens, drawings, rectangles, and text.
-    * **Pointer & Ruler**: A temporary pointer to highlight areas for others in real-time and a ruler to measure distances in pixels.
-* **Layer Management**: Annotations are organized into distinct layers (Tokens, Drawings, Text) that can be individually toggled or cleared.
-* **Comprehensive Session Tools**:
-    * **Character Sheets**: Create and manage multiple character sheets using various templates.
-    * **Counters & Notes**: Keep track of game resources with customizable counters and maintain session notes in a dedicated panel.
-    * **Bookmark Navigation**: Quickly jump to sections using the PDF's native bookmarks.
-* **Real-Time Multiplayer**:
-    * **Live Collaboration**: Create or join a session to have all actions synchronized in real-time with other players.
-    * **Efficient Sync**: Uses `jsondiffpatch` to send only small "delta" updates, and `pako` to compress layer data, ensuring low latency.
-    * **Data Integrity**: Employs state versioning and CRC32 checksums to ensure all players' game states are consistent.
-* **Modern UI/UX**:
-    * **Dark Mode**: A sleek, eye-friendly dark theme for comfortable long sessions.
-    * **Floating Dice Roller**: A convenient, draggable dice roller with support for complex expressions.
-    * **Save/Load**: Save your entire session state, including all annotations and character sheets, to a JSON file and load it back later.
+Whether you're collaborating on a complex strategy game or exploring a solo adventure, Gamebook Studio provides the tools you need in one clean, efficient workspace.
 
 ---
 
-## Tech Stack
+## ✨ Key Features
 
-* **Frontend**: React, Tailwind CSS, PDF.js, Socket.IO Client
-* **Backend**: Node.js, Express, Socket.IO
-* **Key Libraries**:
-    * `lucide-react` for icons
-    * `jsondiffpatch` for efficient state synchronization
-    * `pako` for real-time data compression
-    * `multer` for PDF uploads
+-   **Advanced PDF Viewer**: Load multiple PDFs to serve as your digital game board, map, or rulebook.
+-   **Rich Annotation Toolkit**: Place tokens, draw freely, add text notes, and measure distances directly on the page.
+-   **Real-Time Multiplayer**: Create or join a session and have all your actions synchronized in real-time with other players.
+-   **Comprehensive Session Tools**: Manage character sheets, track resources with counters, and navigate PDFs with bookmarks.
+-   **Save & Load**: Save your entire session, including annotations and character sheets, to a single file and pick up right where you left off.
 
 ---
 
-## Getting Started
+## 🛠️ Tech Stack
 
-To get a local copy up and running, follow these simple steps.
+This project is built with a modern, efficient, and scalable technology stack.
+
+-   **Frontend**: Vite, React, Tailwind CSS
+-   **Backend**: Node.js, Express, Socket.IO
+-   **Key Libraries**:
+    -   **PDF Rendering**: PDF.js
+    -   **Real-time Sync**: `jsondiffpatch` for efficient state synchronization.
+    -   **Data Compression**: `pako` for compressing data to ensure low latency.
+    -   *File Handling**: `multer` for robust PDF uploads on the server.
+
+---
+
+## 🚀 Getting Started
+
+You can run Gamebook Studio either manually on your local machine or through Docker.
 
 ### Prerequisites
 
-* Node.js (v16 or later)
-* npm
+-   **Node.js**: Version 20.x or higher is required to run the application with Vite.
+-   **npm**: Should be included with your Node.js installation.
+-   **(Optional) Docker**: Required only if you choose the Docker setup.
 
-### Installation & Launch
+---
 
-1.  **Clone the repository:**
+### Manual Installation & Launch
+
+1.  **Clone the Repository**
     ```sh
-    git clone https://github.com/pixelotes/gamebook-studio
+    git clone [https://github.com/pixelotes/gamebook-studio.git](https://github.com/pixelotes/gamebook-studio.git)
     cd gamebook-studio
     ```
 
-2.  **Install dependencies:**
-    (This project uses a single `package.json` for both client and server dependencies).
+2.  **Install Dependencies**
+    This single command installs both client and server dependencies.
     ```sh
     npm install
     ```
 
-3.  **Run the backend server:**
-    The server handles multiplayer sessions and PDF uploads.
-    ```sh
-    npm run server
-    ```
-    You should see the message: `Multiplayer server running on port 3001`.
-
-4.  **Run the React frontend:**
-    Open a new terminal window in the same directory.
-    ```sh
-    npm run start
-    ```
-
-5.  **[Optional] Run both server and client:**
-    Open a new terminal window in the same directory.
+3.  **Run the Development Server**
+    This command concurrently starts the backend server and the Vite frontend client.
     ```sh
     npm run dev
     ```
-
-6.  **Open the application:**
-    Navigate to `http://localhost:3000` in your web browser.
+    - The multiplayer server will run on port `3001`.
+    - The React application will be available at `http://localhost:3000`.
 
 ---
 
-## 🔮 Future Enhancements
+### Docker Installation & Launch
 
-The current application is robust, but there are several exciting possibilities for future development:
+For a containerized and isolated environment, you can use Docker and Docker Compose.
 
-* **User Authentication**: Implement user accounts for private, secure sessions and administrative controls for session hosts.
-* **Optimistic Client Updates**: Make the UI feel even faster by applying changes locally before receiving confirmation from the server.
-* **In-App Chat**: Add a chat panel for players to communicate within the session.
-* **Action Log**: A running log of all major actions (dice rolls, token movements) to keep track of the game's progress.
+1.  **Clone the Repository** (if you haven't already)
+    ```sh
+    git clone [https://github.com/pixelotes/gamebook-studio.git](https://github.com/pixelotes/gamebook-studio.git)
+    cd gamebook-studio
+    ```
+
+2.  **Build and Run with Docker Compose**
+    Use the `docker-compose.dev.yml` file to build the images and run the containers. This setup uses a single service to run both the client and server.
+    ```sh
+    docker-compose -f docker-compose.dev.yml up --build
+    ```
+    The application will be accessible at `http://localhost:3000`, with both client and server ports exposed.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
