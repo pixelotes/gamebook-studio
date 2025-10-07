@@ -49,7 +49,7 @@ const TabBar = ({
       {pdfs.map(pdf => (
         <div
           key={`${paneId}-${pdf.id}`}
-          onClick={() => onTabSelect(pdf.id)}
+          onClick={() => onTabSelect(pdf.id, paneId)}
           className={`flex items-center gap-2 cursor-pointer ${getTabSize()} ${getTabStyle(pdf.id)}`}
         >
           <span className={isDualPaneMode ? 'text-sm' : ''}>{truncateFileName(pdf.fileName)}</span>
