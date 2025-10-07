@@ -45,7 +45,7 @@ const GamebookApp = () => {
     menuOpen, isDualPaneMode, theme, pdfs, isSidebarVisible,
     selectedTool, selectedColor, selectedTokenShape, selectedTokenColor,
     tokenSize, lineWidth,
-    secondaryPdfId // FIXED: This was missing from the destructuring
+    secondaryPdfId
   } = state;
 
   // --- Refs ---
@@ -55,6 +55,13 @@ const GamebookApp = () => {
   const secondaryOverlayCanvasRef = useRef(null);
   const fabricCanvas = useRef(null);
   const secondaryFabricCanvas = useRef(null);
+  
+  // FIX: Add a ref to always hold the latest state
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  });
+
 
   // --- UI State ---
   const [showMetadataModal, setShowMetadataModal] = useState(false);
@@ -86,12 +93,11 @@ const GamebookApp = () => {
 
   // --- Glue Logic ---
   const handleLayerUpdate = useCallback((pdfId, pageNum, layers) => {
-    const currentPdfs = state.pdfs;
+    // FIX: Use the ref to get the CURRENT state, not the stale one from the closure
+    const currentPdfs = stateRef.current.pdfs;
     const newPdfs = currentPdfs.map(p => {
         if (p.id === pdfId) {
             const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
-            // FIX: Explicitly spread the existing pdf object 'p' to ensure all its properties,
-            // including 'initialScaleSet' and 'scale', are preserved.
             return { ...p, pageLayers: updatedPageLayers };
         }
         return p;
@@ -101,7 +107,8 @@ const GamebookApp = () => {
     if (socketService.isMultiplayerActive()) {
       socketService.updateLayers(pdfId, pageNum, layers);
     }
-  }, [state.pdfs, dispatch]);
+    // FIX: Remove state.pdfs from dependency array to prevent creating a stale closure
+  }, [dispatch]);
 
   const handleTabClose = (pdfId) => closePdf(pdfId, addNotification, isHost);
 
