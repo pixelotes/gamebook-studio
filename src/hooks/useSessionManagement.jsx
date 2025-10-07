@@ -1,4 +1,3 @@
-// src/hooks/useSessionManagement.js
 import { useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import JSZip from 'jszip';
@@ -14,7 +13,7 @@ export const useSessionManagement = ({
   handleLeaveMultiplayerSession,
 }) => {
   const fileInputRef = useRef(null);
-  const { pdfs, characters, notes, counters, sessionToRestore, activePdfId, secondaryPdfId, isDualPaneMode } = state;
+  const { pdfs, characters, notes, counters, activePdfId, secondaryPdfId, isDualPaneMode, pdfViewState } = state;
 
   const handleNewSession = () => {
     const hasContent = pdfs.length > 0 || characters.length > 0 || notes || counters.length > 0;
@@ -31,9 +30,9 @@ export const useSessionManagement = ({
   const handleSaveSession = () => {
     const sessionData = {
       pdfs: pdfs.map(p => ({
-        id: p.id, fileName: p.fileName, currentPage: p.currentPage, scale: p.scale,
-        pageLayers: p.pageLayers, totalPages: p.totalPages, bookmarks: p.bookmarks,
+        id: p.id, fileName: p.fileName, pageLayers: p.pageLayers, totalPages: p.totalPages, bookmarks: p.bookmarks,
       })),
+      pdfViewState, // Save the entire pdfViewState object
       activePdfId, secondaryPdfId, isDualPaneMode, characters, notes, counters,
       version: state.gameStateVersion || 0
     };
@@ -52,9 +51,9 @@ export const useSessionManagement = ({
     zip.file('game.json', JSON.stringify(metadata, null, 2));
     const sessionData = {
       pdfs: pdfs.map(p => ({
-        id: p.id, fileName: p.fileName, currentPage: p.currentPage, scale: p.scale,
-        pageLayers: p.pageLayers, totalPages: p.totalPages, bookmarks: p.bookmarks,
+        id: p.id, fileName: p.fileName, pageLayers: p.pageLayers, totalPages: p.totalPages, bookmarks: p.bookmarks,
       })),
+      pdfViewState, // Save the entire pdfViewState object
       activePdfId, secondaryPdfId, isDualPaneMode, characters, notes, counters,
       version: state.gameStateVersion || 0
     };
@@ -80,11 +79,12 @@ export const useSessionManagement = ({
     reader.onload = (e) => {
       try {
         const sessionData = JSON.parse(e.target.result);
-        dispatch({ type: 'SET_STATE', payload: { sessionToRestore: sessionData } });
-        alert(`Session loaded. Please select the following PDF files: ${sessionData.pdfs.map(p => p.fileName).join(', ')}`);
-        fileInputRef.current?.click();
+        // We can dispatch the whole session data directly, as it matches our state structure
+        dispatch({ type: 'SET_STATE', payload: sessionData });
+        addNotification('Session loaded. Any missing PDFs need to be re-added.', 'success');
       } catch (error) {
         addNotification('Could not load session file. It may be corrupt.', 'error');
+        console.error("Session load error:", error);
       }
     };
     reader.readAsText(file);
@@ -127,25 +127,30 @@ export const useSessionManagement = ({
       return;
     }
     const newPdfsData = [];
+    const newPdfViewState = { ...pdfViewState };
+
     for (const file of files) {
       try {
         const url = URL.createObjectURL(file);
         const pdfDoc = await pdfjsLib.getDocument(url).promise;
         const bookmarks = await pdfDoc.getOutline().catch(() => []) || [];
+        const pdfId = `${file.name}-${file.size}`;
         const pdfData = {
-          // Usamos un ID más robusto basado en el nombre y tamaño para evitar colisiones
-          id: `${file.name}-${file.size}`,
+          id: pdfId,
           fileName: file.name,
           file,
           pdfDoc,
           totalPages: pdfDoc.numPages,
-          currentPage: 1,
-          scale: 1,
-          initialScaleSet: false,
           pageLayers: {},
           bookmarks,
         };
         newPdfsData.push(pdfData);
+        // Initialize its view state
+        newPdfViewState[pdfId] = {
+          scale: 1,
+          currentPage: 1,
+          initialScaleSet: false,
+        };
       } catch (error) {
         addNotification(`Error loading PDF: ${file.name}`, 'error');
       }
@@ -153,24 +158,24 @@ export const useSessionManagement = ({
 
     if (newPdfsData.length > 0) {
       const updatedPdfs = [...pdfs, ...newPdfsData];
-      dispatch({ type: 'SET_STATE', payload: { pdfs: updatedPdfs, activePdfId: newPdfsData[0].id } });
+      dispatch({
+        type: 'SET_STATE',
+        payload: {
+          pdfs: updatedPdfs,
+          activePdfId: newPdfsData[0].id,
+          pdfViewState: newPdfViewState,
+        }
+      });
 
-      // --- INICIO DEL CAMBIO IMPORTANTE ---
       if (socketService.isMultiplayerActive()) {
-        // 1. Subir los archivos PDF al servidor
         for (const pdfData of newPdfsData) {
           await socketService.uploadPdfToSession(pdfData.file, pdfData);
         }
-
-        // 2. Notificar a todos los clientes del nuevo estado de la lista de PDFs
-        //    (sin los objetos pesados como pdfDoc o file)
         const pdfsForStateUpdate = updatedPdfs.map(p => {
           const { file, pdfDoc, ...rest } = p;
           return rest;
         });
-
-        socketService.updateGameState({ pdfs: pdfsForStateUpdate });
-        // --- FIN DEL CAMBIO IMPORTANTE ---
+        socketService.updateGameState({ pdfs: pdfsForStateUpdate, pdfViewState: newPdfViewState });
       }
     }
   };

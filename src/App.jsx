@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useReducer, useRef, useEffect, useCallback, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 
@@ -91,6 +90,8 @@ const GamebookApp = () => {
     const newPdfs = currentPdfs.map(p => {
         if (p.id === pdfId) {
             const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
+            // FIX: Explicitly spread the existing pdf object 'p' to ensure all its properties,
+            // including 'initialScaleSet' and 'scale', are preserved.
             return { ...p, pageLayers: updatedPageLayers };
         }
         return p;
@@ -100,8 +101,8 @@ const GamebookApp = () => {
     if (socketService.isMultiplayerActive()) {
       socketService.updateLayers(pdfId, pageNum, layers);
     }
-  }, [state.pdfs]);
-  
+  }, [state.pdfs, dispatch]);
+
   const handleTabClose = (pdfId) => closePdf(pdfId, addNotification, isHost);
 
   // --- Effects ---

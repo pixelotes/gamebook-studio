@@ -1,4 +1,3 @@
-// src/hooks/usePdfManagement.js
 import { useCallback, useEffect, useRef } from 'react';
 import socketService from '../services/SocketService';
 
@@ -12,8 +11,8 @@ export const usePdfManagement = ({
   fabricCanvas,
   secondaryFabricCanvas,
 }) => {
-  const { pdfs, activePdfId, secondaryPdfId, isDualPaneMode } = state;
-  const activeRenderTasks = useRef({}); // Ref to hold active render tasks
+  const { pdfs, activePdfId, secondaryPdfId, isDualPaneMode, pdfViewState } = state;
+  const activeRenderTasks = useRef({});
 
   const renderPdfPage = useCallback(async (pdfData, pdfCanvas, overlayCanvas, fabricCanvasInstance, paneId) => {
     if (activeRenderTasks.current[paneId]) {
@@ -21,7 +20,6 @@ export const usePdfManagement = ({
     }
 
     if (!pdfData || !pdfCanvas.current) {
-      // Clear canvas if no PDF is active in this pane
       const canvas = pdfCanvas.current;
       if (canvas) {
         const context = canvas.getContext('2d');
@@ -29,16 +27,16 @@ export const usePdfManagement = ({
       }
       return;
     }
-  
+
     const { pdfDoc, currentPage, scale, pageLayers } = pdfData;
-  
+
     try {
       const page = await pdfDoc.getPage(currentPage);
       const viewport = page.getViewport({ scale: scale });
-      
+
       const canvas = pdfCanvas.current;
       const context = canvas.getContext('2d');
-      
+
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
@@ -48,10 +46,10 @@ export const usePdfManagement = ({
       };
 
       const renderTask = page.render(renderContext);
-      activeRenderTasks.current[paneId] = renderTask; // Store the new task
-  
+      activeRenderTasks.current[paneId] = renderTask;
+
       await renderTask.promise;
-  
+
       const overlay = overlayCanvas.current;
       if (overlay && fabricCanvasInstance.current) {
         overlay.width = viewport.width;
@@ -61,23 +59,27 @@ export const usePdfManagement = ({
         fabricCanvasInstance.current.setCurrentPage(currentPage);
       }
     } catch (error) {
-      // Silently ignore cancellation errors, log others
       if (error.name !== 'RenderingCancelledException') {
         console.error(`Error rendering page (${paneId}):`, error);
       }
     } finally {
-      // Clean up the task from the ref once it's done or cancelled
       delete activeRenderTasks.current[paneId];
     }
-  }, []); // This function is stable and doesn't need dependencies
+  }, []);
 
-  const activePdf = pdfs.find(p => p.id === activePdfId);
-  const secondaryPdf = pdfs.find(p => p.id === secondaryPdfId);
+  const defaultViewState = { scale: 1, initialScaleSet: false, currentPage: 1 };
 
-  // This effect now correctly depends on the PDF objects themselves
+  const activePdf = pdfs.find(p => p.id === activePdfId)
+    ? { ...pdfs.find(p => p.id === activePdfId), ...(pdfViewState[activePdfId] || defaultViewState) }
+    : null;
+
+  const secondaryPdf = pdfs.find(p => p.id === secondaryPdfId)
+    ? { ...pdfs.find(p => p.id === secondaryPdfId), ...(pdfViewState[secondaryPdfId] || defaultViewState) }
+    : null;
+
   useEffect(() => {
     renderPdfPage(activePdf, pdfCanvasRef, overlayCanvasRef, fabricCanvas, 'primary');
-    
+
     if (isDualPaneMode) {
       renderPdfPage(secondaryPdf, secondaryPdfCanvasRef, secondaryOverlayCanvasRef, secondaryFabricCanvas, 'secondary');
     }
@@ -86,21 +88,25 @@ export const usePdfManagement = ({
       Object.values(activeRenderTasks.current).forEach(task => task?.cancel());
     };
   }, [
-    activePdf?.id, 
-    activePdf?.currentPage, 
+    activePdf?.id,
+    activePdf?.currentPage,
     activePdf?.scale,
     secondaryPdf?.id,
     secondaryPdf?.currentPage,
     secondaryPdf?.scale,
-    isDualPaneMode, 
+    isDualPaneMode,
     renderPdfPage
   ]);
 
-  // --- The rest of the hook remains the same ---
-  
   const updatePdf = (pdfId, updates) => {
-    const newPdfs = pdfs.map(p => p.id === pdfId ? { ...p, ...updates } : p);
-    dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs }});
+    const newViewState = {
+      ...pdfViewState,
+      [pdfId]: {
+        ...(pdfViewState[pdfId] || defaultViewState),
+        ...updates,
+      },
+    };
+    dispatch({ type: 'SET_STATE', payload: { pdfViewState: newViewState } });
   };
 
   const closePdf = (pdfId, addNotification, isHost) => {
@@ -114,18 +120,22 @@ export const usePdfManagement = ({
     const newPdfs = pdfs.filter(p => p.id !== pdfId);
     let newActivePdfId = activePdfId;
     let newSecondaryPdfId = secondaryPdfId;
-    
+
     if (activePdfId === pdfId) {
         newActivePdfId = newPdfs.length > 0 ? newPdfs[0].id : null;
     }
     if (secondaryPdfId === pdfId) {
         newSecondaryPdfId = null;
     }
-    
-    dispatch({ type: 'SET_STATE', payload: { 
-        pdfs: newPdfs, 
+
+    const newViewState = { ...pdfViewState };
+    delete newViewState[pdfId];
+
+    dispatch({ type: 'SET_STATE', payload: {
+        pdfs: newPdfs,
         activePdfId: newActivePdfId,
-        secondaryPdfId: newSecondaryPdfId
+        secondaryPdfId: newSecondaryPdfId,
+        pdfViewState: newViewState
     }});
   };
 
@@ -134,7 +144,7 @@ export const usePdfManagement = ({
     if (pdf && pageNum >= 1 && pageNum <= pdf.totalPages) {
       updatePdf(pdfId, { currentPage: pageNum });
       if (socketService.isMultiplayerActive()) {
-        socketService.navigatePage(pdf.id, pageNum, pdf.scale);
+        socketService.navigatePage(pdf.id, pageNum, pdfViewState[pdfId]?.scale || 1);
       }
     }
   };
@@ -142,21 +152,23 @@ export const usePdfManagement = ({
   const zoomIn = (pdfId) => {
     const pdf = pdfs.find(p => p.id === pdfId);
     if (pdf) {
-      const newScale = Math.min(pdf.scale + 0.25, 3);
+      const currentScale = pdfViewState[pdfId]?.scale || 1;
+      const newScale = Math.min(currentScale + 0.25, 3);
       updatePdf(pdfId, { scale: newScale });
        if (socketService.isMultiplayerActive()) {
-        socketService.navigatePage(pdf.id, pdf.currentPage, newScale);
+        socketService.navigatePage(pdf.id, pdfViewState[pdfId]?.currentPage || 1, newScale);
       }
     }
   };
-  
+
   const zoomOut = (pdfId) => {
     const pdf = pdfs.find(p => p.id === pdfId);
     if (pdf) {
-      const newScale = Math.max(pdf.scale - 0.25, 0.5);
+      const currentScale = pdfViewState[pdfId]?.scale || 1;
+      const newScale = Math.max(currentScale - 0.25, 0.5);
       updatePdf(pdfId, { scale: newScale });
       if (socketService.isMultiplayerActive()) {
-        socketService.navigatePage(pdf.id, pdf.currentPage, newScale);
+        socketService.navigatePage(pdf.id, pdfViewState[pdfId]?.currentPage || 1, newScale);
       }
     }
   };
@@ -166,12 +178,12 @@ export const usePdfManagement = ({
     if (!pdf) return;
     try {
       const pageIndex = await pdf.pdfDoc.getPageIndex(dest[0]);
-      goToPage(pdfId, pageIndex + 1); 
+      goToPage(pdfId, pageIndex + 1);
     } catch (error) {
       console.error('Error navigating to bookmark:', error);
     }
   };
-  
+
   const handleTabSelect = (pdfId, paneId) => {
     if (paneId === 'primary') {
       dispatch({ type: 'SET_STATE', payload: { activePdfId: pdfId } });
@@ -182,18 +194,18 @@ export const usePdfManagement = ({
 
   const toggleDualPane = () => {
     if (!isDualPaneMode && pdfs.length > 1) {
-      dispatch({ type: 'SET_STATE', payload: { 
+      dispatch({ type: 'SET_STATE', payload: {
         isDualPaneMode: true,
         secondaryPdfId: pdfs.find(p => p.id !== activePdfId)?.id || null
       }});
     } else {
-      dispatch({ type: 'SET_STATE', payload: { 
+      dispatch({ type: 'SET_STATE', payload: {
         isDualPaneMode: false,
         secondaryPdfId: null
       }});
     }
   };
-  
+
   return {
     activePdf,
     secondaryPdf,

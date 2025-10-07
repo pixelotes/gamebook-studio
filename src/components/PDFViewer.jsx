@@ -40,7 +40,7 @@ const PDFViewer = ({
       const timerId = setTimeout(calculateInitialScale, 100);
       return () => clearTimeout(timerId);
 
-    }, [pdf?.id]);
+    }, [pdf?.id, pdf?.initialScaleSet, updatePdf]);
 
   // Get the appropriate canvas
   const canvas = paneId === 'primary' ? fabricCanvas.current : secondaryFabricCanvas.current;

@@ -11,9 +11,10 @@ const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(
 
 export const initialState = {
   pdfs: [],
+  pdfViewState: {}, // Stores view-related state like scale, initialScaleSet, and currentPage
   activePdfId: null,
-  secondaryPdfId: null, // NEW: ID of PDF in secondary pane
-  isDualPaneMode: false, // NEW: Whether dual pane is enabled
+  secondaryPdfId: null,
+  isDualPaneMode: false,
   activeTab: 'sheets',
   characters: [],
   selectedTemplate: 'custom',
