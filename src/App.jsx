@@ -56,7 +56,9 @@ const GamebookApp = () => {
   const [showMetadataModal, setShowMetadataModal] = useState(false);
 
   const pdfCanvasRef = useRef(null);
-  /* Legacy Canvas Refs Removed */
+  const secondaryPdfCanvasRef = useRef(null);
+  // Track active PDF render tasks to prevent race conditions (flipped PDF bug)
+  const renderTaskRef = useRef({ primary: null, secondary: null });
   const fileInputRef = useRef(null);
 
   const [showDebugModal, setShowDebugModal] = useState(false);
@@ -176,6 +178,12 @@ const GamebookApp = () => {
   const renderPdfPage = useCallback(async (pdfData, canvasRef, paneId = 'primary') => {
     if (!pdfData || !canvasRef.current) return;
 
+    // CANCEL previous task if it exists to prevent race condition (flipped PDF bug)
+    if (renderTaskRef.current[paneId]) {
+      renderTaskRef.current[paneId].cancel();
+      renderTaskRef.current[paneId] = null;
+    }
+
     const { pdfDoc, currentPage, scale, pageLayers } = pdfData;
 
     try {
@@ -188,23 +196,29 @@ const GamebookApp = () => {
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
+      // Reset transform to ensure clean slate
+      context.setTransform(1, 0, 0, 1, 0, 0);
       context.clearRect(0, 0, canvas.width, canvas.height);
 
       const renderContext = {
         canvasContext: context,
         viewport: viewport,
         background: 'white',
-        transform: null
       };
 
-      await page.render(renderContext).promise;
+      // Store the task so we can cancel it if needed
+      const renderTask = page.render(renderContext);
+      renderTaskRef.current[paneId] = renderTask;
 
-      const overlayCanvas = null; // Removed
-      const canvas_fabric = null; // Removed
+      await renderTask.promise;
 
-      /* Overlay Canvas Logic Removed - Handled by React-Konva */
+      // Clear the ref after successful completion
+      renderTaskRef.current[paneId] = null;
     } catch (error) {
-      console.error('Error rendering page:', error);
+      // Ignore cancelled errors - they are expected when rapidly switching pages
+      if (error.name !== 'RenderingCancelledException') {
+        console.error('Error rendering page:', error);
+      }
     }
   }, []);
 

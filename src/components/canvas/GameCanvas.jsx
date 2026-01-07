@@ -45,6 +45,31 @@ const Pointer = memo(({ x, y, color }) => {
 });
 Pointer.displayName = 'Pointer';
 
+// SVG Token Renderer - MUST be outside GameCanvas to prevent remounting on every render
+const SvgToken = memo(({ token, size, color, strokeColor }) => {
+    const coloredUrl = React.useMemo(() => {
+        if (!token?.svgContent) return null;
+        let svg = token.svgContent;
+        // Replace currentColor with actual color
+        svg = svg.replace(/currentColor/g, color);
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    }, [token?.svgContent, color]);
+
+    const [img] = useImage(coloredUrl || '');
+
+    return (
+        <KonvaImage
+            image={img}
+            width={size * 2}
+            height={size * 2}
+            offsetX={size}
+            offsetY={size}
+            opacity={token?.opacity || 1}
+        />
+    );
+});
+SvgToken.displayName = 'SvgToken';
+
 const GameCanvas = memo(({
     layers = [],
     width,
@@ -309,42 +334,7 @@ const GameCanvas = memo(({
         onUpdate(pdfId, pageId, newLayers);
     }, [onUpdate, pdfId, pageId]);
 
-
-    // Render Helpers
-    // SVG Renderer Component
-    const SvgToken = ({ token, size, color, strokeColor }) => {
-        const [image] = useImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(token.svgContent)}`);
-
-        // We need to re-color the SVG. 
-        // Konva Filters won't work easily on SVG images without caching.
-        // Better to inject the color into the SVG string before encoding?
-        // simple replace of "currentColor" or "fill"?
-
-        const coloredUrl = React.useMemo(() => {
-            if (!token.svgContent) return null;
-            let svg = token.svgContent;
-            // Replace currentColor
-            svg = svg.replace(/currentColor/g, color);
-            // Also replace fill="..." if it's not none, to be safe? 
-            // Most GBTK tokens should use currentColor.
-            return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-            // Most GBTK tokens should use currentColor.
-            return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-        }, [token.svgContent, color]);
-
-        const [img] = useImage(coloredUrl || '');
-
-        return (
-            <KonvaImage
-                image={img}
-                width={size * 2}
-                height={size * 2}
-                offsetX={size}
-                offsetY={size}
-                opacity={token.opacity || 1} // Support opacity override
-            />
-        );
-    };
+    // Render Helpers - SvgToken is now defined OUTSIDE GameCanvas for performance
 
     const renderTokenShape = (tokenObj, opacity = 1) => {
         const { shape, size, color, strokeColor } = tokenObj;
@@ -413,6 +403,7 @@ const GameCanvas = memo(({
             onClick={handleStageClick}
             style={{ position: 'absolute', top: 0, left: 0 }}
         >
+            {/* STATIC LAYER: Persistent objects - only redraws when layers prop changes */}
             <Layer>
                 {layers.map((layer) => {
                     if (!layer.visible) return null;
@@ -538,6 +529,10 @@ const GameCanvas = memo(({
                         </Group>
                     );
                 })}
+            </Layer>
+
+            {/* DYNAMIC LAYER: Temporary elements - updates frequently on mouse move without affecting static layer */}
+            <Layer listening={false}>
                 {/* Render Temp Path while drawing */}
                 {isDrawing.current && tool === 'draw' && (
                     <Line
@@ -592,7 +587,7 @@ const GameCanvas = memo(({
                 )}
                 {/* Ghost Token Preview */}
                 {tool === 'token' && mousePos && (
-                    <Group x={mousePos.x} y={mousePos.y} listening={false}>
+                    <Group x={mousePos.x} y={mousePos.y}>
                         {renderTokenShape({
                             shape: selectedTokenShape,
                             color: selectedTokenColor,
