@@ -34,13 +34,14 @@ This project is built with a modern, efficient, and scalable technology stack.
 
 You can run Gamebook Studio either manually on your local machine or through Docker.
 
+
 ### Prerequisites
 
 -   **Node.js**: Version 20.x or higher is required to run the application with Vite.
 -   **npm**: Should be included with your Node.js installation.
 -   **(Optional) Docker**: Required only if you choose the Docker setup.
 
----
+
 
 ### Manual Installation & Launch
 
