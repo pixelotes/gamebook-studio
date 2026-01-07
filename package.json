@@ -15,6 +15,7 @@
     "ioredis": "^5.9.0",
     "jsondiffpatch": "^0.7.3",
     "jszip": "^3.10.1",
+    "konva": "^10.0.12",
     "lodash": "^4.17.21",
     "lucide-react": "^0.544.0",
     "multer": "^2.0.2",
@@ -23,9 +24,11 @@
     "pdfjs-dist": "^5.4.149",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-konva": "^19.2.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.1.13",
+    "use-image": "^1.1.4",
     "web-vitals": "^5.1.0",
     "zod": "^4.3.5",
     "zustand": "^5.0.8"
@@ -58,6 +61,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
+    "baseline-browser-mapping": "^2.9.12",
     "buffer": "^6.0.3",
     "concurrently": "^9.2.1",
     "vite": "^7.1.7"

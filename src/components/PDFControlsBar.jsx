@@ -5,7 +5,10 @@ import { AppContext } from '../state/appState';
 const PDFControlsBar = ({
   pdf,
   paneId,
-  canvas,
+  layers = [],
+  onLayerUpdate,
+  pdfId,
+  pageId,
   onGoToPage,
   onZoomIn,
   onZoomOut,
@@ -55,20 +58,26 @@ const PDFControlsBar = ({
   }, [tocDropdownOpen]);
 
   const handleToggleVisibility = (layerId) => {
-    canvas?.toggleLayerVisibility(layerId);
-    dispatch({ type: 'SET_STATE', payload: { layerStateKey: state.layerStateKey + 1 } });
-  };
-
-  const handleSetActiveLayer = (layerId) => {
-    canvas?.setActiveLayer(layerId);
-    dispatch({ type: 'SET_STATE', payload: { layerStateKey: state.layerStateKey + 1 } });
-    setLocalDropdownOpen(false);
+    if (!onLayerUpdate) return;
+    const newLayers = layers.map(l => {
+      if (l.id === layerId) {
+        return { ...l, visible: !l.visible };
+      }
+      return l;
+    });
+    onLayerUpdate(pdfId, pageId, newLayers);
   };
 
   const handleClearLayer = (layerId) => {
+    if (!onLayerUpdate) return;
     if (window.confirm('Are you sure you want to clear all items from this layer? This action cannot be undone.')) {
-      canvas?.clearLayer(layerId);
-      dispatch({ type: 'SET_STATE', payload: { layerStateKey: state.layerStateKey + 1 } });
+      const newLayers = layers.map(l => {
+        if (l.id === layerId) {
+          return { ...l, objects: [] };
+        }
+        return l;
+      });
+      onLayerUpdate(pdfId, pageId, newLayers);
     }
   };
 
@@ -120,38 +129,35 @@ const PDFControlsBar = ({
       ref={controlsRef}
       className="absolute top-4 left-4 z-20"
     >
-        <div
-            className="flex items-center"
-            onMouseLeave={() => {
-                if (!isPinned && !localDropdownOpen && !tocDropdownOpen) {
-                    setIsExpanded(false);
-                }
-            }}
-        >
+      <div
+        className="flex items-center"
+        onMouseLeave={() => {
+          if (!isPinned && !localDropdownOpen && !tocDropdownOpen) {
+            setIsExpanded(false);
+          }
+        }}
+      >
         {/* Gear Icon (always visible) - now clickable with hover */}
         <button
           onClick={handleGearClick}
           onMouseEnter={() => !isPinned && setIsExpanded(true)}
-          className={`flex items-center backdrop-blur-sm rounded-lg border p-2 shadow-sm transition-colors ${
-            isPinned
+          className={`flex items-center backdrop-blur-sm rounded-lg border p-2 shadow-sm transition-colors ${isPinned
               ? 'bg-blue-100/70 border-blue-300/50 dark:bg-blue-900/30 dark:border-blue-600/50'
               : 'bg-white/30 border-gray-200/30 dark:bg-gray-800/30 dark:border-gray-700/30'
-          }`}
+            }`}
           title={isPinned ? "Unpin controls" : "Pin controls"}
         >
-          <Settings size={16} className={`transition-colors ${
-            isPinned
+          <Settings size={16} className={`transition-colors ${isPinned
               ? 'text-blue-600 dark:text-blue-400'
               : 'text-gray-600 dark:text-gray-300'
-          }`} />
+            }`} />
         </button>
 
         {/* Expandable Controls */}
         <div
           onMouseEnter={() => !isPinned && setIsExpanded(true)}
-          className={`flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200/50 ml-2 px-2 py-1 shadow-sm transition-all duration-300 dark:bg-gray-800/70 dark:border-gray-700/50 ${
-            isExpanded || isPinned ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'
-          }`}
+          className={`flex items-center gap-2 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200/50 ml-2 px-2 py-1 shadow-sm transition-all duration-300 dark:bg-gray-800/70 dark:border-gray-700/50 ${isExpanded || isPinned ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'
+            }`}
         >
           {/* Table of Contents */}
           {pdf.bookmarks && pdf.bookmarks.length > 0 && (
@@ -184,7 +190,7 @@ const PDFControlsBar = ({
                       className="w-6 h-6 bg-gray-200 text-gray-600 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white"
                       aria-label="Close table of contents"
                     >
-                      <X size={14}/>
+                      <X size={14} />
                     </button>
                   </div>
                   <div className="max-h-80 overflow-y-auto">
@@ -207,7 +213,7 @@ const PDFControlsBar = ({
               <Layers size={16} />
             </button>
 
-            {localDropdownOpen && canvas && (
+            {localDropdownOpen && layers.length > 0 && (
               <div
                 className="absolute w-64 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg z-30 border border-gray-200 p-2 space-y-1 dark:bg-gray-800/95 dark:border-gray-700"
                 style={layersMenuStyle}
@@ -220,9 +226,9 @@ const PDFControlsBar = ({
               >
                 <div className="px-2 py-1 text-xs font-bold text-gray-500 border-b -mx-2 mb-1 pb-2 dark:text-gray-400 dark:border-gray-600">
                   {isDualPaneMode && `${paneId.charAt(0).toUpperCase() + paneId.slice(1)} - `}
-                  Active: <span className="text-blue-600 dark:text-blue-400">{canvas.layers.find(l => l.id === canvas.activeLayer)?.name}</span>
+                  Layers
                 </div>
-                {canvas.layers.map(layer => (
+                {layers.map(layer => (
                   <div key={layer.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                     <div className="flex items-center gap-2">
                       <button
@@ -232,12 +238,11 @@ const PDFControlsBar = ({
                       >
                         {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
                       </button>
-                      <button
-                        onClick={() => handleSetActiveLayer(layer.id)}
-                        className={`text-sm text-left ${canvas.activeLayer === layer.id ? 'font-bold' : 'text-gray-700 dark:text-gray-300'}`}
+                      <span
+                        className="text-sm text-left text-gray-700 dark:text-gray-300"
                       >
                         {layer.name} ({layer.objects.length})
-                      </button>
+                      </span>
                     </div>
                     <button
                       onClick={() => handleClearLayer(layer.id)}
@@ -253,7 +258,7 @@ const PDFControlsBar = ({
                   className="absolute -top-2 -right-2 w-6 h-6 bg-gray-200 text-gray-600 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white"
                   aria-label="Close layers panel"
                 >
-                  <X size={14}/>
+                  <X size={14} />
                 </button>
               </div>
             )}

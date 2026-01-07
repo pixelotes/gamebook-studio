@@ -1,19 +1,22 @@
-import React, { useContext, useRef, useEffect } from 'react';
+import React, { useContext, useRef, useEffect, useState } from 'react';
 import { AppContext } from '../state/appState';
 import { FileText } from 'lucide-react';
 import PDFControlsBar from './PDFControlsBar';
+import GameCanvas from './canvas/GameCanvas';
 
 const PDFViewer = ({
   pdfCanvasRef,
-  overlayCanvasRef,
+  // overlayCanvasRef, // No longer needed
   pdf,
   paneId = 'primary',
   updatePdf,
-  onBookmarkNavigate
+  onBookmarkNavigate,
+  onLayerUpdate // Passed from App -> PDFPane -> PDFViewer
 }) => {
-  const { state, fabricCanvas, secondaryFabricCanvas, goToPage, zoomIn, zoomOut } = useContext(AppContext);
-  const { selectedTool, isDualPaneMode } = state;
+  const { state, goToPage, zoomIn, zoomOut } = useContext(AppContext);
+  const { selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, tokenSize, isDualPaneMode } = state;
   const scrollContainerRef = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const calculateInitialScale = async () => {
@@ -27,7 +30,7 @@ const PDFViewer = ({
             const page = await pdf.pdfDoc.getPage(1); // Get page 1 for dimensions
             const viewport = page.getViewport({ scale: 1 });
             const verticalPadding = 32; // Add some padding so it's not edge-to-edge
-            
+
             // Calculate scale and ensure it's not excessively large
             const newScale = Math.min(2, (viewerHeight - verticalPadding) / viewport.height);
 
@@ -47,8 +50,31 @@ const PDFViewer = ({
 
   }, [pdf, updatePdf]);
 
-  // Get the appropriate canvas
-  const canvas = paneId === 'primary' ? fabricCanvas.current : secondaryFabricCanvas.current;
+  // Monitor PDF Canvas size changes to update GameCanvas size
+  useEffect(() => {
+    if (!pdfCanvasRef.current) return;
+
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
+      }
+    });
+
+    observer.observe(pdfCanvasRef.current);
+
+    // Initial check
+    if (pdfCanvasRef.current.width !== dimensions.width || pdfCanvasRef.current.height !== dimensions.height) {
+      setDimensions({
+        width: pdfCanvasRef.current.width,
+        height: pdfCanvasRef.current.height
+      });
+    }
+
+    return () => observer.disconnect();
+  }, [pdfCanvasRef, pdf]); // Re-run if pdf changes (might trigger re-render of canvas)
 
   const renderEmptyState = () => (
     <div className="flex items-center justify-center h-full">
@@ -90,6 +116,19 @@ const PDFViewer = ({
     zoomOut(pdf.id);
   };
 
+  // Get current layers
+  const currentLayers = pdf && pdf.pageLayers && pdf.pageLayers[pdf.currentPage]
+    ? pdf.pageLayers[pdf.currentPage]
+    : [
+      { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
+      { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
+      { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
+    ];
+
+  // We actually need to ensure the structure exists if it's undefined, similar to MockFabricCanvas logic
+  // But passing it as default value above is safer for declarative rendering.
+  // If we modify it, `onLayerUpdate` should handle saving it back to state.
+
   return (
     <div className="flex-1 bg-gray-50 dark:bg-gray-900 flex flex-col h-full relative">
       <div ref={scrollContainerRef} className="flex-1" style={{ overflow: 'auto' }}>
@@ -98,8 +137,8 @@ const PDFViewer = ({
             <div
               className="relative"
               style={{
-                width: pdfCanvasRef.current ? pdfCanvasRef.current.width : 'auto',
-                height: pdfCanvasRef.current ? pdfCanvasRef.current.height : 'auto',
+                width: dimensions.width || 'auto',
+                height: dimensions.height || 'auto',
               }}
             >
               <canvas
@@ -107,25 +146,39 @@ const PDFViewer = ({
                 className="block shadow-lg border border-gray-300 rounded"
                 style={{ background: 'white' }}
               />
-              <canvas
-                ref={overlayCanvasRef}
-                className="absolute top-0 left-0 pointer-events-auto rounded"
-                style={{
-                  zIndex: 10,
-                  cursor: selectedTool === 'select' ? 'default' : 'crosshair'
-                }}
-              />
+              {dimensions.width > 0 && (
+                <GameCanvas
+                  layers={currentLayers}
+                  width={dimensions.width}
+                  height={dimensions.height}
+                  scale={pdf.scale}
+                  tool={selectedTool}
+                  selectedColor={selectedColor}
+                  selectedTokenShape={selectedTokenShape}
+                  selectedTokenColor={selectedTokenColor}
+                  tokenSize={tokenSize}
+                  lineWidth={state.lineWidth}
+                  onUpdate={onLayerUpdate}
+                  pdfId={pdf.id}
+                  pageId={pdf.currentPage}
+                  tokenPacks={state.tokenPacks}
+                  embeddedTokens={state.embeddedTokens}
+                />
+              )}
             </div>
           </div>
         ) : (
           renderEmptyState()
         )}
       </div>
-      
+
       <PDFControlsBar
         pdf={pdf}
         paneId={paneId}
-        canvas={canvas}
+        layers={currentLayers}
+        onLayerUpdate={onLayerUpdate}
+        pdfId={pdf?.id}
+        pageId={pdf?.currentPage}
         onGoToPage={handleGoToPage}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
