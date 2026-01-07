@@ -18,6 +18,23 @@ const Toolbar = () => {
   const [tokenSearch, setTokenSearch] = useState('');
   const [showTokenBrowser, setShowTokenBrowser] = useState(false);
   const searchInputRef = useRef(null);
+  const toolbarRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!activeDropdown) return;
+
+    const handleClickOutside = (event) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(event.target)) {
+        dispatch({ type: 'SET_STATE', payload: { activeDropdown: null } });
+        setTokenSearch('');
+      }
+    };
+
+    // Use mousedown for faster response
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeDropdown, dispatch]);
 
   // This effect reliably focuses the search input when the dropdown is opened
   useEffect(() => {
@@ -86,7 +103,7 @@ const Toolbar = () => {
 
   return (
     <>
-      <div className="bg-white border-b border-gray-200 px-3 py-1 flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+      <div ref={toolbarRef} className="bg-white border-b border-gray-200 px-3 py-1 flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setIsSidebarVisible(!isSidebarVisible)}
