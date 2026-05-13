@@ -116,6 +116,12 @@ const PDFViewer = ({
     zoomOut(pdf.id);
   };
 
+  const cursorForTool = (tool) => {
+    if (tool === 'text') return 'text';
+    if (tool === 'select' || tool === 'pan') return 'default';
+    return 'crosshair';
+  };
+
   const handlePanMouseDown = (e) => {
     if (selectedTool !== 'pan' || !scrollContainerRef.current) return;
     const startX = e.clientX;
@@ -166,6 +172,7 @@ const PDFViewer = ({
               style={{
                 width: dimensions.width || 'auto',
                 height: dimensions.height || 'auto',
+                cursor: cursorForTool(selectedTool),
               }}
             >
               <canvas

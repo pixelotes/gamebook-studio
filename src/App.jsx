@@ -416,6 +416,66 @@ const GamebookApp = () => {
     };
   }, [gameStateVersion]);
 
+  // Keyboard shortcuts for tools (V/H/T/R/P/E) + Space for temporary pan
+  useEffect(() => {
+    let toolBeforePan = null;
+
+    const isTypingTarget = (target) => {
+      if (!target) return false;
+      const tag = target.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
+    };
+
+    const setTool = (toolId) => {
+      dispatch({ type: 'SET_STATE', payload: { selectedTool: toolId } });
+    };
+
+    const SHORTCUTS = {
+      v: 'select',
+      h: 'pan',
+      t: 'text',
+      r: 'rectangle',
+      p: 'draw',
+      e: 'eraser',
+    };
+
+    const handleKeyDown = (ev) => {
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (isTypingTarget(ev.target)) return;
+
+      if (ev.code === 'Space' && !ev.repeat) {
+        const current = stateRef.current.selectedTool;
+        if (current !== 'pan') {
+          toolBeforePan = current;
+          setTool('pan');
+        }
+        ev.preventDefault();
+        return;
+      }
+
+      const tool = SHORTCUTS[ev.key.toLowerCase()];
+      if (tool) {
+        ev.preventDefault();
+        setTool(tool);
+      }
+    };
+
+    const handleKeyUp = (ev) => {
+      if (ev.code === 'Space' && toolBeforePan !== null) {
+        setTool(toolBeforePan);
+        toolBeforePan = null;
+        ev.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
   const prevCharacters = usePrevious(characters);
   useEffect(() => {
     if (socketService.isMultiplayerActive() && JSON.stringify(prevCharacters) !== JSON.stringify(characters)) {
