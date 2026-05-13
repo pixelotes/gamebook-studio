@@ -133,7 +133,7 @@ const GamebookApp = () => {
     }
   }, []);
 
-  const handleUnifiedLoad = async (event) => {
+  const handleUnifiedLoad = async (event, targetPane = 'primary') => {
     const files = event.target.files;
     if (files.length === 0) return;
 
@@ -170,7 +170,7 @@ const GamebookApp = () => {
     if (pdfFiles.length > 0) {
       const dt = new DataTransfer();
       pdfFiles.forEach(f => dt.items.add(f));
-      await handleFileUpload({ target: { files: dt.files } });
+      await handleFileUpload({ target: { files: dt.files } }, targetPane);
     }
 
     // Reset the input
@@ -590,7 +590,7 @@ const GamebookApp = () => {
     addNotification('Left multiplayer session', 'info');
   };
 
-  const handleFileUpload = async (event) => {
+  const handleFileUpload = async (event, targetPane = 'primary') => {
     const files = event.target.files;
     if (files.length === 0) return;
 
@@ -669,10 +669,11 @@ const GamebookApp = () => {
       }
     } else {
       if (newPdfsData.length > 0) {
+        const paneIdKey = targetPane === 'secondary' ? 'secondaryPdfId' : 'activePdfId';
         dispatch({
           type: 'SET_STATE', payload: {
             pdfs: [...pdfs, ...newPdfsData],
-            activePdfId: newPdfsData[0].id,
+            [paneIdKey]: newPdfsData[0].id,
           }
         });
 
@@ -1230,6 +1231,7 @@ const GamebookApp = () => {
                 onTabClose={handleTabClose}
                 onBookmarkNavigate={handleBookmarkNavigate}
                 onLayerUpdate={handleLayerUpdate}
+                onFilesDropped={(files) => handleUnifiedLoad({ target: { files } }, 'primary')}
               />
             </div>
 
@@ -1267,6 +1269,7 @@ const GamebookApp = () => {
                   onTabClose={handleTabClose}
                   onBookmarkNavigate={handleBookmarkNavigate}
                   onLayerUpdate={handleLayerUpdate}
+                  onFilesDropped={(files) => handleUnifiedLoad({ target: { files } }, 'secondary')}
                 />
               </div>
             )}
