@@ -1,0 +1,577 @@
+// @vitest-environment node
+//
+// Integration test suite for server.jsx
+//
+// Strategy:
+//   - We don't want to spin up a real Redis, so we replace `ioredis` in the
+//     CJS require cache with an in-memory mock BEFORE loading server.jsx.
+//   - server.jsx auto-listens on PORT, so we set PORT=0 to grab a free port.
+//   - server.jsx has the `.jsx` extension but contains pure JS, so we register
+//     a CJS loader for `.jsx` (= the `.js` loader) via Module._extensions.
+//   - Tests run end-to-end against the real Express + Socket.IO instance.
+
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import Module from 'module';
+import { createRequire } from 'module';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { io as ioClient } from 'socket.io-client';
+import pako from 'pako';
+
+// ---------------------------------------------------------------------------
+// In-memory ioredis mock
+// ---------------------------------------------------------------------------
+const store = new Map();
+
+class MockRedis {
+  constructor() {
+    this.status = 'ready';
+  }
+  async get(key) {
+    return store.has(key) ? store.get(key) : null;
+  }
+  async set(key, value /* ...opts (EX, ttl) ignored */) {
+    store.set(key, value);
+    return 'OK';
+  }
+  async del(...keys) {
+    let n = 0;
+    for (const k of keys) if (store.delete(k)) n++;
+    return n;
+  }
+  async keys(pattern) {
+    const re = new RegExp(
+      '^' +
+        pattern
+          .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+          .replace(/\*/g, '.*') +
+        '$'
+    );
+    return [...store.keys()].filter((k) => re.test(k));
+  }
+  on() {
+    return this;
+  }
+  quit() {
+    return Promise.resolve();
+  }
+  disconnect() {}
+}
+
+// ---------------------------------------------------------------------------
+// Server bootstrap
+// ---------------------------------------------------------------------------
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const serverPath = path.resolve(__dirname, 'server.jsx');
+
+let app, server, io, baseUrl;
+const uploadedPaths = [];
+
+beforeAll(async () => {
+  process.env.PORT = '0';
+  process.env.REDIS_URL = 'redis://mock';
+
+  // Register a CJS loader for `.jsx` (server.jsx is pure JS despite extension)
+  if (!Module._extensions['.jsx']) {
+    Module._extensions['.jsx'] = Module._extensions['.js'];
+  }
+
+  // Pre-populate require cache with the ioredis mock so that
+  // `require('ioredis')` inside server.jsx returns MockRedis.
+  const localRequire = createRequire(serverPath);
+  const ioredisPath = localRequire.resolve('ioredis');
+  localRequire.cache[ioredisPath] = {
+    id: ioredisPath,
+    filename: ioredisPath,
+    loaded: true,
+    exports: MockRedis,
+    children: [],
+    paths: [],
+  };
+
+  const mod = localRequire(serverPath);
+  ({ app, server, io } = mod);
+
+  await new Promise((resolve) => {
+    if (server.listening) return resolve();
+    server.once('listening', resolve);
+  });
+
+  const { port } = server.address();
+  baseUrl = `http://127.0.0.1:${port}`;
+});
+
+afterAll(async () => {
+  io.close();
+  await new Promise((r) => server.close(r));
+  for (const p of uploadedPaths) {
+    try {
+      fs.unlinkSync(p);
+    } catch (_) {
+      /* already gone */
+    }
+  }
+});
+
+beforeEach(() => {
+  store.clear();
+});
+
+// ---------------------------------------------------------------------------
+// Socket client helpers
+// ---------------------------------------------------------------------------
+const openClients = [];
+
+function connect() {
+  return new Promise((resolve, reject) => {
+    const client = ioClient(baseUrl, {
+      transports: ['websocket'],
+      forceNew: true,
+      reconnection: false,
+    });
+    openClients.push(client);
+    client.once('connect', () => resolve(client));
+    client.once('connect_error', reject);
+  });
+}
+
+function once(socket, event, timeoutMs = 1500) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new Error(`Timeout waiting for '${event}'`)),
+      timeoutMs
+    );
+    socket.once(event, (...args) => {
+      clearTimeout(t);
+      resolve(args.length <= 1 ? args[0] : args);
+    });
+  });
+}
+
+function emitWithAck(socket, event, payload) {
+  return new Promise((resolve) => {
+    const cb = (resp) => resolve(resp);
+    if (payload === undefined) socket.emit(event, cb);
+    else socket.emit(event, payload, cb);
+  });
+}
+
+afterEach(() => {
+  while (openClients.length) {
+    const c = openClients.pop();
+    if (c.connected) c.disconnect();
+    c.removeAllListeners();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// REST API
+// ---------------------------------------------------------------------------
+describe('REST API', () => {
+  it('GET /health reports redis as connected', async () => {
+    const res = await fetch(`${baseUrl}/health`);
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.status).toBe('ok');
+    expect(body.redis).toBe('connected');
+    expect(typeof body.timestamp).toBe('string');
+  });
+
+  it('POST /api/sessions creates a session and persists it', async () => {
+    const res = await fetch(`${baseUrl}/api/sessions`, { method: 'POST' });
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.sessionId).toMatch(/^[A-Z0-9_-]{10}$/);
+    expect(store.has(`session:${body.sessionId}`)).toBe(true);
+  });
+
+  it('GET /api/sessions lists previously created sessions', async () => {
+    await fetch(`${baseUrl}/api/sessions`, { method: 'POST' });
+    await fetch(`${baseUrl}/api/sessions`, { method: 'POST' });
+    const res = await fetch(`${baseUrl}/api/sessions`);
+    const list = await res.json();
+    expect(Array.isArray(list)).toBe(true);
+    expect(list).toHaveLength(2);
+    for (const s of list) {
+      expect(s).toHaveProperty('id');
+      expect(s).toHaveProperty('gameState');
+    }
+  });
+
+  it('POST /api/sessions/:id/upload-pdf rejects unknown session', async () => {
+    const fd = new FormData();
+    fd.append(
+      'pdf',
+      new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])], {
+        type: 'application/pdf',
+      }),
+      'phantom.pdf'
+    );
+    fd.append('totalPages', '1');
+    const res = await fetch(`${baseUrl}/api/sessions/NOPE/upload-pdf`, {
+      method: 'POST',
+      body: fd,
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('POST upload-pdf attaches PDF metadata and serves the binary back', async () => {
+    const create = await fetch(`${baseUrl}/api/sessions`, { method: 'POST' });
+    const { sessionId } = await create.json();
+
+    const fd = new FormData();
+    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"
+    fd.append(
+      'pdf',
+      new Blob([pdfBytes], { type: 'application/pdf' }),
+      'rulebook.pdf'
+    );
+    fd.append('totalPages', '7');
+    fd.append('bookmarks', JSON.stringify([{ page: 1, title: 'Intro' }]));
+
+    const upload = await fetch(
+      `${baseUrl}/api/sessions/${sessionId}/upload-pdf`,
+      { method: 'POST', body: fd }
+    );
+    expect(upload.status).toBe(200);
+    const { success, pdfData } = await upload.json();
+    expect(success).toBe(true);
+    expect(pdfData.fileName).toBe('rulebook.pdf');
+    expect(pdfData.totalPages).toBe(7);
+    expect(pdfData.bookmarks).toEqual([{ page: 1, title: 'Intro' }]);
+    expect(pdfData.currentPage).toBe(1);
+
+    uploadedPaths.push(pdfData.filePath);
+
+    const serve = await fetch(
+      `${baseUrl}/api/sessions/${sessionId}/pdf/${pdfData.id}`
+    );
+    expect(serve.status).toBe(200);
+    expect(serve.headers.get('content-type')).toContain('application/pdf');
+    const buf = new Uint8Array(await serve.arrayBuffer());
+    expect(Array.from(buf)).toEqual(Array.from(pdfBytes));
+  });
+
+  it('GET /api/sessions/:id/pdf/:pdfId returns 404 when session or pdf missing', async () => {
+    const r1 = await fetch(`${baseUrl}/api/sessions/NOPE/pdf/whatever`);
+    expect(r1.status).toBe(404);
+
+    const create = await fetch(`${baseUrl}/api/sessions`, { method: 'POST' });
+    const { sessionId } = await create.json();
+    const r2 = await fetch(`${baseUrl}/api/sessions/${sessionId}/pdf/missing`);
+    expect(r2.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Socket.IO — session lifecycle
+// ---------------------------------------------------------------------------
+describe('Socket.IO — session lifecycle', () => {
+  it('create-session returns sessionId and marks creator as host', async () => {
+    const client = await connect();
+    const resp = await emitWithAck(client, 'create-session');
+    expect(resp.success).toBe(true);
+    expect(resp.sessionId).toMatch(/^[A-Z0-9_-]{10}$/);
+    expect(resp.isHost).toBe(true);
+    expect(resp.clientCount).toBe(1);
+    expect(resp.version).toBe(0);
+    expect(resp.gameState).toMatchObject({
+      pdfs: [],
+      characters: [],
+      counters: [],
+      notes: '',
+    });
+  });
+
+  it('join-session attaches an existing session and emits player-joined to others', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+
+    const joinerPromise = (async () => {
+      const joiner = await connect();
+      const joined = once(host, 'player-joined');
+      const resp = await emitWithAck(joiner, 'join-session', created.sessionId);
+      return { resp, broadcast: await joined };
+    })();
+
+    const { resp, broadcast } = await joinerPromise;
+    expect(resp.success).toBe(true);
+    expect(resp.isHost).toBe(false);
+    expect(resp.clientCount).toBe(2);
+    expect(resp.gameState).toEqual(created.gameState);
+    expect(broadcast.clientCount).toBe(2);
+    expect(typeof broadcast.socketId).toBe('string');
+  });
+
+  it('join-session creates a session on the fly when the id is unknown', async () => {
+    const client = await connect();
+    const resp = await emitWithAck(client, 'join-session', 'FRESHSESS1');
+    expect(resp.success).toBe(true);
+    expect(store.has('session:FRESHSESS1')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Socket.IO — state sync (diff/patch + versioning)
+// ---------------------------------------------------------------------------
+describe('Socket.IO — state synchronization', () => {
+  it('broadcasts game-state-delta with monotonic version and CRC', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    const delta1 = once(peer, 'game-state-delta');
+    host.emit('update-game-state', { notes: 'first edit' });
+    const d1 = await delta1;
+    expect(d1.version).toBe(1);
+    expect(d1.fromVersion).toBe(0);
+    expect(d1.crc).toMatch(/^[0-9a-f]+$/);
+    expect(d1.delta).toBeDefined();
+
+    const delta2 = once(peer, 'game-state-delta');
+    host.emit('update-game-state', { notes: 'second edit' });
+    const d2 = await delta2;
+    expect(d2.version).toBe(2);
+    expect(d2.fromVersion).toBe(1);
+  });
+
+  it('does NOT echo the delta back to the sender', async () => {
+    const host = await connect();
+    await emitWithAck(host, 'create-session');
+
+    let received = false;
+    host.on('game-state-delta', () => {
+      received = true;
+    });
+    host.emit('update-game-state', { notes: 'silent' });
+    // Allow event loop to flush
+    await new Promise((r) => setTimeout(r, 100));
+    expect(received).toBe(false);
+  });
+
+  it('silently rejects updates that violate the zod schema', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    let received = false;
+    peer.on('game-state-delta', () => {
+      received = true;
+    });
+    // `notes` must be a string per schema → invalid
+    host.emit('update-game-state', { notes: 12345 });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(received).toBe(false);
+
+    // Sanity: a valid update right after still goes through
+    const ok = once(peer, 'game-state-delta');
+    host.emit('update-game-state', { notes: 'recovered' });
+    const d = await ok;
+    expect(d.version).toBe(1);
+  });
+
+  it('request-missing-updates returns deltas when fromVersion is in history', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+    // Use a peer to observe each broadcast — the server emits the delta
+    // AFTER persisting, so awaiting it serializes the updates and avoids the
+    // documented race condition in update-game-state.
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    for (const notes of ['v1', 'v2', 'v3']) {
+      const next = once(peer, 'game-state-delta');
+      host.emit('update-game-state', { notes });
+      await next;
+    }
+
+    const resp = await emitWithAck(host, 'request-missing-updates', {
+      fromVersion: 1,
+    });
+    expect(resp.success).toBe(true);
+    expect(resp.deltas).toBeDefined();
+    expect(resp.deltas.map((d) => d.version)).toEqual([2, 3]);
+    expect(resp.fullState).toBeUndefined();
+  });
+
+  it('request-missing-updates returns a full state when history has a gap', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+
+    host.emit('update-game-state', { notes: 'only edit' });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const resp = await emitWithAck(host, 'request-missing-updates', {
+      fromVersion: 99,
+    });
+    expect(resp.success).toBe(true);
+    expect(resp.fullState).toBeDefined();
+    expect(resp.version).toBe(1);
+    expect(resp.deltas).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Socket.IO — pages, layers, presence, dice
+// ---------------------------------------------------------------------------
+describe('Socket.IO — events', () => {
+  it('navigate-page persists currentPage/scale and broadcasts to peers', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+
+    // Seed a pdf via game-state update so the page can be navigated
+    host.emit('update-game-state', {
+      pdfs: [
+        {
+          id: 'pdf-1',
+          fileName: 'x.pdf',
+          totalPages: 10,
+          currentPage: 1,
+          scale: 1,
+          pageLayers: {},
+          bookmarks: [],
+        },
+      ],
+    });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    const navigated = once(peer, 'page-navigated');
+    host.emit('navigate-page', { pdfId: 'pdf-1', currentPage: 4, scale: 1.5 });
+    const data = await navigated;
+    expect(data).toEqual({ pdfId: 'pdf-1', currentPage: 4, scale: 1.5 });
+
+    // Persisted in the stored session
+    const raw = JSON.parse(store.get(`session:${created.sessionId}`));
+    const pdf = raw.gameState.pdfs.find((p) => p.id === 'pdf-1');
+    expect(pdf.currentPage).toBe(4);
+    expect(pdf.scale).toBe(1.5);
+  });
+
+  it('update-layers decompresses the payload, persists it, and re-broadcasts', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    const payload = {
+      pdfId: 'pdf-X',
+      pageNum: 2,
+      layers: { drawings: [{ id: 'a', kind: 'line' }] },
+    };
+    const compressed = pako.deflate(JSON.stringify(payload));
+
+    const broadcast = once(peer, 'layers-updated');
+    host.emit('update-layers', compressed);
+    const echoed = await broadcast;
+
+    // Broadcast is forwarded verbatim (still compressed)
+    const decoded = JSON.parse(pako.inflate(echoed, { to: 'string' }));
+    expect(decoded).toEqual(payload);
+
+    // Persisted into session.gameState.pageLayers
+    const raw = JSON.parse(store.get(`session:${created.sessionId}`));
+    expect(raw.gameState.pageLayers['pdf-X']['2']).toEqual(payload.layers);
+  });
+
+  it('pointer-event is broadcast to peers but not echoed to the sender', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    let selfEcho = false;
+    host.on('pointer-event', () => {
+      selfEcho = true;
+    });
+    const fwd = once(peer, 'pointer-event');
+    host.emit('pointer-event', { x: 10, y: 20, color: 'red' });
+    const got = await fwd;
+    expect(got).toEqual({ x: 10, y: 20, color: 'red' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(selfEcho).toBe(false);
+  });
+
+  it('dice-roll is echoed to ALL clients including the sender, with rolledBy + timestamp', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    const onHost = once(host, 'dice-rolled');
+    const onPeer = once(peer, 'dice-rolled');
+    host.emit('dice-roll', { sides: 20, result: 17 });
+    const [hostMsg, peerMsg] = await Promise.all([onHost, onPeer]);
+
+    for (const msg of [hostMsg, peerMsg]) {
+      expect(msg.sides).toBe(20);
+      expect(msg.result).toBe(17);
+      expect(msg.rolledBy).toBe(host.id);
+      expect(typeof msg.timestamp).toBe('number');
+    }
+  });
+
+  it('real-time-update is forwarded with a fromSocket field', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    const fwd = once(peer, 'real-time-update');
+    host.emit('real-time-update', { kind: 'cursor', x: 1 });
+    const msg = await fwd;
+    expect(msg.kind).toBe('cursor');
+    expect(msg.x).toBe(1);
+    expect(msg.fromSocket).toBe(host.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Socket.IO — disconnect / host reassignment
+// ---------------------------------------------------------------------------
+describe('Socket.IO — disconnect handling', () => {
+  it('deletes the session from Redis when the last client leaves', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+    expect(store.has(`session:${created.sessionId}`)).toBe(true);
+
+    host.disconnect();
+    // Give the server time to react to the disconnect
+    await new Promise((r) => setTimeout(r, 100));
+    expect(store.has(`session:${created.sessionId}`)).toBe(false);
+  });
+
+  it('emits player-left and keeps the session alive when only one of two leaves', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    const left = once(host, 'player-left');
+    peer.disconnect();
+    const msg = await left;
+    expect(msg.clientCount).toBe(1);
+    expect(store.has(`session:${created.sessionId}`)).toBe(true);
+  });
+
+  it('reassigns host and emits host-changed when the host disconnects', async () => {
+    const host = await connect();
+    const created = await emitWithAck(host, 'create-session');
+    const peer = await connect();
+    await emitWithAck(peer, 'join-session', created.sessionId);
+
+    const hostChanged = once(peer, 'host-changed');
+    host.disconnect();
+    const msg = await hostChanged;
+    expect(msg.newHostId).toBe(peer.id);
+
+    const raw = JSON.parse(store.get(`session:${created.sessionId}`));
+    expect(raw.hostSocketId).toBe(peer.id);
+  });
+});

@@ -17,8 +17,6 @@ export const initialState = {
   activeTab: 'sheets',
   characters: [],
   selectedTemplate: 'custom',
-  characters: [],
-  selectedTemplate: 'custom',
   notes: '',
   counters: [],
   tokenPacks: [], // NEW: Library of loaded packs
