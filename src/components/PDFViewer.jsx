@@ -119,6 +119,7 @@ const PDFViewer = ({
   const cursorForTool = (tool) => {
     if (tool === 'text') return 'text';
     if (tool === 'select' || tool === 'pan') return 'default';
+    if (tool === 'eraser') return 'none';
     return 'crosshair';
   };
 

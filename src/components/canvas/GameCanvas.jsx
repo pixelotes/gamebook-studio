@@ -101,8 +101,9 @@ const GameCanvas = memo(({
     const [tempRect, setTempRect] = useState(null);
     const [rulerStart, setRulerStart] = useState(null);
     const [rulerCurrent, setRulerCurrent] = useState(null);
-    const [mousePos, setMousePos] = useState(null); // Track mouse for ghost token
+    const [mousePos, setMousePos] = useState(null); // Track mouse for ghost token / eraser
     const [textEditor, setTextEditor] = useState(null);
+    const [eraserTrail, setEraserTrail] = useState([]); // [{x, y, ts}]
 
     // Use ref to access latest layers in timeouts
     const layersRef = useRef(layers);
@@ -114,6 +115,26 @@ const GameCanvas = memo(({
     useEffect(() => {
         setTextEditor(null);
     }, [pdfId, pageId]);
+
+    // Eraser trail fade-out: while tool is eraser, drop old points each frame
+    useEffect(() => {
+        if (tool !== 'eraser') {
+            setEraserTrail([]);
+            return;
+        }
+        let rafId;
+        const tick = () => {
+            const now = Date.now();
+            setEraserTrail(prev => {
+                if (prev.length === 0) return prev;
+                const next = prev.filter(p => now - p.ts < 350);
+                return next.length === prev.length ? prev : next;
+            });
+            rafId = requestAnimationFrame(tick);
+        };
+        rafId = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(rafId);
+    }, [tool]);
 
     // Helper to get relative pointer position
     const getRelativePointerPosition = (stage) => {
@@ -143,11 +164,21 @@ const GameCanvas = memo(({
         const stage = e.target.getStage();
         const pos = getRelativePointerPosition(stage);
 
-        // Always update mouse pos for ghost token
-        if (tool === 'token') {
+        // Track mouse for ghost previews (token, eraser)
+        if (tool === 'token' || tool === 'eraser') {
             setMousePos(pos);
         } else if (mousePos) {
             setMousePos(null);
+        }
+
+        // Push to eraser trail
+        if (tool === 'eraser') {
+            const now = Date.now();
+            setEraserTrail(prev => {
+                const appended = [...prev, { x: pos.x, y: pos.y, ts: now }];
+                const trimmed = appended.filter(p => now - p.ts < 350);
+                return trimmed.length > 30 ? trimmed.slice(-30) : trimmed;
+            });
         }
 
         if (!isDrawing.current) return;
@@ -434,6 +465,10 @@ const GameCanvas = memo(({
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onClick={handleStageClick}
+            onMouseLeave={() => {
+                setMousePos(null);
+                setEraserTrail([]);
+            }}
             style={{ position: 'absolute', top: 0, left: 0 }}
         >
             {/* STATIC LAYER: Persistent objects - only redraws when layers prop changes */}
@@ -641,6 +676,42 @@ const GameCanvas = memo(({
                             strokeColor: selectedTokenColor === '#ffffff' ? '#000000' : '#ffffff',
                             size: tokenSize
                         }, 0.5)}
+                    </Group>
+                )}
+                {/* Eraser trail (estelita) */}
+                {tool === 'eraser' && eraserTrail.length > 1 && (
+                    <Line
+                        points={eraserTrail.flatMap(p => [p.x, p.y])}
+                        stroke="#ec4899"
+                        strokeWidth={3}
+                        opacity={0.45}
+                        lineCap="round"
+                        lineJoin="round"
+                        tension={0.4}
+                        strokeScaleEnabled={false}
+                    />
+                )}
+                {/* Eraser cursor (gomita) — invariant size at any zoom */}
+                {tool === 'eraser' && mousePos && (
+                    <Group x={mousePos.x} y={mousePos.y} scaleX={1 / scale} scaleY={1 / scale} listening={false}>
+                        <Rect
+                            x={-12}
+                            y={-7}
+                            width={24}
+                            height={10}
+                            cornerRadius={3}
+                            fill="#fbcfe8"
+                            stroke="#831843"
+                            strokeWidth={1.2}
+                        />
+                        <Rect
+                            x={-12}
+                            y={3}
+                            width={24}
+                            height={4}
+                            cornerRadius={1.5}
+                            fill="#831843"
+                        />
                     </Group>
                 )}
             </Layer>

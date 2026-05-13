@@ -69,6 +69,8 @@ const GamebookApp = () => {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  const goToPageRef = useRef(null);
+
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -450,6 +452,17 @@ const GamebookApp = () => {
           setTool('pan');
         }
         ev.preventDefault();
+        return;
+      }
+
+      // Page navigation on the active (primary) PDF
+      if (ev.key === 'ArrowLeft' || ev.key === 'PageUp' || ev.key === 'ArrowRight' || ev.key === 'PageDown') {
+        const { activePdfId: activeId, pdfs: currentPdfs } = stateRef.current;
+        const activePdfState = currentPdfs.find(p => p.id === activeId);
+        if (!activePdfState || !goToPageRef.current) return;
+        const delta = (ev.key === 'ArrowLeft' || ev.key === 'PageUp') ? -1 : 1;
+        ev.preventDefault();
+        goToPageRef.current(activeId, activePdfState.currentPage + delta);
         return;
       }
 
@@ -931,6 +944,7 @@ const GamebookApp = () => {
       }
     }
   };
+  goToPageRef.current = goToPage;
 
   const zoomIn = (pdfId) => {
     const pdf = pdfs.find(p => p.id === pdfId);
