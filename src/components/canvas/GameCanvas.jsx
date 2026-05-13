@@ -102,12 +102,18 @@ const GameCanvas = memo(({
     const [rulerStart, setRulerStart] = useState(null);
     const [rulerCurrent, setRulerCurrent] = useState(null);
     const [mousePos, setMousePos] = useState(null); // Track mouse for ghost token
+    const [textEditor, setTextEditor] = useState(null);
 
     // Use ref to access latest layers in timeouts
     const layersRef = useRef(layers);
     useEffect(() => {
         layersRef.current = layers;
     }, [layers]);
+
+    // Drop any in-progress text edit when the page or PDF changes
+    useEffect(() => {
+        setTextEditor(null);
+    }, [pdfId, pageId]);
 
     // Helper to get relative pointer position
     const getRelativePointerPosition = (stage) => {
@@ -117,7 +123,7 @@ const GameCanvas = memo(({
     };
 
     const handleMouseDown = (e) => {
-        if (tool === 'select' || tool === 'eraser' || tool === 'token' || tool === 'pointer') return;
+        if (tool === 'select' || tool === 'eraser' || tool === 'token' || tool === 'pointer' || tool === 'text' || tool === 'pan') return;
 
         isDrawing.current = true;
         const stage = e.target.getStage();
@@ -238,19 +244,14 @@ const GameCanvas = memo(({
             const stage = e.target.getStage();
             const pos = getRelativePointerPosition(stage);
 
-            const text = prompt('Enter text:');
-            if (text) {
-                const newObj = {
-                    type: 'text',
-                    id: Date.now(),
-                    x: pos.x,
-                    y: pos.y,
-                    content: text,
-                    color: selectedColor,
-                    font: '16px Arial'
-                };
-                addObject('text', newObj);
-            }
+            setTextEditor({
+                mode: 'create',
+                x: pos.x,
+                y: pos.y,
+                content: '',
+                color: selectedColor,
+                fontSize: 16,
+            });
         } else if (tool === 'pointer') {
             const stage = e.target.getStage();
             const pos = getRelativePointerPosition(stage);
@@ -392,7 +393,39 @@ const GameCanvas = memo(({
         return <Circle {...commonProps} />;
     };
 
+    const commitTextEditor = () => {
+        if (!textEditor) return;
+        const { mode, content, x, y, color, fontSize, objId } = textEditor;
+        const trimmed = content.trim();
+
+        if (mode === 'create') {
+            if (trimmed) {
+                addObject('text', {
+                    type: 'text',
+                    id: Date.now(),
+                    x, y,
+                    content,
+                    color,
+                    font: `${fontSize}px Arial`,
+                });
+            }
+        } else if (mode === 'edit' && objId != null) {
+            const currentLayers = layersRef.current;
+            const textLayer = currentLayers.find(l => l.id === 'text');
+            const existingObj = textLayer?.objects.find(o => o.id === objId);
+            if (existingObj) {
+                if (trimmed) {
+                    updateObject('text', { ...existingObj, content });
+                } else {
+                    removeObject('text', objId);
+                }
+            }
+        }
+        setTextEditor(null);
+    };
+
     return (
+        <>
         <Stage
             width={width}
             height={height}
@@ -493,6 +526,8 @@ const GameCanvas = memo(({
                                     );
                                 }
                                 if (obj.type === 'text') {
+                                    const isBeingEdited = textEditor?.mode === 'edit' && textEditor.objId === obj.id;
+                                    if (isBeingEdited) return null;
                                     return (
                                         <Text
                                             key={obj.id}
@@ -510,6 +545,18 @@ const GameCanvas = memo(({
                                                 });
                                             }}
                                             onClick={() => tool === 'eraser' && removeObject(layer.id, obj.id)}
+                                            onDblClick={() => {
+                                                if (tool !== 'select') return;
+                                                setTextEditor({
+                                                    mode: 'edit',
+                                                    objId: obj.id,
+                                                    x: obj.x,
+                                                    y: obj.y,
+                                                    content: obj.content,
+                                                    color: obj.color,
+                                                    fontSize: parseInt(obj.font) || 16,
+                                                });
+                                            }}
                                             onMouseEnter={(e) => handleObjectMouseEnter(e, layer.id, obj.id)}
                                         />
                                     );
@@ -598,6 +645,42 @@ const GameCanvas = memo(({
                 )}
             </Layer>
         </Stage>
+        {textEditor && (
+            <textarea
+                autoFocus
+                value={textEditor.content}
+                onChange={(e) => setTextEditor(prev => prev && ({ ...prev, content: e.target.value }))}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setTextEditor(null);
+                    }
+                }}
+                onBlur={commitTextEditor}
+                style={{
+                    position: 'absolute',
+                    left: `${textEditor.x * scale}px`,
+                    top: `${textEditor.y * scale}px`,
+                    fontSize: `${textEditor.fontSize * scale}px`,
+                    fontFamily: 'Arial',
+                    lineHeight: 1.2,
+                    color: textEditor.color,
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    border: '1px solid #3b82f6',
+                    outline: 'none',
+                    resize: 'none',
+                    padding: '2px 4px',
+                    margin: 0,
+                    minWidth: '60px',
+                    zIndex: 20,
+                    overflow: 'hidden',
+                }}
+            />
+        )}
+        </>
     );
 });
 GameCanvas.displayName = 'GameCanvas';
