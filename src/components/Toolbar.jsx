@@ -2,7 +2,7 @@ import React, { useContext, useState, useRef, useEffect } from 'react';
 import { AppContext } from '../state/appState';
 import {
   PanelLeft, ChevronDown,
-  Move, Stamp, Square, Type, Pen, Eraser, Circle, MousePointerClick, Ruler, Signal, Package
+  Move, Stamp, Square, Type, Pen, Eraser, Circle, MousePointerClick, Ruler, Signal, Package, Hand
 } from 'lucide-react';
 import { TOKEN_SHAPES } from '../data/Shapes';
 import { TOKEN_COLORS } from '../data/Colors';
@@ -88,6 +88,7 @@ const Toolbar = () => {
 
   const tools = [
     { id: 'select', icon: Move, label: 'Select' },
+    { id: 'pan', icon: Hand, label: 'Pan' },
     { id: 'token', icon: Stamp, label: 'Token' },
     { id: 'pointer', icon: MousePointerClick, label: 'Pointer' },
     { id: 'ruler', icon: Ruler, label: 'Ruler' },
@@ -152,7 +153,7 @@ const Toolbar = () => {
             </div>
 
             {/* Color Selection for non-token tools */}
-            {!['select', 'eraser', 'token'].includes(selectedTool) && (
+            {!['select', 'eraser', 'token', 'pan'].includes(selectedTool) && (
               <div className="relative">
                 <button
                   onClick={() => setActiveDropdown('color')}

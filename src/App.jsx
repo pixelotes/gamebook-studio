@@ -1133,7 +1133,7 @@ const GamebookApp = () => {
             />
           </div>
 
-          <div className={`flex-1 ${isDualPaneMode ? 'flex' : ''}`} style={{ overflow: 'hidden' }}>
+          <div className="flex-1 flex" style={{ overflow: 'hidden' }}>
             <div
               className={`${isDualPaneMode ? '' : 'w-full'} flex flex-col overflow-hidden`}
               style={{

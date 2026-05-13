@@ -116,6 +116,29 @@ const PDFViewer = ({
     zoomOut(pdf.id);
   };
 
+  const handlePanMouseDown = (e) => {
+    if (selectedTool !== 'pan' || !scrollContainerRef.current) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startScrollLeft = scrollContainerRef.current.scrollLeft;
+    const startScrollTop = scrollContainerRef.current.scrollTop;
+
+    const handleMove = (moveEvent) => {
+      if (!scrollContainerRef.current) return;
+      scrollContainerRef.current.scrollLeft = startScrollLeft - (moveEvent.clientX - startX);
+      scrollContainerRef.current.scrollTop = startScrollTop - (moveEvent.clientY - startY);
+    };
+
+    const handleUp = () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    e.preventDefault();
+  };
+
   // Get current layers
   const currentLayers = pdf && pdf.pageLayers && pdf.pageLayers[pdf.currentPage]
     ? pdf.pageLayers[pdf.currentPage]
@@ -131,7 +154,11 @@ const PDFViewer = ({
 
   return (
     <div className="flex-1 bg-gray-50 dark:bg-gray-900 flex flex-col h-full relative">
-      <div ref={scrollContainerRef} className="flex-1" style={{ overflow: 'auto' }}>
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 min-h-0"
+        style={{ overflow: 'auto' }}
+      >
         {pdf ? (
           <div className="relative">
             <div
@@ -163,6 +190,13 @@ const PDFViewer = ({
                   pageId={pdf.currentPage}
                   tokenPacks={state.tokenPacks}
                   embeddedTokens={state.embeddedTokens}
+                />
+              )}
+              {selectedTool === 'pan' && (
+                <div
+                  className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                  style={{ zIndex: 10 }}
+                  onMouseDown={handlePanMouseDown}
                 />
               )}
             </div>
