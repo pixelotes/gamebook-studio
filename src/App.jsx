@@ -1125,7 +1125,7 @@ const GamebookApp = () => {
                     <Wifi size={14} /> Disconnect
                   </button>
                 )}
-                {pdfs.length > 1 && (
+                {pdfs.length >= 1 && (
                   <button
                     onClick={() => {
                       toggleDualPane();
