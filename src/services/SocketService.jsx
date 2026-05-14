@@ -17,7 +17,11 @@ class SocketService {
     this.sessionId = null;
     this.isHost = false;
     this.listeners = new Map();
-    this.serverUrl = import.meta.env.VITE_SOCKET_SERVER_URL || 'http://localhost:3001';
+    // Default: same hostname as the page, port 3001. Works for localhost AND for LAN
+    // access (e.g. http://192.168.1.5:3000) without any env var. Override with
+    // VITE_SOCKET_SERVER_URL at build time if the server lives elsewhere.
+    this.serverUrl = import.meta.env.VITE_SOCKET_SERVER_URL
+      || `${window.location.protocol}//${window.location.hostname}:3001`;
     this.debounceTimers = {};
     this.layerUpdateTimer = null; // Timer specifically for layer updates
   }
