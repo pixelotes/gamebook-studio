@@ -171,13 +171,13 @@ const GameCanvas = memo(({
             setMousePos(null);
         }
 
-        // Push to eraser trail
-        if (tool === 'eraser') {
+        // Push to eraser trail only while primary button is held
+        if (tool === 'eraser' && e.evt.buttons === 1) {
             const now = Date.now();
             setEraserTrail(prev => {
                 const appended = [...prev, { x: pos.x, y: pos.y, ts: now }];
                 const trimmed = appended.filter(p => now - p.ts < 350);
-                return trimmed.length > 30 ? trimmed.slice(-30) : trimmed;
+                return trimmed.length > 15 ? trimmed.slice(-15) : trimmed;
             });
         }
 
@@ -678,19 +678,22 @@ const GameCanvas = memo(({
                         }, 0.5)}
                     </Group>
                 )}
-                {/* Eraser trail (estelita) */}
-                {tool === 'eraser' && eraserTrail.length > 1 && (
-                    <Line
-                        points={eraserTrail.flatMap(p => [p.x, p.y])}
-                        stroke="#ec4899"
-                        strokeWidth={3}
-                        opacity={0.45}
-                        lineCap="round"
-                        lineJoin="round"
-                        tension={0.4}
-                        strokeScaleEnabled={false}
-                    />
-                )}
+                {/* Eraser trail (estelita) — segments with fading opacity from tail to head */}
+                {tool === 'eraser' && eraserTrail.length > 1 && eraserTrail.slice(0, -1).map((from, i) => {
+                    const to = eraserTrail[i + 1];
+                    const t = (i + 1) / eraserTrail.length; // newer segment → higher t
+                    return (
+                        <Line
+                            key={from.ts}
+                            points={[from.x, from.y, to.x, to.y]}
+                            stroke="#ec4899"
+                            strokeWidth={3}
+                            opacity={t * 0.85}
+                            lineCap="round"
+                            strokeScaleEnabled={false}
+                        />
+                    );
+                })}
                 {/* Eraser cursor (gomita) — invariant size at any zoom */}
                 {tool === 'eraser' && mousePos && (
                     <Group x={mousePos.x} y={mousePos.y} scaleX={1 / scale} scaleY={1 / scale} listening={false}>
