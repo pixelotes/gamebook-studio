@@ -4,6 +4,10 @@ import { FileText } from 'lucide-react';
 import PDFControlsBar from './PDFControlsBar';
 import GameCanvas from './canvas/GameCanvas';
 
+// Pencil cursor SVG — tip at (1, 23) is the hotspot, so strokes start exactly there.
+const DRAW_CURSOR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M 1 23 L 5 19 L 7 21 L 3 23 Z" fill="#111827" stroke="#fff" stroke-width="0.5"/><path d="M 5 19 L 16 8 L 19 11 L 8 22 Z" fill="#fbbf24" stroke="#111827" stroke-width="0.5"/><path d="M 16 8 L 20 4 L 23 7 L 19 11 Z" fill="#ef4444" stroke="#111827" stroke-width="0.5"/></svg>';
+const DRAW_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(DRAW_CURSOR_SVG)}") 1 23, crosshair`;
+
 const PDFViewer = ({
   pdfCanvasRef,
   // overlayCanvasRef, // No longer needed
@@ -19,36 +23,82 @@ const PDFViewer = ({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    const calculateInitialScale = async () => {
-      // Check if pdf exists, initial scale hasn't been set, and the container is rendered
-      if (pdf && pdf.initialScaleSet === false && scrollContainerRef.current) {
-        const viewerHeight = scrollContainerRef.current.clientHeight;
+    if (!pdf || pdf.initialScaleSet !== false) return;
+    let cancelled = false;
+    let rafId = null;
 
-        // Ensure we have a valid height to prevent division by zero
-        if (viewerHeight > 0) {
-          try {
-            const page = await pdf.pdfDoc.getPage(1); // Get page 1 for dimensions
-            const viewport = page.getViewport({ scale: 1 });
-            const verticalPadding = 32; // Add some padding so it's not edge-to-edge
-
-            // Calculate scale and ensure it's not excessively large
-            const newScale = Math.min(2, (viewerHeight - verticalPadding) / viewport.height);
-
-            updatePdf(pdf.id, { scale: newScale, initialScaleSet: true });
-          } catch (error) {
-            console.error("Error calculating initial PDF scale:", error);
-            // If something goes wrong, mark it as set to avoid loops
-            updatePdf(pdf.id, { initialScaleSet: true });
-          }
-        }
+    const calc = async () => {
+      if (cancelled || !scrollContainerRef.current) return;
+      const viewerHeight = scrollContainerRef.current.clientHeight;
+      if (viewerHeight <= 0) {
+        // Layout not ready yet; retry next frame (typically resolves immediately)
+        rafId = requestAnimationFrame(calc);
+        return;
+      }
+      try {
+        const page = await pdf.pdfDoc.getPage(1);
+        if (cancelled) return;
+        const viewport = page.getViewport({ scale: 1 });
+        const verticalPadding = 32;
+        const newScale = Math.min(2, (viewerHeight - verticalPadding) / viewport.height);
+        updatePdf(pdf.id, { scale: newScale, initialScaleSet: true });
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Error calculating initial PDF scale:", error);
+        updatePdf(pdf.id, { initialScaleSet: true });
       }
     };
 
-    // Delay calculation to ensure DOM has settled, then clear timeout
-    const timerId = setTimeout(calculateInitialScale, 100);
-    return () => clearTimeout(timerId);
-
+    calc();
+    return () => {
+      cancelled = true;
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [pdf, updatePdf]);
+
+  // Ctrl/Cmd + wheel → zoom centered on the cursor.
+  // After scale updates, the canvas re-renders at the new size; we restore the
+  // scroll position so the same PDF point stays under the cursor.
+  const pendingZoomFocusRef = useRef(null);
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const onWheel = (ev) => {
+      if (!ev.ctrlKey && !ev.metaKey) return;
+      if (!pdf) return;
+      ev.preventDefault();
+
+      const rect = el.getBoundingClientRect();
+      const mouseInContainer = { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+      const mouseInCanvas = {
+        x: mouseInContainer.x + el.scrollLeft,
+        y: mouseInContainer.y + el.scrollTop,
+      };
+      const oldScale = pdf.scale;
+      const mouseInPdf = { x: mouseInCanvas.x / oldScale, y: mouseInCanvas.y / oldScale };
+
+      const factor = ev.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const newScale = Math.min(3, Math.max(0.25, oldScale * factor));
+      if (newScale === oldScale) return;
+
+      pendingZoomFocusRef.current = { mouseInPdf, mouseInContainer };
+      updatePdf(pdf.id, { scale: newScale });
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [pdf, updatePdf]);
+
+  // After a wheel-zoom causes a re-render, restore scroll so the cursor stays anchored.
+  useEffect(() => {
+    if (!pendingZoomFocusRef.current || !scrollContainerRef.current || !pdf) return;
+    const { mouseInPdf, mouseInContainer } = pendingZoomFocusRef.current;
+    const s = pdf.scale;
+    scrollContainerRef.current.scrollLeft = mouseInPdf.x * s - mouseInContainer.x;
+    scrollContainerRef.current.scrollTop = mouseInPdf.y * s - mouseInContainer.y;
+    pendingZoomFocusRef.current = null;
+  }, [dimensions, pdf?.scale]);
 
   // Monitor PDF Canvas size changes to update GameCanvas size
   useEffect(() => {
@@ -120,6 +170,7 @@ const PDFViewer = ({
     if (tool === 'text') return 'text';
     if (tool === 'select' || tool === 'pan') return 'default';
     if (tool === 'eraser') return 'none';
+    if (tool === 'draw') return DRAW_CURSOR;
     return 'crosshair';
   };
 
