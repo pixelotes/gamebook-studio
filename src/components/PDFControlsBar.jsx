@@ -14,7 +14,7 @@ const PDFControlsBar = ({
   onZoomOut,
   onBookmarkNavigate
 }) => {
-  const { state, dispatch } = useContext(AppContext);
+  const { state, dispatch, confirm } = useContext(AppContext);
   const { isDualPaneMode } = state;
 
   const [localDropdownOpen, setLocalDropdownOpen] = useState(false);
@@ -68,17 +68,22 @@ const PDFControlsBar = ({
     onLayerUpdate(pdfId, pageId, newLayers);
   };
 
-  const handleClearLayer = (layerId) => {
+  const handleClearLayer = async (layerId) => {
     if (!onLayerUpdate) return;
-    if (window.confirm('Are you sure you want to clear all items from this layer? This action cannot be undone.')) {
-      const newLayers = layers.map(l => {
-        if (l.id === layerId) {
-          return { ...l, objects: [] };
-        }
-        return l;
-      });
-      onLayerUpdate(pdfId, pageId, newLayers);
-    }
+    const ok = await confirm({
+      title: 'Clear layer?',
+      message: 'All items in this layer will be removed. This action cannot be undone.',
+      confirmLabel: 'Clear layer',
+      variant: 'destructive',
+    });
+    if (!ok) return;
+    const newLayers = layers.map(l => {
+      if (l.id === layerId) {
+        return { ...l, objects: [] };
+      }
+      return l;
+    });
+    onLayerUpdate(pdfId, pageId, newLayers);
   };
 
   const handleBookmarkClick = async (bookmark) => {

@@ -187,10 +187,15 @@ class SocketService {
   }
   
   // Roll dice
-  rollDice(expression, result) {
+  rollDice(expression, result, playerName) {
     if (this.socket && this.isConnected && this.sessionId) {
-      this.socket.emit('dice-roll', { expression, result });
+      this.socket.emit('dice-roll', { expression, result, playerName });
     }
+  }
+
+  // Return our own socket id (used by listeners to skip echoes of our own events)
+  getSocketId() {
+    return this.socket?.id || null;
   }
 
   // Upload PDF to session

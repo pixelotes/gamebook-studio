@@ -152,11 +152,11 @@ export const MultiplayerModal = ({ isOpen, onClose, onSessionCreated, onSessionJ
               </div>
               <input
                 type="text"
-                placeholder="Enter session ID (e.g., ABC123)"
+                placeholder="Enter session ID (e.g., ABC123XY45)"
                 value={sessionId}
                 onChange={(e) => setSessionId(e.target.value.toUpperCase())}
                 className="w-full p-3 border border-gray-300 rounded-lg text-center font-mono text-lg tracking-wider"
-                maxLength={6}
+                maxLength={10}
               />
               <button
                 onClick={handleJoinSession}

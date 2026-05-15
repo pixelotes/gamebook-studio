@@ -87,7 +87,7 @@ const Toolbar = () => {
   ];
 
   const tools = [
-    { id: 'select', icon: Move, label: 'Select' },
+    { id: 'select', icon: Move, label: 'Drag' },
     { id: 'pan', icon: Hand, label: 'Pan' },
     { id: 'token', icon: Stamp, label: 'Token' },
     { id: 'pointer', icon: MousePointerClick, label: 'Pointer' },
@@ -130,7 +130,7 @@ const Toolbar = () => {
                     return Icon ? <Icon size={16} /> : null;
                   })()}
                 </span>
-                <span className="font-medium capitalize">{selectedTool}</span>
+                <span className="font-medium">{tools.find(t => t.id === selectedTool)?.label ?? selectedTool}</span>
                 <ChevronDown size={14} className="text-gray-500" />
               </button>
               {activeDropdown === 'tools' && (

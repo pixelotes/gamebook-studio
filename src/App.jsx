@@ -10,7 +10,9 @@ import SidebarHoverTrigger from './components/SidebarHoverTrigger';
 import { AppContext, initialState, reducer } from './state/appState';
 import { TOKEN_SHAPES } from './data/Shapes';
 import { MultiplayerModal, MultiplayerStatus, MultiplayerNotifications } from './components/MultiplayerModal';
+import ConfirmModal from './components/ConfirmModal';
 import socketService from './services/SocketService';
+import eventLogService from './services/EventLogService';
 import { create } from 'jsondiffpatch';
 import ResizeHandle from './components/ResizeHandle';
 import pako from 'pako';
@@ -57,6 +59,11 @@ const GamebookApp = () => {
 
   const pdfCanvasRef = useRef(null);
   const secondaryPdfCanvasRef = useRef(null);
+  const confirmModalRef = useRef(null);
+  const confirm = useCallback((options) => {
+    if (!confirmModalRef.current) return Promise.resolve(false);
+    return confirmModalRef.current.confirm(options);
+  }, []);
   // Track active PDF render tasks to prevent race conditions (flipped PDF bug)
   const renderTaskRef = useRef({ primary: null, secondary: null });
   const fileInputRef = useRef(null);
@@ -401,12 +408,30 @@ const GamebookApp = () => {
       addNotification('A PDF was removed from the session', 'info');
     };
 
+    const handleDiceRolled = (data) => {
+      const { expression, result, rolledBy, playerName } = data;
+      if (!result) return;
+
+      const resolvedPlayer = playerName || `Player ${(rolledBy || '').slice(0, 6)}`;
+      const breakdown = result.type === 'coin'
+        ? result.symbolicBreakdown
+        : (result.results || []).map(r => r.value);
+
+      eventLogService.logDiceRoll(expression, breakdown, result.finalTotal, resolvedPlayer);
+
+      // Toast only for OTHER players — we already see our own result in the dice modal
+      if (rolledBy && rolledBy !== socketService.getSocketId()) {
+        addNotification(`${resolvedPlayer} rolled ${expression}: ${result.finalTotal}`, 'info');
+      }
+    };
+
     socketService.on('game-state-delta', handleGameStateDelta);
     socketService.on('page-navigated', handlePageNavigated);
     socketService.on('layers-updated', handleLayersUpdated);
     socketService.on('pdf-added', handlePdfAdded);
     socketService.on('pdf-removed', handlePdfRemoved);
     socketService.on('pointer-event', handlePointerEvent);
+    socketService.on('dice-rolled', handleDiceRolled);
 
     return () => {
       socketService.off('game-state-delta', handleGameStateDelta);
@@ -415,6 +440,7 @@ const GamebookApp = () => {
       socketService.off('pdf-added', handlePdfAdded);
       socketService.off('pdf-removed', handlePdfRemoved);
       socketService.off('pointer-event', handlePointerEvent);
+      socketService.off('dice-rolled', handleDiceRolled);
     };
   }, [gameStateVersion]);
 
@@ -664,7 +690,7 @@ const GamebookApp = () => {
           }
         });
       } else {
-        alert('Could not restore session. Please select all the correct PDF files.');
+        addNotification('Could not restore session. Please select all the correct PDF files.', 'error');
         dispatch({ type: 'SET_STATE', payload: { sessionToRestore: null } });
       }
     } else {
@@ -784,7 +810,7 @@ const GamebookApp = () => {
   const handleLoadGBS = async (event) => {
     const file = event.target.files[0];
     if (!file || !file.name.endsWith('.gbs')) {
-      alert('Please select a valid .gbs file');
+      addNotification('Please select a valid .gbs file', 'error');
       return;
     }
 
@@ -854,7 +880,7 @@ const GamebookApp = () => {
 
     } catch (error) {
       console.error('Error loading .gbs file:', error);
-      alert('Failed to load .gbs file. It may be corrupt or invalid.');
+      addNotification('Failed to load .gbs file. It may be corrupt or invalid.', 'error');
     }
   };
 
@@ -867,31 +893,35 @@ const GamebookApp = () => {
           const sessionData = JSON.parse(e.target.result);
           setGameStateVersion(sessionData.version || 0);
           dispatch({ type: 'SET_STATE', payload: { sessionToRestore: sessionData } });
-          alert(`Session loaded. Please select the following PDF files: ${sessionData.pdfs.map(p => p.fileName).join(', ')}`);
+          addNotification(`Session loaded. Please select the following PDF files: ${sessionData.pdfs.map(p => p.fileName).join(', ')}`, 'info');
           fileInputRef.current.click();
         } catch (error) {
           console.error('Error parsing session file:', error);
-          alert('Could not load session file. It may be corrupt.');
+          addNotification('Could not load session file. It may be corrupt.', 'error');
         }
       };
       reader.readAsText(file);
     }
   };
 
-  const handleNewSession = () => {
+  const handleNewSession = async () => {
     const hasContent = pdfs.length > 0 || characters.length > 0 || notes || counters.length > 0;
 
     if (hasContent) {
-      const confirmed = window.confirm(
-        'Are you sure you want to start a new session?\n\n' +
-        'This will close all PDFs and reset all game state including:\n' +
-        '• All open PDFs\n' +
-        '• Character sheets\n' +
-        '• Notes\n' +
-        '• Counters\n' +
-        '• All annotations\n\n' +
-        'This action cannot be undone.'
-      );
+      const confirmed = await confirm({
+        title: 'Start a new session?',
+        message:
+          'This will close all PDFs and reset all game state including:\n' +
+          '• All open PDFs\n' +
+          '• Character sheets\n' +
+          '• Notes\n' +
+          '• Counters\n' +
+          '• All annotations\n\n' +
+          'This action cannot be undone.',
+        confirmLabel: 'Start new session',
+        cancelLabel: 'Keep current',
+        variant: 'destructive',
+      });
 
       if (!confirmed) {
         return;
@@ -1020,9 +1050,12 @@ const GamebookApp = () => {
       secondaryPdf,
       goToPage: (pageNum, pdfId = activePdfId) => goToPage(pdfId, pageNum),
       zoomIn: (pdfId = activePdfId) => zoomIn(pdfId),
-      zoomOut: (pdfId = activePdfId) => zoomOut(pdfId)
+      zoomOut: (pdfId = activePdfId) => zoomOut(pdfId),
+      addNotification,
+      confirm,
     }}>
       <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-300" style={{ width: '100vw', overflow: 'hidden' }}>
+        <ConfirmModal ref={confirmModalRef} />
         <MultiplayerNotifications notifications={notifications} />
 
         <MultiplayerModal

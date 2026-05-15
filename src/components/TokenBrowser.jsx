@@ -5,7 +5,7 @@ import { X, Upload, Search, Package } from 'lucide-react';
 import { loadGBTKPack } from '../services/GBTKLoader';
 
 const TokenBrowser = ({ onClose }) => {
-    const { state, dispatch } = useContext(AppContext);
+    const { state, dispatch, addNotification } = useContext(AppContext);
     const { tokenPacks, embeddedTokens, selectedTokenShape } = state;
     const [activeTab, setActiveTab] = useState('library'); // 'library' or 'project'
     const [searchTerm, setSearchTerm] = useState('');
@@ -26,7 +26,7 @@ const TokenBrowser = ({ onClose }) => {
             dispatch({ type: 'REGISTER_PACK', payload: pack });
             // Switch to the new pack? Just keep in library view for now
         } catch (error) {
-            alert("Failed to load pack: " + error.message);
+            addNotification("Failed to load pack: " + error.message, 'error');
         } finally {
             setIsLoading(false);
         }

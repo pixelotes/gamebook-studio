@@ -9,7 +9,7 @@ import eventLogService from '../services/EventLogService';
 import { CHARACTER_TEMPLATES } from '../data/Templates';
 
 const Sidebar = ({ children }) => {
-  const { state, dispatch } = useContext(AppContext);
+  const { state, dispatch, confirm } = useContext(AppContext);
   const { activeTab, selectedTemplate } = state;
   const [events, setEvents] = useState([]);
 
@@ -29,8 +29,14 @@ const Sidebar = ({ children }) => {
     dispatch({ type: 'SET_STATE', payload: { selectedTemplate: template } });
   };
 
-  const handleClearLog = () => {
-    if (window.confirm('Are you sure you want to clear the event log?')) {
+  const handleClearLog = async () => {
+    const ok = await confirm({
+      title: 'Clear event log?',
+      message: 'This will remove all logged events from the current session.',
+      confirmLabel: 'Clear log',
+      variant: 'destructive',
+    });
+    if (ok) {
       eventLogService.clearEvents();
     }
   };
