@@ -1,14 +1,22 @@
 import React, { useReducer, useRef, useEffect, useCallback, useState } from 'react';
-import { Upload, RotateCcw, Save, Menu, FilePlus, Wifi, Moon, Sun, Columns } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-import JSZip from 'jszip';
-import FloatingDice from './components/FloatingDice';
+
+// State and Context
+import { AppContext, initialState, reducer } from './state/appState';
+
+// Custom Hooks for Logic
+import { useMultiplayer } from './hooks/useMultiplayer';
+import { usePdfManagement } from './hooks/usePdfManagement';
+import { useSessionManagement } from './hooks/useSessionManagement';
+
+// Core Components
 import Sidebar from './components/Sidebar';
 import Toolbar from './components/Toolbar';
 import PDFPane from './components/PDFPane';
-import SidebarHoverTrigger from './components/SidebarHoverTrigger';
-import { AppContext, initialState, reducer } from './state/appState';
-import { TOKEN_SHAPES } from './data/Shapes';
+import MainMenu from './components/MainMenu';
+import FloatingDice from './components/FloatingDice';
+
+// UI Components
 import { MultiplayerModal, MultiplayerStatus, MultiplayerNotifications } from './components/MultiplayerModal';
 import ConfirmModal from './components/ConfirmModal';
 import socketService from './services/SocketService';
@@ -22,10 +30,11 @@ import GameMetadataModal from './components/GameMetadataModal';
 import { Settings } from 'lucide-react';
 import { CorePack } from './data/CorePack';
 
-const diffpatcher = create({
-  objectHash: (obj) => obj.id,
-});
+// Services and Classes
+import FabricCanvas from './canvas/FabricCanvas';
+import socketService from './services/SocketService';
 
+// PDF worker setup
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
 
 // Custom hook to get the previous value of a prop or state
@@ -38,25 +47,16 @@ const usePrevious = (value) => {
 };
 
 // MockFabricCanvas removed
-
 const GamebookApp = () => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const {
-    pdfs, activePdfId, secondaryPdfId, isDualPaneMode, characters, notes, counters, selectedTool, selectedColor,
-    selectedTokenShape, selectedTokenColor, tokenSize, sessionToRestore,
-    isSidebarVisible, menuOpen, theme, lineWidth
+    menuOpen, isDualPaneMode, theme, pdfs, isSidebarVisible,
+    selectedTool, selectedColor, selectedTokenShape, selectedTokenColor,
+    tokenSize, lineWidth,
+    secondaryPdfId
   } = state;
 
-  const [showMultiplayerModal, setShowMultiplayerModal] = useState(false);
-  const [multiplayerSession, setMultiplayerSession] = useState(null);
-  const [connectedPlayers, setConnectedPlayers] = useState(1);
-  const [notifications, setNotifications] = useState([]);
-  const [isHost, setIsHost] = useState(false);
-  const [gameStateVersion, setGameStateVersion] = useState(0);
-  const [sidebarWidth, setSidebarWidth] = useState(state.sidebarWidth);
-  const [primaryPaneWidth, setPrimaryPaneWidth] = useState(null);
-  const [showMetadataModal, setShowMetadataModal] = useState(false);
-
+  // --- Refs ---
   const pdfCanvasRef = useRef(null);
   const secondaryPdfCanvasRef = useRef(null);
   const confirmModalRef = useRef(null);
@@ -79,12 +79,8 @@ const GamebookApp = () => {
   const goToPageRef = useRef(null);
 
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
+    stateRef.current = state;
+  });
 
   // Initialize GBTK - Register Core Pack
   useEffect(() => {
@@ -101,24 +97,37 @@ const GamebookApp = () => {
     }
   };
 
-  const handleTabClose = (pdfId) => {
-    closePdf(pdfId);
-  };
+  // --- UI State ---
+  const [showMetadataModal, setShowMetadataModal] = useState(false);
+  const [showDebugModal, setShowDebugModal] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(state.sidebarWidth);
+  const [primaryPaneWidth, setPrimaryPaneWidth] = useState(null);
+  
+  // --- Logic Hooks ---
+  const {
+    showMultiplayerModal, setShowMultiplayerModal, multiplayerSession, connectedPlayers,
+    notifications, isHost, addNotification, handleLeaveMultiplayerSession,
+    handleCreateMultiplayerSession, handleJoinMultiplayerSession
+  } = useMultiplayer({ state, dispatch, usePrevious, fabricCanvas, secondaryFabricCanvas });
 
-  const addNotification = (message, type = 'info', details = null) => {
-    const notification = {
-      id: Date.now(),
-      message,
-      type,
-      details
-    };
-    setNotifications(prev => [...prev, notification]);
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== notification.id));
-    }, 5000);
-  };
+  const {
+    activePdf, secondaryPdf, updatePdf, closePdf, goToPage, zoomIn, zoomOut,
+    handleBookmarkNavigate, handleTabSelect, toggleDualPane,
+  } = usePdfManagement({
+    state, dispatch, pdfCanvasRef, overlayCanvasRef, secondaryPdfCanvasRef,
+    secondaryOverlayCanvasRef, fabricCanvas, secondaryFabricCanvas
+  });
 
+  const {
+    fileInputRef, handleNewSession, handleSaveSession, handleExportGBS,
+    handleUnifiedLoad, triggerLoadFiles,
+  } = useSessionManagement({
+    state, dispatch, addNotification, isHost, multiplayerSession, handleLeaveMultiplayerSession
+  });
+
+  // --- Glue Logic ---
   const handleLayerUpdate = useCallback((pdfId, pageNum, layers) => {
+    // FIX: Use the ref to get the CURRENT state, not the stale one from the closure
     const currentPdfs = stateRef.current.pdfs;
     const newPdfs = currentPdfs.map(p => {
       if (p.id === pdfId) {
@@ -165,6 +174,8 @@ const GamebookApp = () => {
       await handleLoadGBS({ target: { files: [gbsFile] } });
       return;
     }
+    // FIX: Remove state.pdfs from dependency array to prevent creating a stale closure
+  }, [dispatch]);
 
     // JSON session files need PDFs to be loaded separately
     if (jsonFile) {
@@ -1013,15 +1024,9 @@ const GamebookApp = () => {
   const handleSidebarResize = useCallback((newWidth) => {
     setSidebarWidth(newWidth);
     dispatch({ type: 'SET_STATE', payload: { sidebarWidth: newWidth } });
-  }, []);
+  }, [dispatch]);
 
-  const handlePaneResize = useCallback((newWidth) => {
-    setPrimaryPaneWidth(newWidth);
-  }, []);
-
-  const maxSidebarWidth = Math.min(600, window.innerWidth * 0.4);
-  const availableWidth = window.innerWidth - sidebarWidth - 2;
-  const maxPrimaryPaneWidth = isDualPaneMode ? availableWidth * 0.8 : availableWidth;
+  const handlePaneResize = useCallback((newWidth) => setPrimaryPaneWidth(newWidth), []);
 
   const toggleDualPane = () => {
     if (!isDualPaneMode && pdfs.length > 1) {
@@ -1083,7 +1088,7 @@ const GamebookApp = () => {
 
         {isSidebarVisible ? (
           <div className="flex h-full">
-            <div style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: `${maxSidebarWidth}px`, height: '100%' }}>
+            <div style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: `${Math.min(600, window.innerWidth * 0.4)}px`, height: '100%' }}>
               <Sidebar>
                 {multiplayerSession && (
                   <div className="p-4 border-b">

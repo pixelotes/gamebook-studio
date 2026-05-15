@@ -16,6 +16,7 @@ class SocketService {
     this.isConnected = false;
     this.sessionId = null;
     this.isHost = false;
+    this.playerName = 'Player 1'; // Default name
     this.listeners = new Map();
     // Default: same hostname as the page, port 3001. Works for localhost AND for LAN
     // access (e.g. http://192.168.1.5:3000) without any env var. Override with
@@ -55,6 +56,7 @@ class SocketService {
         this.isConnected = false;
         this.sessionId = null;
         this.isHost = false;
+        this.playerName = 'Player 1'; // Reset on disconnect
       });
 
       // Set up event listeners
@@ -66,10 +68,6 @@ class SocketService {
   disconnect() {
     if (this.socket) {
       this.socket.disconnect();
-      this.socket = null;
-      this.isConnected = false;
-      this.sessionId = null;
-      this.isHost = false;
     }
   }
 
@@ -85,7 +83,8 @@ class SocketService {
         if (response.success) {
           this.sessionId = response.sessionId;
           this.isHost = response.isHost;
-          console.log('Created session:', this.sessionId);
+          this.playerName = response.playerName;
+          console.log(`Created session: ${this.sessionId} as ${this.playerName}`);
           resolve(response);
         } else {
           reject(new Error(response.error || 'Failed to create session'));
@@ -106,13 +105,21 @@ class SocketService {
         if (response.success) {
           this.sessionId = sessionId;
           this.isHost = response.isHost;
-          console.log('Joined session:', sessionId);
+          this.playerName = response.playerName;
+          console.log(`Joined session: ${sessionId} as ${this.playerName}`);
           resolve(response);
         } else {
           reject(new Error(response.error || 'Failed to join session'));
         }
       });
     });
+  }
+  
+  // New method to log an event
+  logEvent(event) {
+    if (this.socket && this.isConnected && this.sessionId) {
+        this.socket.emit('log-event', event);
+    }
   }
 
   // Update game state (characters, counters, notes, etc.) with adaptive debouncing
@@ -290,7 +297,8 @@ class SocketService {
     return {
       sessionId: this.sessionId,
       isConnected: this.isConnected,
-      isHost: this.isHost
+      isHost: this.isHost,
+      playerName: this.playerName
     };
   }
 

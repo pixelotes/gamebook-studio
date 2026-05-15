@@ -78,7 +78,8 @@ class GameSession {
       characters: [],
       notes: '',
       counters: [],
-      pageLayers: {}
+      pageLayers: {},
+      eventLog: [] // Add event log to game state
     };
     // this.pdfFiles = new Map(); // REMOVED: Stored on disk now
     this.stateVersion = stateVersion;
@@ -101,12 +102,23 @@ class GameSession {
   }
 
   addClient(socketId) {
-    this.clients.add(socketId);
+    const playerName = `Player ${this.nextPlayerNumber++}`;
+    this.clients.set(socketId, { name: playerName });
+    return playerName;
   }
 
   removeClient(socketId) {
     this.clients.delete(socketId);
     return this.clients.size === 0;
+  }
+  
+  addEvent(event) {
+    this.gameState.eventLog.push(event);
+    if (this.gameState.eventLog.length > 100) { // Limit log size
+        this.gameState.eventLog.shift();
+    }
+    // Broadcast the new event to all clients
+    io.to(this.id).emit('event-logged', event);
   }
 
   updateGameState(updates) {
@@ -259,19 +271,23 @@ io.on('connection', (socket) => {
 
     socket.join(sessionId);
     socket.sessionId = sessionId;
+    socket.playerName = playerName;
 
-    console.log(`User ${socket.id} joined session ${sessionId}`);
+
+    console.log(`User ${socket.id} (${playerName}) joined session ${sessionId}`);
 
     callback({
       success: true,
       gameState: session.gameState,
       isHost: session.hostSocketId === socket.id,
       clientCount: session.clients.size,
-      version: session.stateVersion
+      version: session.stateVersion,
+      playerName: playerName
     });
 
     socket.to(sessionId).emit('player-joined', {
       socketId: socket.id,
+      name: playerName,
       clientCount: session.clients.size
     });
   });
@@ -285,8 +301,10 @@ io.on('connection', (socket) => {
 
     socket.join(sessionId);
     socket.sessionId = sessionId;
+    socket.playerName = playerName;
 
-    console.log(`User ${socket.id} created session ${sessionId}`);
+
+    console.log(`User ${socket.id} (${playerName}) created session ${sessionId}`);
 
     callback({
       success: true,
@@ -294,7 +312,8 @@ io.on('connection', (socket) => {
       gameState: session.gameState,
       isHost: true,
       clientCount: 1,
-      version: session.stateVersion
+      version: session.stateVersion,
+      playerName: playerName
     });
   });
 
@@ -323,6 +342,17 @@ io.on('connection', (socket) => {
             crc: gameStateCrc
         });
     }
+  });
+  
+  // New event for logging
+  socket.on('log-event', (eventData) => {
+      if (!socket.sessionId) return;
+      const session = gameSessions.get(socket.sessionId);
+      if (session) {
+          // Assign the player name from the socket
+          const eventWithPlayer = { ...eventData, player: socket.playerName };
+          session.addEvent(eventWithPlayer);
+      }
   });
 
   socket.on('request-missing-updates', async ({ fromVersion }, callback) => {
@@ -426,7 +456,6 @@ io.on('connection', (socket) => {
 
             socket.to(socket.sessionId).emit('player-left', {
                 socketId: socket.id,
-                clientCount: session.clients.size
             });
         }
       }

@@ -126,6 +126,36 @@ const PDFViewer = ({
     return () => observer.disconnect();
   }, [pdfCanvasRef, pdf]); // Re-run if pdf changes (might trigger re-render of canvas)
 
+  const calculateHeight = (canvas) => {
+    if (!canvas) {
+      console.log('Canvas not available yet');
+      return 'auto';
+    }
+
+    // Get browser window height
+    const windowHeight = window.innerHeight;
+    //console.log('Window height:', windowHeight);
+    
+    // Set scroll container max height to window height minus some offset (e.g., for header)
+    if (scrollContainerRef.current) {
+      const offset = 0; // In case I ever need it
+      const maxHeight = windowHeight - offset;
+      scrollContainerRef.current.style.maxHeight = `${maxHeight}px`;
+      //console.log('Setting scroll container max height to:', maxHeight);
+    }
+
+    // If the canvas height is less than the container height, use '100%' to fill the space
+    if (scrollContainerRef.current && canvas.height < scrollContainerRef.current.clientHeight) {
+      //console.log('Using 100% height to fill container');
+      //console.log('Container height:', scrollContainerRef.current.clientHeight, " Canvas height:", canvas.height);
+      return '100%';
+    }
+    //console.log('Using canvas height:', canvas.height);
+    //console.log('Container height:', scrollContainerRef.current.clientHeight, " Canvas height:", canvas.height);
+    return canvas.height;
+  }
+
+
   const renderEmptyState = () => (
     <div className="flex items-center justify-center h-full">
       <div className="text-center text-gray-500">
