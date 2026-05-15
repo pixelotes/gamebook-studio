@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   client:
     build: .
@@ -7,3 +5,17 @@ services:
     ports:
       - "3000:3000"
       - "3001:3001"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

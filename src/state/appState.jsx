@@ -20,9 +20,11 @@ export const initialState = {
   selectedTemplate: 'custom',
   notes: '',
   counters: [],
+  tokenPacks: [], // NEW: Library of loaded packs
+  embeddedTokens: [], // NEW: Tokens used in this session/project
   selectedTool: 'select',
   selectedColor: '#ff6b6b',
-  selectedTokenShape: 'circle',
+  selectedTokenShape: 'circle', // Will now store GBTK Token ID
   selectedTokenColor: '#ff6b6b',
   tokenSize: 20,
   lineWidth: 3,
@@ -48,28 +50,36 @@ export function reducer(state, action) {
       localStorage.setItem('theme', newTheme);
       return { ...state, theme: newTheme };
     case 'ADD_CHARACTER':
-        const template = CHARACTER_TEMPLATES[state.selectedTemplate];
-        const newChar = {
-          id: generateUniqueId(),
-          template: state.selectedTemplate,
-          data: {
-            customFields: []
-          }
-        };
-        template.fields.forEach(field => {
-          newChar.data[field.name] = field.default;
-        });
+      const template = CHARACTER_TEMPLATES[state.selectedTemplate];
+      const newChar = {
+        id: generateUniqueId(),
+        template: state.selectedTemplate,
+        data: {
+          customFields: []
+        }
+      };
+      template.fields.forEach(field => {
+        newChar.data[field.name] = field.default;
+      });
       return { ...state, characters: [...state.characters, newChar] };
+    case 'REGISTER_PACK':
+      // Prevent duplicates
+      if (state.tokenPacks.some(p => p.name === action.payload.name)) return state;
+      return { ...state, tokenPacks: [...state.tokenPacks, action.payload] };
+    case 'EMBED_TOKEN':
+      // Avoid duplicates based on ID
+      if (state.embeddedTokens.some(t => t.id === action.payload.id)) return state;
+      return { ...state, embeddedTokens: [...state.embeddedTokens, action.payload] };
     case 'UPDATE_CHARACTER':
-        return {
-            ...state,
-            characters: state.characters.map(char =>
-                char.id === action.payload.id ? {
-                    ...char,
-                    data: { ...char.data, [action.payload.field]: action.payload.value }
-                } : char
-            )
-        };
+      return {
+        ...state,
+        characters: state.characters.map(char =>
+          char.id === action.payload.id ? {
+            ...char,
+            data: { ...char.data, [action.payload.field]: action.payload.value }
+          } : char
+        )
+      };
     default:
       return state;
   }

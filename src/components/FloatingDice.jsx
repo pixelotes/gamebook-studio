@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Dice1, Dice6, X } from 'lucide-react';
 import DiceParser from '../utils/DiceParser';
 import eventLogService from '../services/EventLogService';
+import socketService from '../services/SocketService';
+import { AppContext } from '../state/appState';
 
 // Helper function to chunk an array into smaller arrays of a specific size
 const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
@@ -65,6 +67,7 @@ const Die = ({ value, sides }) => {
 
 
 const FloatingDice = () => {
+  const { addNotification } = useContext(AppContext);
   const [position, setPosition] = useState({ x: window.innerWidth - 80, y: window.innerHeight - 80 });
   const [isDragging, setIsDragging] = useState(false);
   const [isSelectorVisible, setIsSelectorVisible] = useState(false);
@@ -174,16 +177,22 @@ const FloatingDice = () => {
   const handleRoll = (expression) => {
     const result = DiceParser.roll(expression);
     if (result.error) {
-      alert(result.error);
+      addNotification(result.error, 'error');
       return;
     }
 
-    // Log the dice roll
-    eventLogService.logDiceRoll(
-      expression,
-      result.type === 'coin' ? result.symbolicBreakdown : result.results.map(r => r.value),
-      result.finalTotal
-    );
+    // In multiplayer, emit the roll — the server echoes it back to everyone
+    // (including us), and the App-level `dice-rolled` listener handles logging.
+    // Skipping local logging here avoids a double entry on the roller's side.
+    if (socketService.isMultiplayerActive()) {
+      socketService.rollDice(expression, result, eventLogService.getPlayerName());
+    } else {
+      eventLogService.logDiceRoll(
+        expression,
+        result.type === 'coin' ? result.symbolicBreakdown : result.results.map(r => r.value),
+        result.finalTotal
+      );
+    }
 
     setRollResult(result.finalTotal);
     setRollSymbols(result.symbolicBreakdown);

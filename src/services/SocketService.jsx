@@ -18,7 +18,11 @@ class SocketService {
     this.isHost = false;
     this.playerName = 'Player 1'; // Default name
     this.listeners = new Map();
-    this.serverUrl = import.meta.env.VITE_SOCKET_SERVER_URL || 'http://localhost:3001';
+    // Default: same hostname as the page, port 3001. Works for localhost AND for LAN
+    // access (e.g. http://192.168.1.5:3000) without any env var. Override with
+    // VITE_SOCKET_SERVER_URL at build time if the server lives elsewhere.
+    this.serverUrl = import.meta.env.VITE_SOCKET_SERVER_URL
+      || `${window.location.protocol}//${window.location.hostname}:3001`;
     this.debounceTimers = {};
     this.layerUpdateTimer = null; // Timer specifically for layer updates
   }
@@ -190,10 +194,15 @@ class SocketService {
   }
   
   // Roll dice
-  rollDice(expression, result) {
+  rollDice(expression, result, playerName) {
     if (this.socket && this.isConnected && this.sessionId) {
-      this.socket.emit('dice-roll', { expression, result });
+      this.socket.emit('dice-roll', { expression, result, playerName });
     }
+  }
+
+  // Return our own socket id (used by listeners to skip echoes of our own events)
+  getSocketId() {
+    return this.socket?.id || null;
   }
 
   // Upload PDF to session

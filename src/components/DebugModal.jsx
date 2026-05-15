@@ -120,35 +120,35 @@ const DebugModal = ({ isOpen, onClose, gameState, gameStateVersion }) => {
             <div className="ml-4 border-l border-gray-200 dark:border-gray-600 pl-2 mt-1">
               {isArray
                 ? entries.map((item, index) => (
-                    <div key={index} className="mb-1">
-                      <span className="text-purple-600 dark:text-purple-400 text-sm mr-2">
-                        [{index}]:
-                      </span>
-                      {renderValue(item, `${path}[${index}]`, depth + 1)}
-                    </div>
-                  ))
+                  <div key={index} className="mb-1">
+                    <span className="text-purple-600 dark:text-purple-400 text-sm mr-2">
+                      [{index}]:
+                    </span>
+                    {renderValue(item, `${path}[${index}]`, depth + 1)}
+                  </div>
+                ))
                 : entries.map(([key, val]) => (
-                    <div key={key} className="mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-blue-600 dark:text-blue-400 text-sm font-medium">
-                          {key}:
-                        </span>
-                        <button
-                          onClick={() => copyToClipboard(JSON.stringify(val, null, 2), `${path}.${key}`)}
-                          className="opacity-0 group-hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-600 p-1 rounded"
-                          title="Copy value"
-                        >
-                          <Copy size={10} />
-                          {copiedKey === `${path}.${key}` && (
-                            <span className="text-xs text-green-600 ml-1">✓</span>
-                          )}
-                        </button>
-                      </div>
-                      <div className="ml-2">
-                        {renderValue(val, `${path}.${key}`, depth + 1)}
-                      </div>
+                  <div key={key} className="mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                        {key}:
+                      </span>
+                      <button
+                        onClick={() => copyToClipboard(JSON.stringify(val, null, 2), `${path}.${key}`)}
+                        className="opacity-0 group-hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-600 p-1 rounded"
+                        title="Copy value"
+                      >
+                        <Copy size={10} />
+                        {copiedKey === `${path}.${key}` && (
+                          <span className="text-xs text-green-600 ml-1">✓</span>
+                        )}
+                      </button>
                     </div>
-                  ))
+                    <div className="ml-2">
+                      {renderValue(val, `${path}.${key}`, depth + 1)}
+                    </div>
+                  </div>
+                ))
               }
             </div>
           )}
@@ -173,7 +173,7 @@ const DebugModal = ({ isOpen, onClose, gameState, gameStateVersion }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100]">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[90vw] h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600">

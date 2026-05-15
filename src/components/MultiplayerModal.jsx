@@ -65,7 +65,7 @@ export const MultiplayerModal = ({ isOpen, onClose, onSessionCreated, onSessionJ
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-100">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-100">
       <div className="bg-white rounded-lg shadow-xl w-96 max-w-md">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -105,21 +105,19 @@ export const MultiplayerModal = ({ isOpen, onClose, onSessionCreated, onSessionJ
         <div className="flex border-b">
           <button
             onClick={() => setActiveTab('create')}
-            className={`flex-1 py-3 px-4 text-sm font-medium ${
-              activeTab === 'create' 
-                ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
+            className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'create'
+                ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500'
                 : 'text-gray-600 hover:text-gray-800'
-            }`}
+              }`}
           >
             Create Session
           </button>
           <button
             onClick={() => setActiveTab('join')}
-            className={`flex-1 py-3 px-4 text-sm font-medium ${
-              activeTab === 'join' 
-                ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
+            className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'join'
+                ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500'
                 : 'text-gray-600 hover:text-gray-800'
-            }`}
+              }`}
           >
             Join Session
           </button>
@@ -154,11 +152,11 @@ export const MultiplayerModal = ({ isOpen, onClose, onSessionCreated, onSessionJ
               </div>
               <input
                 type="text"
-                placeholder="Enter session ID (e.g., ABC123)"
+                placeholder="Enter session ID (e.g., ABC123XY45)"
                 value={sessionId}
                 onChange={(e) => setSessionId(e.target.value.toUpperCase())}
                 className="w-full p-3 border border-gray-300 rounded-lg text-center font-mono text-lg tracking-wider"
-                maxLength={6}
+                maxLength={10}
               />
               <button
                 onClick={handleJoinSession}
@@ -226,7 +224,7 @@ export const MultiplayerStatus = ({ sessionId, isHost, connectedPlayers, onLeave
           Leave Session
         </button>
       </div>
-      
+
       <div className="flex items-center gap-2 mb-2">
         <span className="text-xs text-blue-600 font-mono bg-white px-2 py-1 rounded border">
           {sessionId}
@@ -239,11 +237,11 @@ export const MultiplayerStatus = ({ sessionId, isHost, connectedPlayers, onLeave
           {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
       </div>
-      
+
       <div className="text-xs text-blue-600">
         {connectedPlayers} player{connectedPlayers !== 1 ? 's' : ''} connected
       </div>
-      
+
       {isHost && (
         <div className="mt-2 text-xs text-blue-600">
           💡 Share the session ID with other players so they can join
@@ -287,11 +285,10 @@ export const MultiplayerNotifications = ({ notifications }) => {
       {notifications.map(notification => (
         <div
           key={notification.id}
-          className={`p-3 rounded-lg shadow-lg max-w-sm animate-slide-in ${
-            notification.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' :
-            notification.type === 'error' ? 'bg-red-100 text-red-800 border border-red-200' :
-            'bg-blue-100 text-blue-800 border border-blue-200'
-          }`}
+          className={`p-3 rounded-lg shadow-lg max-w-sm animate-slide-in ${notification.type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' :
+              notification.type === 'error' ? 'bg-red-100 text-red-800 border border-red-200' :
+                'bg-blue-100 text-blue-800 border border-blue-200'
+            }`}
         >
           <div className="flex items-center gap-2">
             <Users size={16} />

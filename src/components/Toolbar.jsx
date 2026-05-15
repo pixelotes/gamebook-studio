@@ -2,10 +2,11 @@ import React, { useContext, useState, useRef, useEffect } from 'react';
 import { AppContext } from '../state/appState';
 import {
   PanelLeft, ChevronDown,
-  Move, Stamp, Square, Type, Pen, Eraser, Circle, MousePointerClick, Ruler, Signal
+  Move, Stamp, Square, Type, Pen, Eraser, Circle, MousePointerClick, Ruler, Signal, Package, Hand
 } from 'lucide-react';
 import { TOKEN_SHAPES } from '../data/Shapes';
 import { TOKEN_COLORS } from '../data/Colors';
+import TokenBrowser from './TokenBrowser';
 
 const Toolbar = () => {
   const { state, dispatch } = useContext(AppContext);
@@ -15,7 +16,25 @@ const Toolbar = () => {
   } = state;
 
   const [tokenSearch, setTokenSearch] = useState('');
+  const [showTokenBrowser, setShowTokenBrowser] = useState(false);
   const searchInputRef = useRef(null);
+  const toolbarRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!activeDropdown) return;
+
+    const handleClickOutside = (event) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(event.target)) {
+        dispatch({ type: 'SET_STATE', payload: { activeDropdown: null } });
+        setTokenSearch('');
+      }
+    };
+
+    // Use mousedown for faster response
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeDropdown, dispatch]);
 
   // This effect reliably focuses the search input when the dropdown is opened
   useEffect(() => {
@@ -59,7 +78,7 @@ const Toolbar = () => {
   const setLineWidth = (width) => {
     dispatch({ type: 'SET_STATE', payload: { lineWidth: width } });
   };
-  
+
   const lineWidths = [
     { value: 1, label: 'Thin' },
     { value: 3, label: 'Normal' },
@@ -68,7 +87,8 @@ const Toolbar = () => {
   ];
 
   const tools = [
-    { id: 'select', icon: Move, label: 'Select' },
+    { id: 'select', icon: Move, label: 'Drag' },
+    { id: 'pan', icon: Hand, label: 'Pan' },
     { id: 'token', icon: Stamp, label: 'Token' },
     { id: 'pointer', icon: MousePointerClick, label: 'Pointer' },
     { id: 'ruler', icon: Ruler, label: 'Ruler' },
@@ -83,178 +103,75 @@ const Toolbar = () => {
   );
 
   return (
-    <div className="bg-white border-b border-gray-200 px-3 py-1 flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => setIsSidebarVisible(!isSidebarVisible)}
-          className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-          title={isSidebarVisible ? 'Hide Sidebar' : 'Show Sidebar'}
-        >
-          <PanelLeft size={16} />
-        </button>
+    <>
+      <div ref={toolbarRef} className="bg-white border-b border-gray-200 px-3 py-1 flex items-center justify-between dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setIsSidebarVisible(!isSidebarVisible)}
+            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+            title={isSidebarVisible ? 'Hide Sidebar' : 'Show Sidebar'}
+          >
+            <PanelLeft size={16} />
+          </button>
 
-        {/* Divider */}
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+          {/* Divider */}
+          <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
 
-        <div className="flex items-center gap-2">
-          {/* Tool Selection */}
-          <div className="relative">
-            <button
-              onClick={() => setActiveDropdown('tools')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
-            >
-              <span className="flex-shrink-0">
-                {(() => {
-                  const Icon = tools.find(t => t.id === selectedTool)?.icon;
-                  return Icon ? <Icon size={16} /> : null;
-                })()}
-              </span>
-              <span className="font-medium capitalize">{selectedTool}</span>
-              <ChevronDown size={14} className="text-gray-500" />
-            </button>
-            {activeDropdown === 'tools' && (
-              <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-                {tools.map(tool => (
-                  <button
-                    key={tool.id}
-                    onClick={() => {
-                      setSelectedTool(tool.id);
-                      setActiveDropdown(null);
-                    }}
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                  >
-                    <tool.icon size={16} />
-                    {tool.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Color Selection for non-token tools */}
-          {!['select', 'eraser', 'token'].includes(selectedTool) && (
+          <div className="flex items-center gap-2">
+            {/* Tool Selection */}
             <div className="relative">
               <button
-                onClick={() => setActiveDropdown('color')}
+                onClick={() => setActiveDropdown('tools')}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
-                title="Select color"
               >
-                <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: selectedColor }} />
+                <span className="flex-shrink-0">
+                  {(() => {
+                    const Icon = tools.find(t => t.id === selectedTool)?.icon;
+                    return Icon ? <Icon size={16} /> : null;
+                  })()}
+                </span>
+                <span className="font-medium">{tools.find(t => t.id === selectedTool)?.label ?? selectedTool}</span>
                 <ChevronDown size={14} className="text-gray-500" />
               </button>
-              {activeDropdown === 'color' && (
+              {activeDropdown === 'tools' && (
                 <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-                  {TOKEN_COLORS.map(color => (
+                  {tools.map(tool => (
                     <button
-                      key={color.value}
+                      key={tool.id}
                       onClick={() => {
-                        setSelectedColor(color.value);
+                        setSelectedTool(tool.id);
                         setActiveDropdown(null);
                       }}
                       className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                     >
-                      <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }}/>
-                      {color.name}
+                      <tool.icon size={16} />
+                      {tool.label}
                     </button>
                   ))}
                 </div>
               )}
             </div>
-          )}
 
-          {/* Line Width for Draw Tool */}
-          {selectedTool === 'draw' && (
-            <div className="relative">
-              <button
-                onClick={() => setActiveDropdown('lineWidth')}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
-                title="Select line width"
-              >
-                <Signal size={16} />
-                <span className="font-medium">{lineWidth}px</span>
-                <ChevronDown size={14} className="text-gray-500" />
-              </button>
-              {activeDropdown === 'lineWidth' && (
-                <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-                  {lineWidths.map(width => (
-                    <button
-                      key={width.value}
-                      onClick={() => {
-                        setLineWidth(width.value);
-                        setActiveDropdown(null);
-                      }}
-                      className="w-full text-left flex items-center justify-between gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                    >
-                      <span>{width.label}</span>
-                      <span className="text-xs text-gray-500">{width.value}px</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Token Controls */}
-          {selectedTool === 'token' && (
-            <>
-              {/* Token Shape */}
+            {/* Color Selection for non-token tools */}
+            {!['select', 'eraser', 'token', 'pan'].includes(selectedTool) && (
               <div className="relative">
                 <button
-                  onClick={() => setActiveDropdown('tokenShape')}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm w-32 justify-between dark:hover:bg-gray-700 dark:border-gray-600"
-                  title="Select token shape"
-                >
-                  <span className="text-lg">{TOKEN_SHAPES[selectedTokenShape].icon}</span>
-                  <span className="font-medium capitalize">{TOKEN_SHAPES[selectedTokenShape].name}</span>
-                  <ChevronDown size={14} className="text-gray-500" />
-                </button>
-                {activeDropdown === 'tokenShape' && (
-                  <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 flex flex-col">
-                    <div 
-                      className="p-2 border-b border-gray-200 dark:border-gray-700" 
-                      onMouseDown={(e) => e.preventDefault()} // Prevent blur on the input
-                    >
-                      <input
-                          ref={searchInputRef}
-                          type="text"
-                          placeholder="Search tokens..."
-                          value={tokenSearch}
-                          onChange={(e) => setTokenSearch(e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
-                      />
-                    </div>
-                    <div className="max-h-[60vh] overflow-y-auto">
-                      {filteredTokenShapes.map(([key, shape]) => (
-                        <button 
-                          key={key} 
-                          onClick={() => { setSelectedTokenShape(key); setActiveDropdown(null); setTokenSearch(''); }} 
-                          className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                        >
-                          <span className="text-lg w-5 text-center">{shape.icon}</span>
-                          {shape.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Token Color */}
-              <div className="relative">
-                <button
-                  onClick={() => setActiveDropdown('tokenColor')}
+                  onClick={() => setActiveDropdown('color')}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
-                  title="Select token color"
+                  title="Select color"
                 >
-                  <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: selectedTokenColor }} />
+                  <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: selectedColor }} />
                   <ChevronDown size={14} className="text-gray-500" />
                 </button>
-                {activeDropdown === 'tokenColor' && (
+                {activeDropdown === 'color' && (
                   <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                     {TOKEN_COLORS.map(color => (
-                      <button 
-                        key={color.value} 
-                        onClick={() => { setSelectedTokenColor(color.value); setActiveDropdown(null); }}
+                      <button
+                        key={color.value}
+                        onClick={() => {
+                          setSelectedColor(color.value);
+                          setActiveDropdown(null);
+                        }}
                         className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                       >
                         <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }} />
@@ -264,24 +181,99 @@ const Toolbar = () => {
                   </div>
                 )}
               </div>
-              
-              {/* Token Size Slider */}
-              <div className="flex items-center gap-2">
-                <Circle size={14} className="text-gray-500" />
-                <input
-                  type="range"
-                  min="5"
-                  max="50"
-                  value={tokenSize}
-                  onChange={(e) => setTokenSize(parseInt(e.target.value))}
-                  className="w-24"
-                />
+            )}
+
+            {/* Line Width for Draw Tool */}
+            {selectedTool === 'draw' && (
+              <div className="relative">
+                <button
+                  onClick={() => setActiveDropdown('lineWidth')}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
+                  title="Select line width"
+                >
+                  <Signal size={16} />
+                  <span className="font-medium">{lineWidth}px</span>
+                  <ChevronDown size={14} className="text-gray-500" />
+                </button>
+                {activeDropdown === 'lineWidth' && (
+                  <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+                    {lineWidths.map(width => (
+                      <button
+                        key={width.value}
+                        onClick={() => {
+                          setLineWidth(width.value);
+                          setActiveDropdown(null);
+                        }}
+                        className="w-full text-left flex items-center justify-between gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                      >
+                        <span>{width.label}</span>
+                        <span className="text-xs text-gray-500">{width.value}px</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </>
-          )}
+            )}
+
+            {/* Token Controls */}
+            {selectedTool === 'token' && (
+              <>
+                {/* Token Shape */}
+                {/* Token Browser Trigger */}
+                <button
+                  onClick={() => setShowTokenBrowser(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
+                  title="Select Token"
+                >
+                  <Package size={16} />
+                  <span className="font-medium">Token Library</span>
+                </button>
+
+                {/* Token Color */}
+                <div className="relative">
+                  <button
+                    onClick={() => setActiveDropdown('tokenColor')}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 border border-gray-200 text-sm dark:hover:bg-gray-700 dark:border-gray-600"
+                    title="Select token color"
+                  >
+                    <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: selectedTokenColor }} />
+                    <ChevronDown size={14} className="text-gray-500" />
+                  </button>
+                  {activeDropdown === 'tokenColor' && (
+                    <div className="absolute top-full mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+                      {TOKEN_COLORS.map(color => (
+                        <button
+                          key={color.value}
+                          onClick={() => { setSelectedTokenColor(color.value); setActiveDropdown(null); }}
+                          className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        >
+                          <div className="w-5 h-5 rounded border border-gray-400" style={{ backgroundColor: color.value }} />
+                          {color.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Token Size Slider */}
+                <div className="flex items-center gap-2">
+                  <Circle size={14} className="text-gray-500" />
+                  <input
+                    type="range"
+                    min="5"
+                    max="50"
+                    value={tokenSize}
+                    onChange={(e) => setTokenSize(parseInt(e.target.value))}
+                    className="w-24"
+                  />
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      {showTokenBrowser && <TokenBrowser onClose={() => setShowTokenBrowser(false)} />}
+    </>
   );
 };
 

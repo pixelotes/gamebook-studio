@@ -1,13 +1,12 @@
-version: '3.8'
-
 services:
   client:
     build: .
     command: npm run start
     ports:
       - "3000:3000"
-    environment:
-      - VITE_SOCKET_SERVER_URL="http://server:3001"
+    # No VITE_SOCKET_SERVER_URL: the client auto-derives the server URL from
+    # window.location at runtime (same host, port 3001). Override here only if
+    # the server lives on a different host/port than the published 3001.
 
   server:
     build: .
@@ -15,4 +14,16 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - CORS_ORIGIN="http://client:3000"
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:
