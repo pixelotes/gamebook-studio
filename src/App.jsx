@@ -379,6 +379,7 @@ const GamebookApp = () => {
         }
 
         addNotification(`PDF "${pdfData.fileName}" was added to the session`, 'success');
+        eventLogService.logPdfOpen(pdfData.fileName);
       } catch (error) {
         console.error('Failed to load PDF from session:', error);
         addNotification('Failed to load PDF from session', 'error');
@@ -425,6 +426,20 @@ const GamebookApp = () => {
       }
     };
 
+    const handlePlayerJoined = (data) => {
+      const { socketId, clientCount } = data || {};
+      const label = `Player ${(socketId || '').slice(0, 6) || 'unknown'}`;
+      eventLogService.logPlayerJoin(label);
+      if (typeof clientCount === 'number') setConnectedPlayers(clientCount);
+    };
+
+    const handlePlayerLeft = (data) => {
+      const { socketId, clientCount } = data || {};
+      const label = `Player ${(socketId || '').slice(0, 6) || 'unknown'}`;
+      eventLogService.logPlayerLeave(label);
+      if (typeof clientCount === 'number') setConnectedPlayers(clientCount);
+    };
+
     socketService.on('game-state-delta', handleGameStateDelta);
     socketService.on('page-navigated', handlePageNavigated);
     socketService.on('layers-updated', handleLayersUpdated);
@@ -432,6 +447,8 @@ const GamebookApp = () => {
     socketService.on('pdf-removed', handlePdfRemoved);
     socketService.on('pointer-event', handlePointerEvent);
     socketService.on('dice-rolled', handleDiceRolled);
+    socketService.on('player-joined', handlePlayerJoined);
+    socketService.on('player-left', handlePlayerLeft);
 
     return () => {
       socketService.off('game-state-delta', handleGameStateDelta);
@@ -441,6 +458,8 @@ const GamebookApp = () => {
       socketService.off('pdf-removed', handlePdfRemoved);
       socketService.off('pointer-event', handlePointerEvent);
       socketService.off('dice-rolled', handleDiceRolled);
+      socketService.off('player-joined', handlePlayerJoined);
+      socketService.off('player-left', handlePlayerLeft);
     };
   }, [gameStateVersion]);
 
@@ -541,6 +560,7 @@ const GamebookApp = () => {
     setIsHost(true);
     setConnectedPlayers(1);
     addNotification(`Multiplayer session created: ${sessionId}`, 'success');
+    eventLogService.logMultiplayerStart(sessionId);
 
     const uploadPromises = pdfs
       .filter(pdf => pdf.file)
@@ -570,9 +590,11 @@ const GamebookApp = () => {
   };
 
   const handleJoinMultiplayerSession = async (response) => {
-    setMultiplayerSession(response.sessionId || socketService.getSessionInfo().sessionId);
+    const joinedSessionId = response.sessionId || socketService.getSessionInfo().sessionId;
+    setMultiplayerSession(joinedSessionId);
     setIsHost(response.isHost);
     setConnectedPlayers(response.clientCount);
+    eventLogService.logMultiplayerStart(joinedSessionId);
 
     if (response.gameState) {
       setGameStateVersion(response.version);
@@ -702,6 +724,7 @@ const GamebookApp = () => {
             [paneIdKey]: newPdfsData[0].id,
           }
         });
+        newPdfsData.forEach(p => eventLogService.logPdfOpen(p.fileName));
 
         if (socketService.isMultiplayerActive()) {
           for (const pdfData of newPdfsData) {
@@ -938,6 +961,7 @@ const GamebookApp = () => {
       addNotification("Only the session host can close PDFs", "error");
       return;
     }
+    const closingPdf = pdfs.find(p => p.id === pdfId);
     if (socketService.isMultiplayerActive()) {
       socketService.removePdf(pdfId);
     }
@@ -959,6 +983,9 @@ const GamebookApp = () => {
         secondaryPdfId: newSecondaryPdfId
       }
     });
+    if (closingPdf) {
+      eventLogService.logPdfClose(closingPdf.fileName);
+    }
   };
 
   const updatePdf = (pdfId, updates) => {

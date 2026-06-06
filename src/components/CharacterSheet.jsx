@@ -65,6 +65,7 @@ const CharacterSheet = () => {
   };
 
   const addCustomField = (charId) => {
+    const character = characters.find(c => c.id === charId);
     dispatch({ type: 'SET_STATE', payload: {
       characters: characters.map(char => {
         if (char.id === charId) {
@@ -75,6 +76,9 @@ const CharacterSheet = () => {
         return char;
       })
     }});
+    if (character) {
+      eventLogService.logCustomStatAdd(character.data.name || 'Unnamed', 'New Stat');
+    }
   };
 
   const updateCustomField = (charId, fieldId, fieldProp, value) => {
@@ -123,11 +127,12 @@ const CharacterSheet = () => {
         }
       }, 500); // 500ms for number fields
     } else {
-      // For non-value fields (like name changes), update immediately without logging
+      // For non-value fields (like name changes)
+      const oldField = character?.data.customFields?.find(f => f.id === fieldId);
       dispatch({ type: 'SET_STATE', payload: {
         characters: characters.map(char => {
           if (char.id === charId) {
-            const updatedFields = char.data.customFields.map(field => 
+            const updatedFields = char.data.customFields.map(field =>
               field.id === fieldId ? { ...field, [fieldProp]: value } : field
             );
             return { ...char, data: { ...char.data, customFields: updatedFields } };
@@ -135,10 +140,15 @@ const CharacterSheet = () => {
           return char;
         })
       }});
+      if (fieldProp === 'name' && character && oldField && oldField.name !== value) {
+        eventLogService.logCustomStatRename(character.data.name || 'Unnamed', oldField.name, value);
+      }
     }
   };
 
   const removeCustomField = (charId, fieldId) => {
+    const character = characters.find(c => c.id === charId);
+    const removedField = character?.data.customFields?.find(f => f.id === fieldId);
     dispatch({ type: 'SET_STATE', payload: {
       characters: characters.map(char => {
         if (char.id === charId) {
@@ -148,6 +158,9 @@ const CharacterSheet = () => {
         return char;
       })
     }});
+    if (character && removedField) {
+      eventLogService.logCustomStatDelete(character.data.name || 'Unnamed', removedField.name);
+    }
   };
 
   // Silently filter out duplicate characters to prevent crashes
