@@ -97,6 +97,42 @@ class EventLogService {
     );
   }
 
+  logCounterRename(oldName, newName, player = null) {
+    return this.addEvent(
+      'counter_rename',
+      `Renamed counter "${oldName}" → "${newName}"`,
+      null,
+      player
+    );
+  }
+
+  logCustomStatAdd(characterName, statName, player = null) {
+    return this.addEvent(
+      'custom_stat_add',
+      `Added stat "${statName}" to ${characterName || 'character'}`,
+      null,
+      player
+    );
+  }
+
+  logCustomStatRename(characterName, oldName, newName, player = null) {
+    return this.addEvent(
+      'custom_stat_rename',
+      `Renamed stat in ${characterName || 'character'}: "${oldName}" → "${newName}"`,
+      null,
+      player
+    );
+  }
+
+  logCustomStatDelete(characterName, statName, player = null) {
+    return this.addEvent(
+      'custom_stat_delete',
+      `Deleted stat "${statName}" from ${characterName || 'character'}`,
+      null,
+      player
+    );
+  }
+
   logCharacterCreate(characterName, template, player = null) {
     return this.addEvent(
       'character_create',
@@ -174,6 +210,15 @@ class EventLogService {
     return this.addEvent(
       'player_join',
       `${playerName} joined the session`,
+      null,
+      'System'
+    );
+  }
+
+  logPlayerLeave(playerName) {
+    return this.addEvent(
+      'player_leave',
+      `${playerName} left the session`,
       null,
       'System'
     );

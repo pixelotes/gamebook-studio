@@ -71,10 +71,13 @@ const Counters = () => {
     } else {
       // For non-value fields (like name), update without debouncing
       dispatch({ type: 'SET_STATE', payload: {
-        counters: counters.map(counter => 
+        counters: counters.map(counter =>
           counter.id === id ? { ...counter, [field]: value } : counter
         )
       }});
+      if (field === 'name' && counter && counter.name !== value) {
+        eventLogService.logCounterRename(counter.name, value);
+      }
     }
   };
 

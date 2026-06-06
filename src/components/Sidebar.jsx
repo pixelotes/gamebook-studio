@@ -92,7 +92,11 @@ const Sidebar = ({ children }) => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold">Character Sheets</h3>
                   <button
-                    onClick={() => dispatch({ type: 'ADD_CHARACTER' })}
+                    onClick={() => {
+                      const templateName = CHARACTER_TEMPLATES[selectedTemplate]?.name || selectedTemplate;
+                      eventLogService.logCharacterCreate(null, templateName);
+                      dispatch({ type: 'ADD_CHARACTER' });
+                    }}
                     className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
                   >
                     <Plus size={14} />
