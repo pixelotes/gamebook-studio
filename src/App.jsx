@@ -540,6 +540,9 @@ const GamebookApp = () => {
           } catch (error) {
             console.error('Error loading PDF for session restore:', file.name, error);
           }
+        } else {
+          const expectedNames = sessionToRestore.pdfs.map(p => p.fileName).join(', ');
+          console.warn(`[Session Restore] Rejected PDF "${file.name}". The loaded session is expecting exactly these files: [${expectedNames}]`);
         }
       } else {
         try {
@@ -579,7 +582,10 @@ const GamebookApp = () => {
           }
         });
       } else {
-        addNotification('Could not restore session. Please select all the correct PDF files.', 'error');
+        const expectedNames = sessionToRestore.pdfs.map(p => p.fileName).join(', ');
+        const uploadedNames = newPdfsData.map(p => p.fileName).join(', ');
+        console.error(`[Session Restore] Failed to restore session. Expected [${expectedNames}], but got [${uploadedNames}]`);
+        addNotification('Could not restore session. Filenames must match exactly. Check browser console for details.', 'error');
         dispatch({ type: 'SET_STATE', payload: { sessionToRestore: null } });
       }
     } else {
