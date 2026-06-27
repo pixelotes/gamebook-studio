@@ -84,17 +84,16 @@ const GamebookApp = () => {
   }, [state.tokenPacks]);
 
   const [gameStateVersion, setGameStateVersion] = useState(0);
-  // Layout constants
-  const maxSidebarWidth = Math.min(600, window.innerWidth * 0.4);
-  const availableWidth = isSidebarVisible ? window.innerWidth - sidebarWidth : window.innerWidth;
-  const maxPrimaryPaneWidth = availableWidth - 200; // 200px minimum for secondary pane
-
-
   // --- UI State ---
   const [showMetadataModal, setShowMetadataModal] = useState(false);
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(state.sidebarWidth);
   const [primaryPaneWidth, setPrimaryPaneWidth] = useState(null);
+
+  // Layout constants
+  const maxSidebarWidth = Math.min(600, window.innerWidth * 0.4);
+  const availableWidth = isSidebarVisible ? window.innerWidth - sidebarWidth : window.innerWidth;
+  const maxPrimaryPaneWidth = availableWidth - 200; // 200px minimum for secondary pane
   
   // --- Logic Hooks ---
   const {
