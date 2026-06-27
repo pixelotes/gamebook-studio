@@ -27,7 +27,7 @@ import * as pako from 'pako'
 import { crc32 } from 'crc';
 import DebugModal from './components/DebugModal';
 import GameMetadataModal from './components/GameMetadataModal';
-import { Settings } from 'lucide-react';
+import { Settings, Menu, Wifi, Columns, Moon, Sun, FilePlus, Upload, Save, RotateCcw } from 'lucide-react';
 import { CorePack } from './data/CorePack';
 
 // Services and Classes
@@ -50,9 +50,8 @@ const GamebookApp = () => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const {
     menuOpen, isDualPaneMode, theme, pdfs, isSidebarVisible,
-    selectedTool, selectedColor, selectedTokenShape, selectedTokenColor,
     tokenSize, lineWidth,
-    secondaryPdfId
+    secondaryPdfId, activePdfId, sessionToRestore
   } = state;
 
   // --- Refs ---
@@ -87,6 +86,8 @@ const GamebookApp = () => {
   const [gameStateVersion, setGameStateVersion] = useState(0);
   // Layout constants
   const maxSidebarWidth = Math.min(600, window.innerWidth * 0.4);
+  const availableWidth = isSidebarVisible ? window.innerWidth - sidebarWidth : window.innerWidth;
+  const maxPrimaryPaneWidth = availableWidth - 200; // 200px minimum for secondary pane
 
 
   // --- UI State ---
