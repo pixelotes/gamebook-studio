@@ -943,7 +943,7 @@ const GamebookApp = () => {
                 closePdf={closePdf}
                 updatePdf={updatePdf}
                 onTabSelect={(pdfId) => handleTabSelect(pdfId, 'primary')}
-                onTabClose={handleTabClose}
+                onTabClose={closePdf}
                 onBookmarkNavigate={handleBookmarkNavigate}
                 onLayerUpdate={handleLayerUpdate}
                 onFilesDropped={(files) => handleUnifiedLoad({ target: { files } }, 'primary')}
@@ -981,7 +981,7 @@ const GamebookApp = () => {
                   closePdf={closePdf}
                   updatePdf={updatePdf}
                   onTabSelect={(pdfId) => handleTabSelect(pdfId, 'secondary')}
-                  onTabClose={handleTabClose}
+                  onTabClose={closePdf}
                   onBookmarkNavigate={handleBookmarkNavigate}
                   onLayerUpdate={handleLayerUpdate}
                   onFilesDropped={(files) => handleUnifiedLoad({ target: { files } }, 'secondary')}
