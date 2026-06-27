@@ -5,6 +5,9 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crc = require('crc');
+const Redis = require('ioredis');
+const { nanoid } = require('nanoid');
 const { runWorkerTask } = require('./src/server/workerClient');
 const { GameSession } = require('./src/server/GameSession');
 
