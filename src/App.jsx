@@ -33,8 +33,8 @@ import { CorePack } from './data/CorePack';
 // Services and Classes
 import FabricCanvas from './canvas/FabricCanvas';
 
-// PDF worker setup
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 // Custom hook to get the previous value of a prop or state
 const usePrevious = (value) => {
