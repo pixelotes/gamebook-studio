@@ -70,6 +70,20 @@ const GamebookApp = () => {
   const overlayCanvasRef = useRef(null);
   const secondaryOverlayCanvasRef = useRef(null);
 
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const goToPageRef = useRef(null);
+
+  // Initialize GBTK - Register Core Pack
+  useEffect(() => {
+    if (state.tokenPacks && !state.tokenPacks.some(p => p.name === CorePack.name)) {
+      dispatch({ type: 'REGISTER_PACK', payload: CorePack });
+    }
+  }, [state.tokenPacks]);
+
   const [gameStateVersion, setGameStateVersion] = useState(0);
 
   // --- UI State ---
