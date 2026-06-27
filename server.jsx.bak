@@ -95,7 +95,7 @@ async function getSession(sessionId) {
 
 async function saveSession(session) {
   const key = `session:${session.id}`;
-  console.log("saveSession", session.id, session.hostSocketId); await redis.hset(key, {
+  await redis.hset(key, {
     id: session.id,
     hostSocketId: session.hostSocketId,
     clients: JSON.stringify(Array.from(session.clients)),
@@ -434,8 +434,7 @@ io.on('connection', (socket) => {
 app.get('/health', async (req, res) => {
   let redisStatus = 'unknown';
   try {
-      if (redis.status === 'memory') redisStatus = 'memory (optional mode)';
-      else if (redis.status === 'ready') redisStatus = 'connected';
+      if (redis.status === 'ready') redisStatus = 'connected';
       else redisStatus = redis.status;
   } catch (e) {
       redisStatus = 'error';

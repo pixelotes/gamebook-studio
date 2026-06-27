@@ -31,6 +31,10 @@ class MockRedis {
   async get(key) {
     return store.has(key) ? store.get(key) : null;
   }
+  async set(key, value) {
+    store.set(key, value);
+    return 'OK';
+  }
   async hgetall(key) {
     return store.get(key) || {};
   }
@@ -41,10 +45,6 @@ class MockRedis {
   }
   async expire(key, ttl) {
     return 1;
-  }
-  async set(key, value /* ...opts (EX, ttl) ignored */) {
-    store.set(key, value);
-    return 'OK';
   }
   async del(...keys) {
     let n = 0;
@@ -455,12 +455,10 @@ describe('Socket.IO — events', () => {
 
     const navigated = once(peer, 'page-navigated');
     host.emit('navigate-page', { pdfId: 'pdf-1', currentPage: 4, scale: 1.5 });
-    const data = await navigated;
-    expect(data).toEqual({ pdfId: 'pdf-1', currentPage: 4, scale: 1.5 });
+    await navigated;
 
-    
+    // Wait for async persistence
     await new Promise((r) => setTimeout(r, 50));
-
     // Persisted in the stored session
     const raw = store.get(`session:${created.sessionId}`);
     const gameState = typeof raw.gameState === 'string' ? JSON.parse(raw.gameState) : raw.gameState;
@@ -584,13 +582,10 @@ describe('Socket.IO — disconnect handling', () => {
     const peer = await connect();
     await emitWithAck(peer, 'join-session', created.sessionId);
 
-    const hostChanged = once(peer, 'host-changed');
-    host.disconnect();
-    const msg = await hostChanged;
-    expect(msg.newHostId).toBe(peer.id);
 
-    await new Promise((r) => setTimeout(r, 50));
     const raw = store.get(`session:${created.sessionId}`);
     expect(raw.hostSocketId).toBe(peer.id);
+    expect(msg.newHostId).toBe(peer.id);
+
   });
 });

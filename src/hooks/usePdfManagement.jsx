@@ -17,6 +17,11 @@ export const usePdfManagement = ({
   const renderPdfPage = useCallback(async (pdfData, pdfCanvas, overlayCanvas, fabricCanvasInstance, paneId) => {
     if (activeRenderTasks.current[paneId]) {
       activeRenderTasks.current[paneId].cancel();
+      try {
+        await activeRenderTasks.current[paneId].promise;
+      } catch (e) {
+        // ignore cancellation error
+      }
     }
 
     if (!pdfData || !pdfCanvas.current) {
@@ -39,6 +44,10 @@ export const usePdfManagement = ({
 
       canvas.height = viewport.height;
       canvas.width = viewport.width;
+
+      // Reset transform to ensure clean slate
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.clearRect(0, 0, canvas.width, canvas.height);
 
       const renderContext = {
         canvasContext: context,

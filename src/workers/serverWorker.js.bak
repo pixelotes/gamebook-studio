@@ -13,9 +13,7 @@ parentPort.on('message', ({ id, type, payload }) => {
     if (type === 'diff') {
       result = diffpatcher.diff(payload.previousState, payload.newState);
     } else if (type === 'inflate') {
-      const decompressed = pako.inflate(payload.data);
-      const text = new TextDecoder().decode(decompressed);
-      result = JSON.parse(text);
+      result = JSON.parse(pako.inflate(payload.data, { to: 'string' }));
     } else {
       throw new Error(`Unknown task type: ${type}`);
     }

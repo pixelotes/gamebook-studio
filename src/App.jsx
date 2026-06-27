@@ -62,8 +62,6 @@ const GamebookApp = () => {
     if (!confirmModalRef.current) return Promise.resolve(false);
     return confirmModalRef.current.confirm(options);
   }, []);
-  // Track active PDF render tasks to prevent race conditions (flipped PDF bug)
-  const renderTaskRef = useRef({ primary: null, secondary: null });
   const fabricCanvas = useRef(null);
   const secondaryFabricCanvas = useRef(null);
   const overlayCanvasRef = useRef(null);
@@ -150,66 +148,6 @@ const GamebookApp = () => {
     }
   }, []);
 
-
-  const renderPdfPage = useCallback(async (pdfData, canvasRef, paneId = 'primary') => {
-    if (!pdfData || !canvasRef.current) return;
-
-    // CANCEL previous task if it exists to prevent race condition (flipped PDF bug)
-    if (renderTaskRef.current[paneId]) {
-      renderTaskRef.current[paneId].cancel();
-      renderTaskRef.current[paneId] = null;
-    }
-
-    const { pdfDoc, currentPage, scale, pageLayers } = pdfData;
-
-    try {
-      const page = await pdfDoc.getPage(currentPage);
-      const viewport = page.getViewport({ scale: scale });
-
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      // Reset transform to ensure clean slate
-      context.setTransform(1, 0, 0, 1, 0, 0);
-      context.clearRect(0, 0, canvas.width, canvas.height);
-
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport,
-        background: 'white',
-      };
-
-      // Store the task so we can cancel it if needed
-      const renderTask = page.render(renderContext);
-      renderTaskRef.current[paneId] = renderTask;
-
-      await renderTask.promise;
-
-      // Clear the ref after successful completion
-      renderTaskRef.current[paneId] = null;
-    } catch (error) {
-      // Ignore cancelled errors - they are expected when rapidly switching pages
-      if (error.name !== 'RenderingCancelledException') {
-        console.error('Error rendering page:', error);
-      }
-    }
-  }, []);
-
-  /* Legacy Canvas Encapsulation Removed */
-  // Update canvas tool settings (NO PDF re-render)
-  /* Legacy Canvas Tool Effects Removed */
-  // Render PDFs only when they actually change
-  useEffect(() => {
-    renderPdfPage(activePdf, pdfCanvasRef, 'primary');
-    if (isDualPaneMode) {
-      renderPdfPage(secondaryPdf, secondaryPdfCanvasRef, 'secondary');
-    }
-  }, [activePdf?.id, activePdf?.currentPage, activePdf?.scale,
-  secondaryPdf?.id, secondaryPdf?.currentPage, secondaryPdf?.scale,
-    isDualPaneMode, renderPdfPage]);
 
   // Multiplayer effect handlers
   useEffect(() => {
@@ -311,7 +249,7 @@ const GamebookApp = () => {
         const pdfUrl = socketService.getPdfUrl(pdfData.id);
         const response = await fetch(pdfUrl);
         const arrayBuffer = await response.arrayBuffer();
-        const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+        const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
         const newPdf = {
           ...pdfData,
@@ -532,7 +470,7 @@ const GamebookApp = () => {
         if (matchingPdfInSession) {
           try {
             const url = URL.createObjectURL(file);
-            const pdfDoc = await pdfjsLib.getDocument(url).promise;
+            const pdfDoc = await pdfjsLib.getDocument({ url }).promise;
             newPdfsData.push({
               ...matchingPdfInSession,
               file,
@@ -551,7 +489,7 @@ const GamebookApp = () => {
       } else {
         try {
           const url = URL.createObjectURL(file);
-          const pdfDoc = await pdfjsLib.getDocument(url).promise;
+          const pdfDoc = await pdfjsLib.getDocument({ url }).promise;
           const pdfData = {
             id: file.name,
             fileName: file.name,
@@ -562,7 +500,7 @@ const GamebookApp = () => {
             scale: 1,
             initialScaleSet: false,
             pageLayers: {},
-            bookmarks: await pdfjsLib.getDocument(url).promise.then(doc => doc.getOutline()).catch(() => []) || [],
+            bookmarks: await pdfjsLib.getDocument({ url }).promise.then(doc => doc.getOutline()).catch(() => []) || [],
           };
           newPdfsData.push(pdfData);
         } catch (error) {
@@ -661,7 +599,7 @@ const GamebookApp = () => {
         if (pdfFile) {
           const pdfBlob = await pdfFile.async('blob');
           const pdfUrl = URL.createObjectURL(pdfBlob);
-          const pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+          const pdfDoc = await pdfjsLib.getDocument({ url: pdfUrl }).promise;
 
           loadedPdfs.push({
             ...pdfInfo,

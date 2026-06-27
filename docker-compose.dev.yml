@@ -6,6 +6,8 @@ services:
       - "3000:3000"
       - "3001:3001"
     environment:
+      # Set to 'false' to use the in-memory store and avoid needing the redis container
+      - USE_REDIS=true
       - REDIS_URL=redis://redis:6379
     depends_on:
       - redis

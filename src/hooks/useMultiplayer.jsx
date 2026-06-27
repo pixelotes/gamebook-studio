@@ -80,8 +80,8 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
             const pdfUrl = socketService.getPdfUrl(pdfData.id);
             const pdfResponse = await fetch(pdfUrl);
             const arrayBuffer = await pdfResponse.arrayBuffer();
-            
-            const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+
+            const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             
             loadedPdfs.push({ ...pdfData, pdfDoc, file: null });
           } catch (error) {
@@ -212,8 +212,8 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
             const pdfUrl = socketService.getPdfUrl(pdfData.id);
             const response = await fetch(pdfUrl);
             const arrayBuffer = await response.arrayBuffer();
-            
-            const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+
+            const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             const newPdf = { ...pdfData, pdfDoc, file: null };
             dispatch({ type: 'SET_STATE', payload: { pdfs: [...stateRef.current.pdfs, newPdf] }});
             addNotification(`${pdfData.fileName} cargado correctamente.`, 'success');

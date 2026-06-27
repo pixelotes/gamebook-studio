@@ -106,7 +106,7 @@ export const useSessionManagement = ({
         const pdfFile = pdfFolder.file(pdfInfo.fileName);
         if (pdfFile) {
           const pdfBlob = await pdfFile.async('blob');
-          const pdfDoc = await pdfjsLib.getDocument(URL.createObjectURL(pdfBlob)).promise;
+          const pdfDoc = await pdfjsLib.getDocument({ url: URL.createObjectURL(pdfBlob) }).promise;
           loadedPdfs.push({
             ...pdfInfo,
             pdfDoc,
@@ -132,7 +132,7 @@ export const useSessionManagement = ({
     for (const file of files) {
       try {
         const url = URL.createObjectURL(file);
-        const pdfDoc = await pdfjsLib.getDocument(url).promise;
+        const pdfDoc = await pdfjsLib.getDocument({ url }).promise;
         const bookmarks = await pdfDoc.getOutline().catch(() => []) || [];
         const pdfId = `${file.name}-${file.size}`;
         const pdfData = {
@@ -152,6 +152,7 @@ export const useSessionManagement = ({
           initialScaleSet: false,
         };
       } catch (error) {
+        console.error("PDF load error:", error);
         addNotification(`Error loading PDF: ${file.name}`, 'error');
       }
     }
