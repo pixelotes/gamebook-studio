@@ -65,6 +65,10 @@ const GamebookApp = () => {
   }, []);
   // Track active PDF render tasks to prevent race conditions (flipped PDF bug)
   const renderTaskRef = useRef({ primary: null, secondary: null });
+  const fabricCanvas = useRef(null);
+  const secondaryFabricCanvas = useRef(null);
+  const overlayCanvasRef = useRef(null);
+  const secondaryOverlayCanvasRef = useRef(null);
 
 
   // --- UI State ---
