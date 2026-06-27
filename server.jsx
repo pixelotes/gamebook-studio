@@ -181,6 +181,25 @@ async function saveSession(session) {
   await redis.set(`session:${session.id}`, JSON.stringify(session.toJSON()), 'EX', 86400); // 24h expiry
 }
 
+// Session Action Queue to prevent race conditions
+class SessionQueue {
+  constructor() {
+    this.promise = Promise.resolve();
+  }
+  enqueue(task) {
+    this.promise = this.promise.then(task).catch(console.error);
+    return this.promise;
+  }
+}
+const sessionQueues = new Map();
+
+function getQueue(sessionId) {
+  if (!sessionQueues.has(sessionId)) {
+    sessionQueues.set(sessionId, new SessionQueue());
+  }
+  return sessionQueues.get(sessionId);
+}
+
 // API Routes
 app.get('/api/sessions', async (req, res) => {
   // Scan all sessions (inefficient for prod, but matches prototype behavior)
@@ -317,31 +336,30 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('update-game-state', async (updates) => {
+  socket.on('update-game-state', (updates) => {
     if (!socket.sessionId) return;
 
-    // Retry Loop for simple optimism validation or Lock?
-    // For simplicity, we just Get -> Update -> Set.
-    // Race conditions ARE possible here.
-    const session = await getSession(socket.sessionId);
-    if (!session) return;
+    getQueue(socket.sessionId).enqueue(async () => {
+      const session = await getSession(socket.sessionId);
+      if (!session) return;
 
-    const result = session.updateGameState(updates);
-    
-    if (result) {
-        await saveSession(session); // Save changes
+      const result = session.updateGameState(updates);
+      
+      if (result) {
+          await saveSession(session); // Save changes
 
-        const { delta, version } = result;
-        const gameStateCrc = crc.crc32(JSON.stringify(session.gameState)).toString(16);
-        console.log(`Game state updated version ${version} in session ${socket.sessionId} CRC: ${gameStateCrc}`);
-        
-        socket.to(socket.sessionId).emit('game-state-delta', {
-            delta,
-            version,
-            fromVersion: version - 1,
-            crc: gameStateCrc
-        });
-    }
+          const { delta, version } = result;
+          const gameStateCrc = crc.crc32(JSON.stringify(session.gameState)).toString(16);
+          console.log(`Game state updated version ${version} in session ${socket.sessionId} CRC: ${gameStateCrc}`);
+          
+          socket.to(socket.sessionId).emit('game-state-delta', {
+              delta,
+              version,
+              fromVersion: version - 1,
+              crc: gameStateCrc
+          });
+      }
+    });
   });
   
   // New event for logging
@@ -433,32 +451,35 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('disconnect', async () => {
+  socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
 
     if (socket.sessionId) {
-      const session = await getSession(socket.sessionId);
-      if (session) {
-        const isEmpty = session.removeClient(socket.id);
-        
-        if (isEmpty) {
-          await redis.del(`session:${socket.sessionId}`);
-          console.log(`Session ${socket.sessionId} deleted (empty)`);
-        } else {
-            // Need to save the updated client list
-            if (session.hostSocketId === socket.id && session.clients.size > 0) {
-                session.hostSocketId = session.clients.values().next().value;
-                socket.to(socket.sessionId).emit('host-changed', {
-                    newHostId: session.hostSocketId
-                });
-            }
-            await saveSession(session);
+      getQueue(socket.sessionId).enqueue(async () => {
+        const session = await getSession(socket.sessionId);
+        if (session) {
+          const isEmpty = session.removeClient(socket.id);
+          
+          if (isEmpty) {
+            await redis.del(`session:${socket.sessionId}`);
+            sessionQueues.delete(socket.sessionId); // Cleanup queue
+            console.log(`Session ${socket.sessionId} deleted (empty)`);
+          } else {
+              // Need to save the updated client list
+              if (session.hostSocketId === socket.id && session.clients.size > 0) {
+                  session.hostSocketId = session.clients.values().next().value;
+                  socket.to(socket.sessionId).emit('host-changed', {
+                      newHostId: session.hostSocketId
+                  });
+              }
+              await saveSession(session);
 
-            socket.to(socket.sessionId).emit('player-left', {
-                socketId: socket.id,
-            });
+              socket.to(socket.sessionId).emit('player-left', {
+                  socketId: socket.id,
+              });
+          }
         }
-      }
+      });
     }
   });
 });
