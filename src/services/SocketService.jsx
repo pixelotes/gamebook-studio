@@ -1,5 +1,6 @@
 import { io } from 'socket.io-client';
 import pako from 'pako';
+import { runClientWorkerTask } from '../workers/workerClient';
 
 // Use different debounce times for different operations
 const DEBOUNCE_TIMES = {
@@ -170,18 +171,18 @@ class SocketService {
       }
 
       // Set a new timer to emit the correct event
-      this.layerUpdateTimer = setTimeout(() => {
+      this.layerUpdateTimer = setTimeout(async () => {
         const data = { pdfId, pageNum, layers };
-        const compressedData = pako.deflate(JSON.stringify(data)); // Compress the data
+        const compressedData = await runClientWorkerTask('deflate', { data }); // Compress via worker
         this.socket.emit('update-layers', compressedData);
       }, DEBOUNCE_TIMES.drawing);
     }
   }
 
   // Send real-time updates (while drawing/dragging)
-  sendRealTimeUpdate(updateType, data) {
+  async sendRealTimeUpdate(updateType, data) {
     if (this.socket && this.isConnected && this.sessionId) {
-        const compressedData = pako.deflate(JSON.stringify({ type: updateType, data })); // Compress the data
+        const compressedData = await runClientWorkerTask('deflate', { data: { type: updateType, data } }); // Compress via worker
         this.socket.emit('real-time-update', compressedData);
     }
   }

@@ -5,6 +5,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { Worker } = require('worker_threads');
 const jsondiffpatch = require('jsondiffpatch');
 const pako = require('pako');
 const crc = require('crc');
@@ -12,10 +13,28 @@ const Redis = require('ioredis');
 const { nanoid } = require('nanoid');
 const { z } = require('zod');
 
-const diffpatcher = jsondiffpatch.create({
-  objectHash: (obj) => obj.id || JSON.stringify(obj),
-  arrays: { detectMove: true }
+
+// Worker Thread Setup
+const computeWorker = new Worker(path.join(__dirname, 'src/workers/serverWorker.js'));
+const pendingTasks = new Map();
+let taskIdCounter = 0;
+
+computeWorker.on('message', ({ id, success, result, error }) => {
+  const task = pendingTasks.get(id);
+  if (task) {
+    if (success) task.resolve(result);
+    else task.reject(new Error(error));
+    pendingTasks.delete(id);
+  }
 });
+
+function runWorkerTask(type, payload) {
+  return new Promise((resolve, reject) => {
+    const id = taskIdCounter++;
+    pendingTasks.set(id, { resolve, reject });
+    computeWorker.postMessage({ id, type, payload });
+  });
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -121,7 +140,7 @@ class GameSession {
     io.to(this.id).emit('event-logged', event);
   }
 
-  updateGameState(updates) {
+  async updateGameState(updates) {
     // Validate updates (partial)
     try {
         gameStateSchema.parse(updates);
@@ -133,7 +152,7 @@ class GameSession {
     const previousState = { ...this.gameState };
     this.gameState = { ...this.gameState, ...updates };
     
-    const delta = diffpatcher.diff(previousState, this.gameState);
+    const delta = await runWorkerTask('diff', { previousState, newState: this.gameState });
     
     if (delta) {
         this.stateVersion++;
@@ -365,7 +384,7 @@ io.on('connection', (socket) => {
       const session = await getSession(socket.sessionId);
       if (!session) return;
 
-      const result = session.updateGameState(updates);
+      const result = await session.updateGameState(updates);
       
       if (result) {
           await saveSession(session); // Save changes
@@ -435,7 +454,7 @@ io.on('connection', (socket) => {
     if (!session) return;
 
     try {
-        const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
+        const decompressedData = await runWorkerTask('inflate', { data });
         
         if (!session.gameState.pageLayers[decompressedData.pdfId]) {
           session.gameState.pageLayers[decompressedData.pdfId] = {};

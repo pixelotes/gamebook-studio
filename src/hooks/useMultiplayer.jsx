@@ -2,13 +2,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import socketService from '../services/SocketService';
 import eventLogService from '../services/EventLogService';
-import pako from 'pako';
-import { create } from 'jsondiffpatch';
 
-// Crear una instancia de jsondiffpatch para aplicar los deltas
-const diffpatcher = create({
-  objectHash: (obj) => obj.id,
-});
+import { runClientWorkerTask } from '../workers/workerClient';
+
 
 export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, secondaryFabricCanvas }) => {
   const [showMultiplayerModal, setShowMultiplayerModal] = useState(false);
@@ -126,7 +122,7 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
     };
 
     // --- INICIO DE LA FUNCIÓN CORREGIDA ---
-    const handleGameStateDelta = ({ delta }) => {
+    const handleGameStateDelta = async ({ delta }) => {
         const currentState = stateRef.current;
         
         // 1. Crear una versión del estado actual que sea "segura" (solo datos JSON)
@@ -140,7 +136,7 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
         };
 
         // 2. Aplicar el parche a esta versión segura
-        const newSerializableState = diffpatcher.patch(serializableState, delta);
+        const newSerializableState = await runClientWorkerTask('patch', { state: serializableState, delta });
         if (!newSerializableState) return; // Si no hay cambios, no hacer nada
 
         // 3. Reconstruir el estado final, restaurando los objetos pdfDoc del estado original
@@ -166,9 +162,9 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
     };
     // --- FIN DE LA FUNCIÓN CORREGIDA ---
     
-    const handleLayersUpdate = (compressedData) => {
+    const handleLayersUpdate = async (compressedData) => {
       try {
-        const data = JSON.parse(pako.inflate(compressedData, { to: 'string' }));
+        const data = await runClientWorkerTask('inflate', { data: compressedData });
         const { pdfId, pageNum, layers } = data;
         
         const currentPdfs = stateRef.current.pdfs;
