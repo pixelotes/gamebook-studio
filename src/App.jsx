@@ -70,6 +70,7 @@ const GamebookApp = () => {
   const overlayCanvasRef = useRef(null);
   const secondaryOverlayCanvasRef = useRef(null);
 
+  const [gameStateVersion, setGameStateVersion] = useState(0);
 
   // --- UI State ---
   const [showMetadataModal, setShowMetadataModal] = useState(false);
