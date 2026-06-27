@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import pako from 'pako';
+import * as pako from 'pako'
 import { runClientWorkerTask } from '../workers/workerClient';
 
 // Use different debounce times for different operations

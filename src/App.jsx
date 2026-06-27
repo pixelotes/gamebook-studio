@@ -23,7 +23,7 @@ import socketService from './services/SocketService';
 import eventLogService from './services/EventLogService';
 import { create } from 'jsondiffpatch';
 import ResizeHandle from './components/ResizeHandle';
-import pako from 'pako';
+import * as pako from 'pako'
 import { crc32 } from 'crc';
 import DebugModal from './components/DebugModal';
 import GameMetadataModal from './components/GameMetadataModal';
@@ -32,7 +32,6 @@ import { CorePack } from './data/CorePack';
 
 // Services and Classes
 import FabricCanvas from './canvas/FabricCanvas';
-import socketService from './services/SocketService';
 
 // PDF worker setup
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -66,36 +65,7 @@ const GamebookApp = () => {
   }, []);
   // Track active PDF render tasks to prevent race conditions (flipped PDF bug)
   const renderTaskRef = useRef({ primary: null, secondary: null });
-  const fileInputRef = useRef(null);
 
-  const [showDebugModal, setShowDebugModal] = useState(false);
-
-  const activePdf = pdfs.find(p => p.id === activePdfId);
-  const secondaryPdf = pdfs.find(p => p.id === secondaryPdfId);
-
-  const stateRef = useRef(state);
-  stateRef.current = state;
-
-  const goToPageRef = useRef(null);
-
-  useEffect(() => {
-    stateRef.current = state;
-  });
-
-  // Initialize GBTK - Register Core Pack
-  useEffect(() => {
-    if (state.tokenPacks && !state.tokenPacks.some(p => p.name === CorePack.name)) {
-      dispatch({ type: 'REGISTER_PACK', payload: CorePack });
-    }
-  }, [state.tokenPacks]);
-
-  const handleTabSelect = (pdfId, paneId) => {
-    if (paneId === 'primary') {
-      dispatch({ type: 'SET_STATE', payload: { activePdfId: pdfId } });
-    } else {
-      dispatch({ type: 'SET_STATE', payload: { secondaryPdfId: pdfId } });
-    }
-  };
 
   // --- UI State ---
   const [showMetadataModal, setShowMetadataModal] = useState(false);
@@ -149,51 +119,6 @@ const GamebookApp = () => {
     }
   }, []);
 
-  const handleUnifiedLoad = async (event, targetPane = 'primary') => {
-    const files = event.target.files;
-    if (files.length === 0) return;
-
-    const pdfFiles = [];
-    let jsonFile = null;
-    let gbsFile = null;
-
-    // Categorize files by type
-    for (const file of files) {
-      if (file.name.endsWith('.pdf')) {
-        pdfFiles.push(file);
-      } else if (file.name.endsWith('.json')) {
-        jsonFile = file;
-      } else if (file.name.endsWith('.gbs')) {
-        gbsFile = file;
-      }
-    }
-
-    // Priority: GBS > JSON > PDFs
-    // GBS files are complete packages, so they take precedence
-    if (gbsFile) {
-      await handleLoadGBS({ target: { files: [gbsFile] } });
-      return;
-    }
-    // FIX: Remove state.pdfs from dependency array to prevent creating a stale closure
-  }, [dispatch]);
-
-    // JSON session files need PDFs to be loaded separately
-    if (jsonFile) {
-      handleLoadSession({ target: { files: [jsonFile] } });
-      // If PDFs were also selected, they'll be loaded as part of session restoration
-      return;
-    }
-
-    // Just PDFs - regular file upload
-    if (pdfFiles.length > 0) {
-      const dt = new DataTransfer();
-      pdfFiles.forEach(f => dt.items.add(f));
-      await handleFileUpload({ target: { files: dt.files } }, targetPane);
-    }
-
-    // Reset the input
-    event.target.value = '';
-  };
 
   const renderPdfPage = useCallback(async (pdfData, canvasRef, paneId = 'primary') => {
     if (!pdfData || !canvasRef.current) return;
@@ -566,88 +491,8 @@ const GamebookApp = () => {
     }
   }, [counters, prevCounters]);
 
-  const handleCreateMultiplayerSession = async (sessionId) => {
-    setMultiplayerSession(sessionId);
-    setIsHost(true);
-    setConnectedPlayers(1);
-    addNotification(`Multiplayer session created: ${sessionId}`, 'success');
-    eventLogService.logMultiplayerStart(sessionId);
 
-    const uploadPromises = pdfs
-      .filter(pdf => pdf.file)
-      .map(pdf => socketService.uploadPdfToSession(pdf.file, {
-        id: pdf.id,
-        fileName: pdf.fileName,
-        totalPages: pdf.totalPages,
-        bookmarks: pdf.bookmarks || []
-      }));
 
-    await Promise.all(uploadPromises);
-
-    const pdfsForSession = pdfs.map(p => ({
-      id: p.id,
-      fileName: p.fileName,
-      totalPages: p.totalPages,
-      bookmarks: p.bookmarks,
-      pageLayers: p.pageLayers,
-    }));
-
-    socketService.updateGameState({
-      pdfs: pdfsForSession,
-      characters,
-      notes,
-      counters,
-    });
-  };
-
-  const handleJoinMultiplayerSession = async (response) => {
-    const joinedSessionId = response.sessionId || socketService.getSessionInfo().sessionId;
-    setMultiplayerSession(joinedSessionId);
-    setIsHost(response.isHost);
-    setConnectedPlayers(response.clientCount);
-    eventLogService.logMultiplayerStart(joinedSessionId);
-
-    if (response.gameState) {
-      setGameStateVersion(response.version);
-      const { activePdfId, ...restOfGameState } = response.gameState;
-      dispatch({ type: 'SET_STATE', payload: restOfGameState });
-
-      if (response.gameState.pdfs && response.gameState.pdfs.length > 0) {
-        const loadedPdfs = [];
-        for (const pdfData of response.gameState.pdfs) {
-          try {
-            const pdfUrl = socketService.getPdfUrl(pdfData.id);
-            const pdfResponse = await fetch(pdfUrl);
-            const arrayBuffer = await pdfResponse.arrayBuffer();
-            const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
-
-            loadedPdfs.push({
-              ...pdfData,
-              pdfDoc,
-              file: null
-            });
-          } catch (error) {
-            console.error('Failed to load PDF from session:', pdfData.fileName, error);
-          }
-        }
-        const payload = { pdfs: loadedPdfs };
-        if (loadedPdfs.length > 0) {
-          payload.activePdfId = loadedPdfs[0].id;
-        }
-        dispatch({ type: 'SET_STATE', payload });
-      }
-    }
-
-    addNotification(`Joined multiplayer session`, 'success');
-  };
-
-  const handleLeaveMultiplayerSession = () => {
-    socketService.disconnect();
-    setMultiplayerSession(null);
-    setIsHost(false);
-    setConnectedPlayers(1);
-    addNotification('Left multiplayer session', 'info');
-  };
 
   const handleFileUpload = async (event, targetPane = 'primary') => {
     const files = event.target.files;
@@ -751,95 +596,9 @@ const GamebookApp = () => {
     }
   };
 
-  const handleSaveSession = () => {
-    const sessionData = {
-      pdfs: pdfs.map(p => ({
-        id: p.id,
-        fileName: p.fileName,
-        currentPage: p.currentPage,
-        scale: p.scale,
-        pageLayers: p.pageLayers,
-        totalPages: p.totalPages,
-        bookmarks: p.bookmarks,
-      })),
-      activePdfId,
-      secondaryPdfId,
-      isDualPaneMode,
-      characters,
-      notes,
-      counters,
-      version: gameStateVersion
-    };
+  
 
-    const jsonString = JSON.stringify(sessionData, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'gamebook-session.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportGBS = async (metadata) => {
-    const zip = new JSZip();
-
-    // Add game metadata
-    zip.file('game.json', JSON.stringify(metadata, null, 2));
-
-    // Add session data
-    const sessionData = {
-      pdfs: pdfs.map(p => ({
-        id: p.id,
-        fileName: p.fileName,
-        currentPage: p.currentPage,
-        scale: p.scale,
-        pageLayers: p.pageLayers,
-        totalPages: p.totalPages,
-        bookmarks: p.bookmarks,
-      })),
-      activePdfId,
-      secondaryPdfId,
-      isDualPaneMode,
-      characters,
-      notes,
-      counters,
-      version: gameStateVersion
-    };
-
-    zip.file('session.json', JSON.stringify(sessionData, null, 2));
-
-    // Add PDFs
-    const pdfFolder = zip.folder('pdfs');
-    for (const pdf of pdfs) {
-      if (pdf.file) {
-        pdfFolder.file(pdf.fileName, pdf.file);
-      } else {
-        console.warn(`Skipping PDF without file: ${pdf.fileName}`);
-      }
-    }
-
-    // Generate and download with game name
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const fileName = metadata.name
-      ? `${metadata.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.gbs`
-      : 'session.gbs';
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    // Store metadata in state
-    dispatch({ type: 'SET_STATE', payload: { gameMetadata: metadata } });
-
-    addNotification(`Game exported as ${fileName}`, 'success');
-  };
+  
 
   const handleLoadGBS = async (event) => {
     const file = event.target.files[0];
@@ -938,115 +697,20 @@ const GamebookApp = () => {
     }
   };
 
-  const handleNewSession = async () => {
-    const hasContent = pdfs.length > 0 || characters.length > 0 || notes || counters.length > 0;
+  
 
-    if (hasContent) {
-      const confirmed = await confirm({
-        title: 'Start a new session?',
-        message:
-          'This will close all PDFs and reset all game state including:\n' +
-          '• All open PDFs\n' +
-          '• Character sheets\n' +
-          '• Notes\n' +
-          '• Counters\n' +
-          '• All annotations\n\n' +
-          'This action cannot be undone.',
-        confirmLabel: 'Start new session',
-        cancelLabel: 'Keep current',
-        variant: 'destructive',
-      });
+  
 
-      if (!confirmed) {
-        return;
-      }
-    }
-    if (socketService.isMultiplayerActive()) {
-      handleLeaveMultiplayerSession();
-    }
-    dispatch({ type: 'SET_STATE', payload: initialState });
-  };
+  
 
-  const closePdf = (pdfId) => {
-    if (multiplayerSession && !isHost) {
-      addNotification("Only the session host can close PDFs", "error");
-      return;
-    }
-    const closingPdf = pdfs.find(p => p.id === pdfId);
-    if (socketService.isMultiplayerActive()) {
-      socketService.removePdf(pdfId);
-    }
-    const newPdfs = pdfs.filter(p => p.id !== pdfId);
-    let newActivePdfId = activePdfId;
-    let newSecondaryPdfId = secondaryPdfId;
-
-    if (activePdfId === pdfId) {
-      newActivePdfId = newPdfs.length > 0 ? newPdfs[0].id : null;
-    }
-    if (secondaryPdfId === pdfId) {
-      newSecondaryPdfId = null;
-    }
-
-    dispatch({
-      type: 'SET_STATE', payload: {
-        pdfs: newPdfs,
-        activePdfId: newActivePdfId,
-        secondaryPdfId: newSecondaryPdfId
-      }
-    });
-    if (closingPdf) {
-      eventLogService.logPdfClose(closingPdf.fileName);
-    }
-  };
-
-  const updatePdf = (pdfId, updates) => {
-    const newPdfs = pdfs.map(p => p.id === pdfId ? { ...p, ...updates } : p);
-    dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
-  };
-
-  const goToPage = (pdfId, pageNum) => {
-    const pdf = pdfs.find(p => p.id === pdfId);
-    if (pdf && pageNum >= 1 && pageNum <= pdf.totalPages) {
-      updatePdf(pdfId, { currentPage: pageNum });
-      if (socketService.isMultiplayerActive()) {
-        socketService.navigatePage(pdf.id, pageNum, pdf.scale);
-      }
-    }
-  };
+  
   goToPageRef.current = goToPage;
 
-  const zoomIn = (pdfId) => {
-    const pdf = pdfs.find(p => p.id === pdfId);
-    if (pdf) {
-      const newScale = Math.min(pdf.scale + 0.25, 3);
-      updatePdf(pdfId, { scale: newScale });
-      if (socketService.isMultiplayerActive()) {
-        socketService.navigatePage(pdf.id, pdf.currentPage, newScale);
-      }
-    }
-  };
+  
 
-  const zoomOut = (pdfId) => {
-    const pdf = pdfs.find(p => p.id === pdfId);
-    if (pdf) {
-      const newScale = Math.max(pdf.scale - 0.25, 0.5);
-      updatePdf(pdfId, { scale: newScale });
-      if (socketService.isMultiplayerActive()) {
-        socketService.navigatePage(pdf.id, pdf.currentPage, newScale);
-      }
-    }
-  };
+  
 
-  const handleBookmarkNavigate = async (dest, pdfId) => {
-    const pdf = pdfs.find(p => p.id === pdfId);
-    if (!pdf) return;
-    try {
-      const pageIndex = await pdf.pdfDoc.getPageIndex(dest[0]);
-      goToPage(pdfId, pageIndex + 1);
-    } catch (error) {
-      console.error('Error navigating to bookmark:', error);
-    }
-  };
+  
 
   const handleSidebarResize = useCallback((newWidth) => {
     setSidebarWidth(newWidth);
@@ -1055,23 +719,7 @@ const GamebookApp = () => {
 
   const handlePaneResize = useCallback((newWidth) => setPrimaryPaneWidth(newWidth), []);
 
-  const toggleDualPane = () => {
-    if (!isDualPaneMode && pdfs.length > 1) {
-      dispatch({
-        type: 'SET_STATE', payload: {
-          isDualPaneMode: true,
-          secondaryPdfId: pdfs.find(p => p.id !== activePdfId)?.id || null
-        }
-      });
-    } else {
-      dispatch({
-        type: 'SET_STATE', payload: {
-          isDualPaneMode: false,
-          secondaryPdfId: null
-        }
-      });
-    }
-  };
+  
 
   return (
     <AppContext.Provider value={{

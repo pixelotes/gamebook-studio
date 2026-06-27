@@ -1,5 +1,5 @@
 import { create } from 'jsondiffpatch';
-import pako from 'pako';
+import * as pako from 'pako'
 
 const diffpatcher = create({
   objectHash: (obj) => obj.id || JSON.stringify(obj),
