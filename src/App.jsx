@@ -83,6 +83,15 @@ const GamebookApp = () => {
     }
   }, [state.tokenPacks]);
 
+  // Apply theme to document
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
   const [gameStateVersion, setGameStateVersion] = useState(0);
   // --- UI State ---
   const [showMetadataModal, setShowMetadataModal] = useState(false);
