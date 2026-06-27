@@ -475,26 +475,6 @@ const GamebookApp = () => {
     };
   }, []);
 
-  const prevCharacters = usePrevious(characters);
-  useEffect(() => {
-    if (socketService.isMultiplayerActive() && JSON.stringify(prevCharacters) !== JSON.stringify(characters)) {
-      socketService.updateGameState({ characters: characters }, 'characters');
-    }
-  }, [characters, prevCharacters]);
-
-  const prevNotes = usePrevious(notes);
-  useEffect(() => {
-    if (socketService.isMultiplayerActive() && prevNotes !== notes) {
-      socketService.updateGameState({ notes: notes }, 'notes');
-    }
-  }, [notes, prevNotes]);
-
-  const prevCounters = usePrevious(counters);
-  useEffect(() => {
-    if (socketService.isMultiplayerActive() && JSON.stringify(prevCounters) !== JSON.stringify(counters)) {
-      socketService.updateGameState({ counters: counters }, 'characters');
-    }
-  }, [counters, prevCounters]);
 
 
 
