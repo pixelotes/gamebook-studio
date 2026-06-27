@@ -517,7 +517,10 @@ const GamebookApp = () => {
 
     const newPdfsData = [];
     for (const file of files) {
-      if (file.type !== 'application/pdf') continue;
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        console.warn(`[File Upload] Ignored file ${file.name} because it is not a PDF.`);
+        continue;
+      }
 
       if (pdfs.some(p => p.fileName === file.name)) {
         console.warn(`Skipping duplicate file: ${file.name}`);
@@ -539,6 +542,7 @@ const GamebookApp = () => {
             });
           } catch (error) {
             console.error('Error loading PDF for session restore:', file.name, error);
+            addNotification(`Error loading PDF: ${error.message}`, 'error');
           }
         } else {
           const expectedNames = sessionToRestore.pdfs.map(p => p.fileName).join(', ');
@@ -563,6 +567,7 @@ const GamebookApp = () => {
           newPdfsData.push(pdfData);
         } catch (error) {
           console.error('Error loading PDF:', file.name, error);
+          addNotification(`Failed to load ${file.name}: ${error.message}`, 'error');
         }
       }
     }
