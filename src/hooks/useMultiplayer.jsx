@@ -1,4 +1,5 @@
 // src/hooks/useMultiplayer.js
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import socketService from '../services/SocketService';
 import eventLogService from '../services/EventLogService';
@@ -79,7 +80,7 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
             const pdfUrl = socketService.getPdfUrl(pdfData.id);
             const pdfResponse = await fetch(pdfUrl);
             const arrayBuffer = await pdfResponse.arrayBuffer();
-            const { default: pdfjsLib } = await import('pdfjs-dist/build/pdf');
+            
             const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
             
             loadedPdfs.push({ ...pdfData, pdfDoc, file: null });
@@ -211,7 +212,7 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
             const pdfUrl = socketService.getPdfUrl(pdfData.id);
             const response = await fetch(pdfUrl);
             const arrayBuffer = await response.arrayBuffer();
-            const { default: pdfjsLib } = await import('pdfjs-dist/build/pdf');
+            
             const pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
             const newPdf = { ...pdfData, pdfDoc, file: null };
             dispatch({ type: 'SET_STATE', payload: { pdfs: [...stateRef.current.pdfs, newPdf] }});
