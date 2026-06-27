@@ -173,12 +173,30 @@ class GameSession {
 
 // Session Helpers
 async function getSession(sessionId) {
-  const data = await redis.get(`session:${sessionId}`);
-  return data ? GameSession.fromJSON(JSON.parse(data)) : null;
+  const data = await redis.hgetall(`session:${sessionId}`);
+  if (!data || !data.id) return null;
+  
+  return GameSession.fromJSON({
+    id: data.id,
+    hostSocketId: data.hostSocketId,
+    clients: JSON.parse(data.clients || '[]'),
+    gameState: JSON.parse(data.gameState || 'null'),
+    stateVersion: parseInt(data.stateVersion || '0', 10),
+    stateHistory: JSON.parse(data.stateHistory || '[]')
+  });
 }
 
 async function saveSession(session) {
-  await redis.set(`session:${session.id}`, JSON.stringify(session.toJSON()), 'EX', 86400); // 24h expiry
+  const key = `session:${session.id}`;
+  await redis.hset(key, {
+    id: session.id,
+    hostSocketId: session.hostSocketId,
+    clients: JSON.stringify(Array.from(session.clients)),
+    gameState: JSON.stringify(session.gameState),
+    stateVersion: session.stateVersion,
+    stateHistory: JSON.stringify(session.stateHistory)
+  });
+  await redis.expire(key, 86400); // 24h expiry
 }
 
 // Session Action Queue to prevent race conditions
@@ -202,17 +220,21 @@ function getQueue(sessionId) {
 
 // API Routes
 app.get('/api/sessions', async (req, res) => {
-  // Scan all sessions (inefficient for prod, but matches prototype behavior)
-  // For Redis, this is hard. We might need a set of active sessions.
-  // For now, we'll return empty or implement a 'active_sessions' set.
-  // User didn't strictly ask to fix listing, but let's try to maintain behavior if possible or return simplified.
-  // We'll skip listing all for now as it's expensive in Redis without a Set index.
-  // Let's implement a Set index.
   const keys = await redis.keys('session:*');
   const sessions = [];
   for (const key of keys) {
-      const data = await redis.get(key);
-      if (data) sessions.push(GameSession.fromJSON(JSON.parse(data)).toJSON());
+      const data = await redis.hgetall(key);
+      if (data && data.id) {
+          const session = GameSession.fromJSON({
+            id: data.id,
+            hostSocketId: data.hostSocketId,
+            clients: JSON.parse(data.clients || '[]'),
+            gameState: JSON.parse(data.gameState || 'null'),
+            stateVersion: parseInt(data.stateVersion || '0', 10),
+            stateHistory: JSON.parse(data.stateHistory || '[]')
+          });
+          sessions.push(session.toJSON());
+      }
   }
   res.json(sessions);
 });
