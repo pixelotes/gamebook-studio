@@ -5,36 +5,8 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { Worker } = require('worker_threads');
-const jsondiffpatch = require('jsondiffpatch');
-const pako = require('pako');
-const crc = require('crc');
-const Redis = require('ioredis');
-const { nanoid } = require('nanoid');
-const { z } = require('zod');
-
-
-// Worker Thread Setup
-const computeWorker = new Worker(path.join(__dirname, 'src/workers/serverWorker.js'));
-const pendingTasks = new Map();
-let taskIdCounter = 0;
-
-computeWorker.on('message', ({ id, success, result, error }) => {
-  const task = pendingTasks.get(id);
-  if (task) {
-    if (success) task.resolve(result);
-    else task.reject(new Error(error));
-    pendingTasks.delete(id);
-  }
-});
-
-function runWorkerTask(type, payload) {
-  return new Promise((resolve, reject) => {
-    const id = taskIdCounter++;
-    pendingTasks.set(id, { resolve, reject });
-    computeWorker.postMessage({ id, type, payload });
-  });
-}
+const { runWorkerTask } = require('./src/server/workerClient');
+const { GameSession } = require('./src/server/GameSession');
 
 const app = express();
 const server = http.createServer(app);
@@ -76,119 +48,8 @@ if (!fs.existsSync('uploads')) {
 }
 
 // Validation Schema
-const gameStateSchema = z.object({
-  notes: z.string().optional(),
-  characters: z.array(z.any()).optional(),
-  pdfs: z.array(z.any()).optional(),
-  activePdfId: z.string().nullable().optional(),
-  counters: z.array(z.any()).optional(),
-  pageLayers: z.record(z.any()).optional()
-}).passthrough();
 
 // Game session class
-class GameSession {
-  constructor(sessionId, hostSocketId, gameState = null, stateVersion = 0, stateHistory = []) {
-    this.id = sessionId;
-    this.hostSocketId = hostSocketId;
-    this.clients = new Set();
-    this.gameState = gameState || {
-      pdfs: [],
-      activePdfId: null,
-      characters: [],
-      notes: '',
-      counters: [],
-      pageLayers: {},
-      eventLog: [] // Add event log to game state
-    };
-    // this.pdfFiles = new Map(); // REMOVED: Stored on disk now
-    this.stateVersion = stateVersion;
-    this.stateHistory = stateHistory;
-  }
-
-  static fromJSON(json) {
-    if (!json) return null;
-    const session = new GameSession(
-      json.id,
-      json.hostSocketId,
-      json.gameState,
-      json.stateVersion,
-      json.stateHistory
-    );
-    if (json.clients && Array.isArray(json.clients)) {
-      json.clients.forEach(c => session.clients.add(c));
-    }
-    return session;
-  }
-
-  addClient(socketId) {
-    const playerName = `Player ${this.nextPlayerNumber++}`;
-    this.clients.set(socketId, { name: playerName });
-    return playerName;
-  }
-
-  removeClient(socketId) {
-    this.clients.delete(socketId);
-    return this.clients.size === 0;
-  }
-  
-  addEvent(event) {
-    this.gameState.eventLog.push(event);
-    if (this.gameState.eventLog.length > 100) { // Limit log size
-        this.gameState.eventLog.shift();
-    }
-    // Broadcast the new event to all clients
-    io.to(this.id).emit('event-logged', event);
-  }
-
-  async updateGameState(updates) {
-    // Validate updates (partial)
-    try {
-        gameStateSchema.parse(updates);
-    } catch (e) {
-        console.error("Validation error:", e.errors);
-        return null; // Or throw
-    }
-
-    const previousState = { ...this.gameState };
-    this.gameState = { ...this.gameState, ...updates };
-    
-    const delta = await runWorkerTask('diff', { previousState, newState: this.gameState });
-    
-    if (delta) {
-        this.stateVersion++;
-        
-        this.stateHistory.push({
-            version: this.stateVersion,
-            delta,
-            timestamp: Date.now()
-        });
-
-        if (this.stateHistory.length > 500) { // Increased to 500
-            this.stateHistory.shift();
-        }
-
-        return { delta, version: this.stateVersion };
-    }
-    return null;
-  }
-
-  addPdf(pdfData) {
-    this.gameState.pdfs.push(pdfData);
-    // Path is stored in pdfData usually or derived.
-    // We'll ensure pdfData includes necessary info.
-  }
-
-  toJSON() {
-    return {
-      id: this.id,
-      hostSocketId: this.hostSocketId,
-      clients: Array.from(this.clients),
-      gameState: this.gameState,
-      stateVersion: this.stateVersion,
-      stateHistory: this.stateHistory
-    };
-  }
-}
 
 // Session Helpers
 async function getSession(sessionId) {
@@ -404,13 +265,14 @@ io.on('connection', (socket) => {
   });
   
   // New event for logging
-  socket.on('log-event', (eventData) => {
+  socket.on('log-event', async (eventData) => {
       if (!socket.sessionId) return;
-      const session = gameSessions.get(socket.sessionId);
+      const session = await getSession(socket.sessionId);
       if (session) {
-          // Assign the player name from the socket
           const eventWithPlayer = { ...eventData, player: socket.playerName };
           session.addEvent(eventWithPlayer);
+          await saveSession(session);
+          io.to(socket.sessionId).emit('event-logged', eventWithPlayer);
       }
   });
 
