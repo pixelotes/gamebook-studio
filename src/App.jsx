@@ -85,6 +85,9 @@ const GamebookApp = () => {
   }, [state.tokenPacks]);
 
   const [gameStateVersion, setGameStateVersion] = useState(0);
+  // Layout constants
+  const maxSidebarWidth = Math.min(600, window.innerWidth * 0.4);
+
 
   // --- UI State ---
   const [showMetadataModal, setShowMetadataModal] = useState(false);
