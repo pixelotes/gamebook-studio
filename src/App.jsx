@@ -29,6 +29,7 @@ import DebugModal from './components/DebugModal';
 import GameMetadataModal from './components/GameMetadataModal';
 import { Settings, Menu, Wifi, Columns, Moon, Sun, FilePlus, Upload, Save, RotateCcw } from 'lucide-react';
 import { CorePack } from './data/CorePack';
+import { LAYER_TOKENS, LAYER_DRAWINGS, LAYER_TEXT } from './data/LayerIds';
 
 // Services and Classes
 import FabricCanvas from './canvas/FabricCanvas';
@@ -849,9 +850,9 @@ const GamebookApp = () => {
                     /* Clear logic to be re-implemented via state */
                     if (activePdfId && activePdf) {
                       handleLayerUpdate(activePdfId, activePdf.currentPage, [
-                        { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
-                        { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
-                        { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
+                        { id: LAYER_TOKENS, name: 'Game Tokens', objects: [], visible: true, locked: false },
+                        { id: LAYER_DRAWINGS, name: 'Drawings', objects: [], visible: true, locked: false },
+                        { id: LAYER_TEXT, name: 'Text & Notes', objects: [], visible: true, locked: false }
                       ]);
                     }
                     dispatch({ type: 'SET_STATE', payload: { menuOpen: false } });

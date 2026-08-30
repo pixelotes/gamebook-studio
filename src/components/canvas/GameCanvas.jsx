@@ -2,12 +2,7 @@ import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { Stage, Layer, Line, Circle, Rect, Text, Group, Label, Tag, Image as KonvaImage } from 'react-konva';
 import useImage from 'use-image';
 import { TOKEN_SHAPES } from '../../data/Shapes'; // Keeping for fallback if needed, or remove?
-// We need access to the token data. It is passed via props or we need to look it up.
-// Actually, GameCanvas receives 'layers'. The objects in layers HAVE the data?
-// No, the objects have `shape: "some_id"`.
-// We need the ACTUAL SVG content.
-// The objects should probably store the SVG content if we want them to be self-contained?
-// OR GameCanvas needs a lookup dictionary passed to it.
+import { LAYER_TOKENS, LAYER_DRAWINGS, LAYER_TEXT } from '../../data/LayerIds';
 
 const Pointer = memo(({ x, y, color }) => {
     // Simple rotating crosshair
@@ -206,9 +201,7 @@ const GameCanvas = memo(({
                 height: lineCount * fontSize * 1.2,
             };
         }
-        if (obj.type === 'pointer') {
-            return { x: obj.x - 15, y: obj.y - 15, width: 30, height: 30 };
-        }
+        // Pointers are ephemeral (auto-expire) and not draggable/selectable, so no bbox.
         return null;
     };
 
@@ -458,7 +451,7 @@ const GameCanvas = memo(({
                     color: selectedColor,
                     width: lineWidth || 3
                 };
-                addObject('drawings', newObj);
+                addObject(LAYER_DRAWINGS, newObj);
             }
             setTempPath([]);
         } else if (tool === 'rectangle' && tempRect) {
@@ -474,7 +467,7 @@ const GameCanvas = memo(({
                     x, y, width, height,
                     color: selectedColor
                 };
-                addObject('drawings', newObj);
+                addObject(LAYER_DRAWINGS, newObj);
             }
             setTempRect(null);
         } else if (tool === 'ruler') {
@@ -492,13 +485,13 @@ const GameCanvas = memo(({
                         y2: rulerCurrent.y,
                         color: selectedColor,
                     };
-                    addObject('drawings', newObj);
+                    addObject(LAYER_DRAWINGS, newObj);
 
                     // Auto-destroy after 5 seconds (mirrors the pointer pattern)
                     setTimeout(() => {
                         const currentLayers = layersRef.current;
                         const newLayers = currentLayers.map(l => {
-                            if (l.id === 'drawings') {
+                            if (l.id === LAYER_DRAWINGS) {
                                 return {
                                     ...l,
                                     objects: l.objects.filter(o => o.id !== rulerObjId),
@@ -546,7 +539,7 @@ const GameCanvas = memo(({
                 strokeColor: selectedTokenColor === '#ffffff' ? '#000000' : '#ffffff',
                 size: tokenSize
             };
-            addObject('tokens', newObj);
+            addObject(LAYER_TOKENS, newObj);
         } else if (tool === 'text') {
             const stage = e.target.getStage();
             const pos = getRelativePointerPosition(stage);
@@ -572,8 +565,8 @@ const GameCanvas = memo(({
                 color: selectedColor
             };
 
-            // Add pointer object to 'drawings' layer (or create a specific one if needed)
-            addObject('drawings', newObj);
+            // Add pointer object to the drawings layer (or create a specific one if needed)
+            addObject(LAYER_DRAWINGS, newObj);
 
             // Auto destroy after 3 seconds
             setTimeout(() => {
@@ -582,7 +575,7 @@ const GameCanvas = memo(({
 
                 // Manually implement removeObject logic with currentLayers
                 const newLayers = currentLayers.map(l => {
-                    if (l.id === 'drawings') {
+                    if (l.id === LAYER_DRAWINGS) {
                         return {
                             ...l,
                             objects: l.objects.filter(o => o.id !== pointerId)
@@ -707,7 +700,7 @@ const GameCanvas = memo(({
 
         if (mode === 'create') {
             if (trimmed) {
-                addObject('text', {
+                addObject(LAYER_TEXT, {
                     type: 'text',
                     id: Date.now(),
                     x, y,
@@ -718,13 +711,13 @@ const GameCanvas = memo(({
             }
         } else if (mode === 'edit' && objId != null) {
             const currentLayers = layersRef.current;
-            const textLayer = currentLayers.find(l => l.id === 'text');
+            const textLayer = currentLayers.find(l => l.id === LAYER_TEXT);
             const existingObj = textLayer?.objects.find(o => o.id === objId);
             if (existingObj) {
                 if (trimmed) {
-                    updateObject('text', { ...existingObj, content });
+                    updateObject(LAYER_TEXT, { ...existingObj, content });
                 } else {
-                    removeObject('text', objId);
+                    removeObject(LAYER_TEXT, objId);
                 }
             }
         }
@@ -847,16 +840,9 @@ const GameCanvas = memo(({
                                         />
                                     );
                                 }
-                                if (obj.type === 'pointer') {
-                                    return (
-                                        <Pointer
-                                            key={obj.id}
-                                            x={obj.x}
-                                            y={obj.y}
-                                            color={obj.color}
-                                        />
-                                    );
-                                }
+                                // 'pointer' objects render in the dynamic layer below —
+                                // they self-animate via rAF and would otherwise force a
+                                // full static-layer redraw on every frame.
                                 if (obj.type === 'ruler') {
                                     const distance = Math.round(Math.sqrt(Math.pow(obj.x2 - obj.x1, 2) + Math.pow(obj.y2 - obj.y1, 2)));
                                     return (
@@ -896,6 +882,11 @@ const GameCanvas = memo(({
 
             {/* DYNAMIC LAYER: Temporary elements - updates frequently on mouse move without affecting static layer */}
             <Layer listening={false}>
+                {/* Pointers: rendered here (not the static layer) since each one runs its
+                    own rAF rotation loop for the whole ~3s it's alive. */}
+                {layers.flatMap(layer => layer.visible ? layer.objects.filter(o => o.type === 'pointer') : []).map(obj => (
+                    <Pointer key={obj.id} x={obj.x} y={obj.y} color={obj.color} />
+                ))}
                 {/* Render Temp Path while drawing */}
                 {isDrawing.current && tool === 'draw' && (
                     <Line
@@ -965,7 +956,7 @@ const GameCanvas = memo(({
                     const t = (i + 1) / eraserTrail.length; // newer segment → higher t
                     return (
                         <Line
-                            key={from.ts}
+                            key={`${from.ts}-${i}`}
                             points={[from.x, from.y, to.x, to.y]}
                             stroke="#ec4899"
                             strokeWidth={3}

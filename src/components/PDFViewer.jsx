@@ -3,6 +3,7 @@ import { AppContext } from '../state/appState';
 import { FileText } from 'lucide-react';
 import PDFControlsBar from './PDFControlsBar';
 import GameCanvas from './canvas/GameCanvas';
+import { LAYER_TOKENS, LAYER_DRAWINGS, LAYER_TEXT } from '../data/LayerIds';
 
 // Pencil cursor SVG — tip at (1, 23) is the hotspot, so strokes start exactly there.
 const DRAW_CURSOR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M 1 23 L 5 19 L 7 21 L 3 23 Z" fill="#111827" stroke="#fff" stroke-width="0.5"/><path d="M 5 19 L 16 8 L 19 11 L 8 22 Z" fill="#fbbf24" stroke="#111827" stroke-width="0.5"/><path d="M 16 8 L 20 4 L 23 7 L 19 11 Z" fill="#ef4444" stroke="#111827" stroke-width="0.5"/></svg>';
@@ -231,14 +232,12 @@ const PDFViewer = ({
   const currentLayers = pdf && pdf.pageLayers && pdf.pageLayers[pdf.currentPage]
     ? pdf.pageLayers[pdf.currentPage]
     : [
-      { id: 'tokens', name: 'Game Tokens', objects: [], visible: true, locked: false },
-      { id: 'drawings', name: 'Drawings', objects: [], visible: true, locked: false },
-      { id: 'text', name: 'Text & Notes', objects: [], visible: true, locked: false }
+      { id: LAYER_TOKENS, name: 'Game Tokens', objects: [], visible: true, locked: false },
+      { id: LAYER_DRAWINGS, name: 'Drawings', objects: [], visible: true, locked: false },
+      { id: LAYER_TEXT, name: 'Text & Notes', objects: [], visible: true, locked: false }
     ];
 
-  // We actually need to ensure the structure exists if it's undefined, similar to MockFabricCanvas logic
-  // But passing it as default value above is safer for declarative rendering.
-  // If we modify it, `onLayerUpdate` should handle saving it back to state.
+  // If we modify currentLayers, `onLayerUpdate` should handle saving it back to state.
 
   return (
     <div className="flex-1 bg-gray-50 dark:bg-gray-900 flex flex-col h-full relative">
