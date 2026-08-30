@@ -80,7 +80,9 @@ const GameCanvas = memo(({
     pdfId,
     pageId,
     tokenPacks = [], // NEW
-    embeddedTokens = [] // NEW
+    embeddedTokens = [], // NEW
+    onSendPointer,
+    remotePointers = [],
 }) => {
     // Merge all available tokens for lookup
     // Memoize this lookup map
@@ -567,6 +569,11 @@ const GameCanvas = memo(({
 
             // Add pointer object to the drawings layer (or create a specific one if needed)
             addObject(LAYER_DRAWINGS, newObj);
+            // Broadcast immediately for remote players — the layers-sync
+            // path above is debounced and shared with drawings/tokens/text,
+            // which can coalesce this pointer's add+remove away before it
+            // ever reaches another client.
+            onSendPointer?.(pdfId, pos.x, pos.y, selectedColor);
 
             // Auto destroy after 3 seconds
             setTimeout(() => {
@@ -886,6 +893,11 @@ const GameCanvas = memo(({
                     own rAF rotation loop for the whole ~3s it's alive. */}
                 {layers.flatMap(layer => layer.visible ? layer.objects.filter(o => o.type === 'pointer') : []).map(obj => (
                     <Pointer key={obj.id} x={obj.x} y={obj.y} color={obj.color} />
+                ))}
+                {/* Remote players' pointer-tool clicks, pushed via the dedicated
+                    'pointer-event' socket channel rather than the layers state. */}
+                {remotePointers.map(p => (
+                    <Pointer key={p.id} x={p.x} y={p.y} color={p.color} />
                 ))}
                 {/* Render Temp Path while drawing */}
                 {isDrawing.current && tool === 'draw' && (

@@ -43,7 +43,14 @@ export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
             bookmarks: pdf.bookmarks || []
         }));
 
-    await Promise.all(uploadPromises);
+    const uploadResults = await Promise.all(uploadPromises);
+    // uploadPdfToSession() returns the server's stored pdfData, which carries
+    // filePath (where the file actually landed in uploads/). Keep it so a
+    // later joiner's PDF fetch can resolve the file — otherwise the plain
+    // updateGameState() below would overwrite the server's filePath-bearing
+    // entry (set by addPdf() during upload) with one that has no filePath,
+    // and every join-time PDF load would 404 and fail to parse.
+    const filePathById = new Map(uploadResults.map(r => [r.pdfData.id, r.pdfData.filePath]));
 
     const pdfsForSession = pdfs.map(p => ({
         id: p.id,
@@ -51,6 +58,7 @@ export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
         totalPages: p.totalPages,
         bookmarks: p.bookmarks,
         pageLayers: p.pageLayers,
+        ...(filePathById.has(p.id) ? { filePath: filePathById.get(p.id) } : {}),
     }));
     
     socketService.updateGameState({
@@ -79,6 +87,9 @@ export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
           try {
             const pdfUrl = socketService.getPdfUrl(pdfData.id);
             const pdfResponse = await fetch(pdfUrl);
+            if (!pdfResponse.ok) {
+              throw new Error(`PDF not found on server (${pdfResponse.status})`);
+            }
             const arrayBuffer = await pdfResponse.arrayBuffer();
 
             const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;

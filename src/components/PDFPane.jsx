@@ -17,6 +17,8 @@ const PDFPane = ({
   onTabClose,
   onBookmarkNavigate,
   onLayerUpdate,
+  onSendPointer,
+  remotePointers,
   onFilesDropped,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -82,6 +84,8 @@ const PDFPane = ({
         updatePdf={updatePdf}
         onBookmarkNavigate={onBookmarkNavigate}
         onLayerUpdate={onLayerUpdate}
+        onSendPointer={onSendPointer}
+        remotePointers={remotePointers}
       />
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-blue-500/15 border-4 border-dashed border-blue-500 rounded">

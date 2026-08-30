@@ -85,6 +85,9 @@ const GamebookApp = () => {
   }, [theme]);
 
   const [gameStateVersion, setGameStateVersion] = useState(0);
+  // Remote players' pointer-tool clicks, keyed by pdfId — ephemeral, never
+  // persisted to pageLayers/pdfs, unlike drawings/tokens/text.
+  const [remotePointers, setRemotePointers] = useState({});
   // --- UI State ---
   const [showMetadataModal, setShowMetadataModal] = useState(false);
   const [showDebugModal, setShowDebugModal] = useState(false);
@@ -141,6 +144,15 @@ const GamebookApp = () => {
     }
   }, []);
 
+  // Broadcast a pointer-tool click immediately, bypassing the debounced
+  // layers sync above — that debounce is shared with drawings/tokens/text
+  // and can coalesce a pointer's add+auto-remove into nothing before it
+  // ever reaches other players.
+  const handleSendPointer = useCallback((pdfId, x, y, color) => {
+    if (socketService.isMultiplayerActive()) {
+      socketService.sendPointer({ pdfId, x, y, color });
+    }
+  }, []);
 
   // Multiplayer effect handlers
   useEffect(() => {
@@ -233,10 +245,22 @@ const GamebookApp = () => {
     };
 
     const handlePointerEvent = (data) => {
-      const activePdf = stateRef.current.pdfs.find(p => p.id === stateRef.current.activePdfId);
-      const secondaryPdf = stateRef.current.pdfs.find(p => p.id === stateRef.current.secondaryPdfId);
-
-      /* Pointer Events Disabled for now (requires GameCanvas implementation) */
+      const { pdfId, x, y, color } = data;
+      if (pdfId == null) return;
+      const pointerId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      setRemotePointers(prev => ({
+        ...prev,
+        [pdfId]: [...(prev[pdfId] || []), { id: pointerId, x, y, color }],
+      }));
+      // Mirrors GameCanvas's own local pointer lifetime (see GameCanvas.jsx's
+      // 'pointer' tool handler) so a remote pointer fades at the same time
+      // the sender's own copy does.
+      setTimeout(() => {
+        setRemotePointers(prev => ({
+          ...prev,
+          [pdfId]: (prev[pdfId] || []).filter(p => p.id !== pointerId),
+        }));
+      }, 3000);
     };
 
     const handlePdfAdded = async (pdfData) => {
@@ -245,6 +269,9 @@ const GamebookApp = () => {
       try {
         const pdfUrl = socketService.getPdfUrl(pdfData.id);
         const response = await fetch(pdfUrl);
+        if (!response.ok) {
+          throw new Error(`PDF not found on server (${response.status})`);
+        }
         const arrayBuffer = await response.arrayBuffer();
         const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
@@ -901,6 +928,8 @@ const GamebookApp = () => {
                 onTabClose={closePdf}
                 onBookmarkNavigate={handleBookmarkNavigate}
                 onLayerUpdate={handleLayerUpdate}
+                onSendPointer={handleSendPointer}
+                remotePointers={activePdf ? (remotePointers[activePdf.id] || []) : []}
                 onFilesDropped={(files) => handleUnifiedLoad({ target: { files } }, 'primary')}
               />
             </div>
@@ -939,6 +968,8 @@ const GamebookApp = () => {
                   onTabClose={closePdf}
                   onBookmarkNavigate={handleBookmarkNavigate}
                   onLayerUpdate={handleLayerUpdate}
+                  onSendPointer={handleSendPointer}
+                  remotePointers={secondaryPdf ? (remotePointers[secondaryPdf.id] || []) : []}
                   onFilesDropped={(files) => handleUnifiedLoad({ target: { files } }, 'secondary')}
                 />
               </div>

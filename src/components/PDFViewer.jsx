@@ -15,7 +15,9 @@ const PDFViewer = ({
   paneId = 'primary',
   updatePdf,
   onBookmarkNavigate,
-  onLayerUpdate // Passed from App -> PDFPane -> PDFViewer
+  onLayerUpdate, // Passed from App -> PDFPane -> PDFViewer
+  onSendPointer,
+  remotePointers,
 }) => {
   const { state, goToPage, zoomIn, zoomOut } = useContext(AppContext);
   const { selectedTool, selectedColor, selectedTokenShape, selectedTokenColor, tokenSize, isDualPaneMode } = state;
@@ -277,6 +279,8 @@ const PDFViewer = ({
                   pageId={pdf.currentPage}
                   tokenPacks={state.tokenPacks}
                   embeddedTokens={state.embeddedTokens}
+                  onSendPointer={onSendPointer}
+                  remotePointers={remotePointers}
                 />
               )}
               {selectedTool === 'pan' && (
