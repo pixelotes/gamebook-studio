@@ -5,16 +5,12 @@ export const usePdfManagement = ({
   state,
   dispatch,
   pdfCanvasRef,
-  overlayCanvasRef,
   secondaryPdfCanvasRef,
-  secondaryOverlayCanvasRef,
-  fabricCanvas,
-  secondaryFabricCanvas,
 }) => {
   const { pdfs, activePdfId, secondaryPdfId, isDualPaneMode, pdfViewState } = state;
   const activeRenderTasks = useRef({});
 
-  const renderPdfPage = useCallback(async (pdfData, pdfCanvas, overlayCanvas, fabricCanvasInstance, paneId) => {
+  const renderPdfPage = useCallback(async (pdfData, pdfCanvas, paneId) => {
     if (activeRenderTasks.current[paneId]) {
       activeRenderTasks.current[paneId].cancel();
       try {
@@ -33,7 +29,7 @@ export const usePdfManagement = ({
       return;
     }
 
-    const { pdfDoc, currentPage, scale, pageLayers } = pdfData;
+    const { pdfDoc, currentPage, scale } = pdfData;
 
     try {
       const page = await pdfDoc.getPage(currentPage);
@@ -58,15 +54,6 @@ export const usePdfManagement = ({
       activeRenderTasks.current[paneId] = renderTask;
 
       await renderTask.promise;
-
-      const overlay = overlayCanvas.current;
-      if (overlay && fabricCanvasInstance.current) {
-        overlay.width = viewport.width;
-        overlay.height = viewport.height;
-        fabricCanvasInstance.current.loadPageLayers(pageLayers);
-        fabricCanvasInstance.current.setScale(scale);
-        fabricCanvasInstance.current.setCurrentPage(currentPage);
-      }
     } catch (error) {
       if (error.name !== 'RenderingCancelledException') {
         console.error(`Error rendering page (${paneId}):`, error);
@@ -87,10 +74,10 @@ export const usePdfManagement = ({
     : null;
 
   useEffect(() => {
-    renderPdfPage(activePdf, pdfCanvasRef, overlayCanvasRef, fabricCanvas, 'primary');
+    renderPdfPage(activePdf, pdfCanvasRef, 'primary');
 
     if (isDualPaneMode) {
-      renderPdfPage(secondaryPdf, secondaryPdfCanvasRef, secondaryOverlayCanvasRef, secondaryFabricCanvas, 'secondary');
+      renderPdfPage(secondaryPdf, secondaryPdfCanvasRef, 'secondary');
     }
 
     return () => {

@@ -4,7 +4,6 @@ import PDFViewer from './PDFViewer';
 
 const PDFPane = ({
   pdfCanvasRef,
-  overlayCanvasRef,
   pdf,
   paneId = 'primary',
   pdfs,
@@ -78,7 +77,6 @@ const PDFPane = ({
       )}
       <PDFViewer
         pdfCanvasRef={pdfCanvasRef}
-        overlayCanvasRef={overlayCanvasRef}
         pdf={pdf}
         paneId={paneId}
         updatePdf={updatePdf}

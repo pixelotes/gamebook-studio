@@ -11,7 +11,6 @@ const DRAW_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(DRAW_CURS
 
 const PDFViewer = ({
   pdfCanvasRef,
-  // overlayCanvasRef, // No longer needed
   pdf,
   paneId = 'primary',
   updatePdf,

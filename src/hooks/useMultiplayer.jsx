@@ -7,7 +7,7 @@ import eventLogService from '../services/EventLogService';
 import { runClientWorkerTask } from '../workers/workerClient';
 
 
-export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, secondaryFabricCanvas }) => {
+export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
   const [showMultiplayerModal, setShowMultiplayerModal] = useState(false);
   const [multiplayerSession, setMultiplayerSession] = useState(null);
   const [connectedPlayers, setConnectedPlayers] = useState(1);
@@ -177,13 +177,6 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
             return p;
         });
         dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
-
-        if (stateRef.current.activePdfId === pdfId && fabricCanvas.current) {
-            fabricCanvas.current.updateLayersFromMultiplayer(newPdfs.find(p => p.id === pdfId).pageLayers);
-        }
-        if (stateRef.current.secondaryPdfId === pdfId && secondaryFabricCanvas.current) {
-            secondaryFabricCanvas.current.updateLayersFromMultiplayer(newPdfs.find(p => p.id === pdfId).pageLayers);
-        }
       } catch (error) {
         console.error("Error al descomprimir datos de capas:", error);
       }
@@ -196,13 +189,7 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
     };
     
     const handlePointerEvent = (data) => {
-        const { pdfId, x, y, color } = data;
-        if (stateRef.current.activePdfId === pdfId && fabricCanvas.current) {
-            fabricCanvas.current.addPointer(x, y, color);
-        }
-        if (stateRef.current.secondaryPdfId === pdfId && secondaryFabricCanvas.current) {
-            secondaryFabricCanvas.current.addPointer(x, y, color);
-        }
+        // Handled by App.jsx's own 'pointer-event' listener.
     };
 
     const handlePdfAdded = async (pdfData) => {
@@ -242,7 +229,7 @@ export const useMultiplayer = ({ state, dispatch, usePrevious, fabricCanvas, sec
       socketService.off('pointer-event', handlePointerEvent);
       socketService.off('pdf-added', handlePdfAdded);
     };
-  }, [dispatch, addNotification, fabricCanvas, secondaryFabricCanvas]);
+  }, [dispatch, addNotification]);
 
   const { characters, notes, counters } = state;
   const prevCharacters = usePrevious(characters);

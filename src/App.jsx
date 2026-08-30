@@ -31,9 +31,6 @@ import { Settings, Menu, Wifi, Columns, Moon, Sun, FilePlus, Upload, Save, Rotat
 import { CorePack } from './data/CorePack';
 import { LAYER_TOKENS, LAYER_DRAWINGS, LAYER_TEXT } from './data/LayerIds';
 
-// Services and Classes
-import FabricCanvas from './canvas/FabricCanvas';
-
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -46,7 +43,6 @@ const usePrevious = (value) => {
   return ref.current;
 };
 
-// MockFabricCanvas removed
 const GamebookApp = () => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const {
@@ -63,11 +59,6 @@ const GamebookApp = () => {
     if (!confirmModalRef.current) return Promise.resolve(false);
     return confirmModalRef.current.confirm(options);
   }, []);
-  const fabricCanvas = useRef(null);
-  const secondaryFabricCanvas = useRef(null);
-  const overlayCanvasRef = useRef(null);
-  const secondaryOverlayCanvasRef = useRef(null);
-
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
@@ -108,14 +99,13 @@ const GamebookApp = () => {
     showMultiplayerModal, setShowMultiplayerModal, multiplayerSession, connectedPlayers,
     notifications, isHost, addNotification, handleLeaveMultiplayerSession,
     handleCreateMultiplayerSession, handleJoinMultiplayerSession
-  } = useMultiplayer({ state, dispatch, usePrevious, fabricCanvas, secondaryFabricCanvas });
+  } = useMultiplayer({ state, dispatch, usePrevious });
 
   const {
     activePdf, secondaryPdf, updatePdf, closePdf, goToPage, zoomIn, zoomOut,
     handleBookmarkNavigate, handleTabSelect, toggleDualPane,
   } = usePdfManagement({
-    state, dispatch, pdfCanvasRef, overlayCanvasRef, secondaryPdfCanvasRef,
-    secondaryOverlayCanvasRef, fabricCanvas, secondaryFabricCanvas
+    state, dispatch, pdfCanvasRef, secondaryPdfCanvasRef,
   });
 
   const {
