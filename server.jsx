@@ -167,7 +167,12 @@ app.post('/api/sessions/:sessionId/upload-pdf', upload.single('pdf'), async (req
   }
 
   const pdfData = {
-    id: Date.now() + '_' + req.file.filename,
+    // Reuse the client's own id (fileName-size) when it sends one, instead of
+    // minting a different one here — the two IDs disagreeing was letting the
+    // 'pdf-added' broadcast (server id) and the state-delta sync (client id,
+    // via the uploader's own pageLayers/activePdfId updates) point joining
+    // clients' activePdfId at an entry that didn't exist in their pdfs array.
+    id: req.body.id || (Date.now() + '_' + req.file.filename),
     fileName: req.file.originalname,
     filePath: req.file.path, // Store path
     totalPages: parseInt(req.body.totalPages) || 1,

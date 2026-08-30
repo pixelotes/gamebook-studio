@@ -163,25 +163,10 @@ export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
     };
     // --- FIN DE LA FUNCIÓN CORREGIDA ---
     
-    const handleLayersUpdate = async (compressedData) => {
-      try {
-        const data = await runClientWorkerTask('inflate', { data: compressedData });
-        const { pdfId, pageNum, layers } = data;
-        
-        const currentPdfs = stateRef.current.pdfs;
-        const newPdfs = currentPdfs.map(p => {
-            if (p.id === pdfId) {
-                const updatedPageLayers = { ...p.pageLayers, [pageNum]: layers };
-                return { ...p, pageLayers: updatedPageLayers };
-            }
-            return p;
-        });
-        dispatch({ type: 'SET_STATE', payload: { pdfs: newPdfs } });
-      } catch (error) {
-        console.error("Error al descomprimir datos de capas:", error);
-      }
-    };
-    
+    // 'layers-updated' is handled solely by App.jsx's listener — this hook's
+    // older version decoded the payload through a different (client-worker
+    // 'inflate') path than the one the server/sender actually produces,
+    // which threw a JSON parse error on every drawing/token update.
     const handlePageNavigated = (data) => {
         const {pdfId, currentPage, scale} = data;
         const newPdfs = stateRef.current.pdfs.map(p => p.id === pdfId ? { ...p, currentPage, scale } : p);
@@ -192,42 +177,24 @@ export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
         // Handled by App.jsx's own 'pointer-event' listener.
     };
 
-    const handlePdfAdded = async (pdfData) => {
-        if (stateRef.current.pdfs.some(p => p.id === pdfData.id)) return;
-        addNotification(`Recibiendo PDF: ${pdfData.fileName}`, 'info');
-        try {
-            const pdfUrl = socketService.getPdfUrl(pdfData.id);
-            const response = await fetch(pdfUrl);
-            const arrayBuffer = await response.arrayBuffer();
-
-            const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            const newPdf = { ...pdfData, pdfDoc, file: null };
-            dispatch({ type: 'SET_STATE', payload: { pdfs: [...stateRef.current.pdfs, newPdf] }});
-            addNotification(`${pdfData.fileName} cargado correctamente.`, 'success');
-        } catch(error) {
-            console.error("Error al procesar el PDF recibido:", error);
-            addNotification(`Error al cargar ${pdfData.fileName}`, 'error');
-        }
-    };
-
+    // 'pdf-added' is handled solely by App.jsx's listener — it dedupes by
+    // fileName (not just id) and sets activePdfId, which this hook's older
+    // version didn't; registering both raced and left the PDF invisible on
+    // joining clients while duplicating it for the uploading host.
     socketService.on('player-joined', handlePlayerJoined);
     socketService.on('player-left', handlePlayerLeft);
     socketService.on('game-state-delta', handleGameStateDelta);
     socketService.on('event-logged', handleEventLogged);
-    socketService.on('layers-updated', handleLayersUpdate);
     socketService.on('page-navigated', handlePageNavigated);
     socketService.on('pointer-event', handlePointerEvent);
-    socketService.on('pdf-added', handlePdfAdded);
 
     return () => {
       socketService.off('player-joined', handlePlayerJoined);
       socketService.off('player-left', handlePlayerLeft);
       socketService.off('game-state-delta', handleGameStateDelta);
       socketService.off('event-logged', handleEventLogged);
-      socketService.off('layers-updated', handleLayersUpdate);
       socketService.off('page-navigated', handlePageNavigated);
       socketService.off('pointer-event', handlePointerEvent);
-      socketService.off('pdf-added', handlePdfAdded);
     };
   }, [dispatch, addNotification]);
 
@@ -258,6 +225,7 @@ export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
     setShowMultiplayerModal,
     multiplayerSession,
     connectedPlayers,
+    setConnectedPlayers,
     notifications,
     isHost,
     handleCreateMultiplayerSession,

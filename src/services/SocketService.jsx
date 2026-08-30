@@ -273,7 +273,9 @@ class SocketService {
     // Decompress incoming real-time updates
     this.socket.on('real-time-update', (data) => {
         try {
-            const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
+            // pako v3 dropped `{ to: 'string' }` — inflate() always returns bytes now.
+            const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+            const decompressedData = JSON.parse(new TextDecoder().decode(pako.inflate(bytes)));
             
             if (this.listeners.has('real-time-update')) {
                 this.listeners.get('real-time-update').forEach(callback => callback(decompressedData));

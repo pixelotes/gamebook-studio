@@ -22,6 +22,8 @@ import ConfirmModal from './components/ConfirmModal';
 import socketService from './services/SocketService';
 import eventLogService from './services/EventLogService';
 import { create } from 'jsondiffpatch';
+
+const diffpatcher = create();
 import ResizeHandle from './components/ResizeHandle';
 import * as pako from 'pako'
 import { crc32 } from 'crc';
@@ -97,7 +99,7 @@ const GamebookApp = () => {
   // --- Logic Hooks ---
   const {
     showMultiplayerModal, setShowMultiplayerModal, multiplayerSession, connectedPlayers,
-    notifications, isHost, addNotification, handleLeaveMultiplayerSession,
+    setConnectedPlayers, notifications, isHost, addNotification, handleLeaveMultiplayerSession,
     handleCreateMultiplayerSession, handleJoinMultiplayerSession
   } = useMultiplayer({ state, dispatch, usePrevious });
 
@@ -212,7 +214,11 @@ const GamebookApp = () => {
     };
 
     const handleLayersUpdated = (data) => {
-      const decompressedData = JSON.parse(pako.inflate(data, { to: 'string' }));
+      // socket.io-client delivers binary payloads as a raw ArrayBuffer (pako
+      // needs a Uint8Array view), and pako v3 dropped the `{ to: 'string' }`
+      // option — inflate() always returns bytes now, so decode explicitly.
+      const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+      const decompressedData = JSON.parse(new TextDecoder().decode(pako.inflate(bytes)));
 
       /* Imperative Canvas Update Removed - State Only */
       const currentPdfs = stateRef.current.pdfs;

@@ -15,7 +15,8 @@ self.onmessage = (e) => {
     } else if (type === 'deflate') {
       result = pako.deflate(JSON.stringify(payload.data));
     } else if (type === 'inflate') {
-      result = JSON.parse(pako.inflate(payload.data, { to: 'string' }));
+      // pako v3 dropped `{ to: 'string' }` — inflate() always returns bytes now.
+      result = JSON.parse(new TextDecoder().decode(pako.inflate(payload.data)));
     } else {
     }
     self.postMessage({ id, success: true, result });
