@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import * as pako from 'pako';
 import { runClientWorkerTask } from '../workers/workerClient';
 
 // Use different debounce times for different operations
@@ -9,6 +10,16 @@ const DEBOUNCE_TIMES = {
   characters: 300,  // Moderate for character updates
   notes: 1000       // Can be slower for notes
 };
+
+// Full game-state snapshots (session create/join, full-resync fallback) are
+// sent pako-compressed by the server — pako v3 dropped `{ to: 'string' }'
+// (inflate() always returns bytes now), and socket.io-client hands back a
+// raw ArrayBuffer rather than a Uint8Array.
+function decompressGameState(compressed) {
+  if (compressed == null) return compressed;
+  const bytes = compressed instanceof ArrayBuffer ? new Uint8Array(compressed) : compressed;
+  return JSON.parse(new TextDecoder().decode(pako.inflate(bytes)));
+}
 
 class SocketService {
   constructor() {
@@ -84,6 +95,7 @@ class SocketService {
           this.sessionId = response.sessionId;
           this.isHost = response.isHost;
           this.playerName = response.playerName;
+          response.gameState = decompressGameState(response.gameState);
           console.log(`Created session: ${this.sessionId} as ${this.playerName}`);
           resolve(response);
         } else {
@@ -106,6 +118,7 @@ class SocketService {
           this.sessionId = sessionId;
           this.isHost = response.isHost;
           this.playerName = response.playerName;
+          response.gameState = decompressGameState(response.gameState);
           console.log(`Joined session: ${sessionId} as ${this.playerName}`);
           resolve(response);
         } else {
@@ -149,6 +162,9 @@ class SocketService {
         if (!this.socket || !this.isConnected) return resolve({ error: 'Not connected' });
 
         this.socket.emit('request-missing-updates', { fromVersion }, (response) => {
+            if (response.fullState) {
+                response.fullState = decompressGameState(response.fullState);
+            }
             resolve(response);
         });
     });

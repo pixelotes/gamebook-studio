@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import socketService from '../services/SocketService';
 import eventLogService from '../services/EventLogService';
 
-import { runClientWorkerTask } from '../workers/workerClient';
-
 
 export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
   const [showMultiplayerModal, setShowMultiplayerModal] = useState(false);
@@ -133,47 +131,15 @@ export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
         eventLogService.receiveEvent(event);
     };
 
-    // --- INICIO DE LA FUNCIÓN CORREGIDA ---
-    const handleGameStateDelta = async ({ delta }) => {
-        const currentState = stateRef.current;
-        
-        // 1. Crear una versión del estado actual que sea "segura" (solo datos JSON)
-        //    Esto imita la estructura de datos que tiene el servidor.
-        const serializableState = {
-            ...currentState,
-            pdfs: currentState.pdfs.map(p => {
-                const { pdfDoc, file, ...rest } = p; // Quitamos los objetos problemáticos
-                return rest;
-            })
-        };
+    // 'game-state-delta' is handled solely by App.jsx's listener — this hook's
+    // older version patched a stripped-down serializable copy via a worker
+    // round-trip and reattached pdfDoc/file by id afterward, redundant with
+    // App.jsx's simpler direct patch (which already preserves them, since it
+    // patches the live state object instead of a stripped copy). Running both
+    // meant every state change was computed and applied twice, and only
+    // App.jsx's copy tracks gameStateVersion / sends the ack the server's
+    // history-pruning and resync logic rely on.
 
-        // 2. Aplicar el parche a esta versión segura
-        const newSerializableState = await runClientWorkerTask('patch', { state: serializableState, delta });
-        if (!newSerializableState) return; // Si no hay cambios, no hacer nada
-
-        // 3. Reconstruir el estado final, restaurando los objetos pdfDoc del estado original
-        const finalPdfs = newSerializableState.pdfs.map(newPdfData => {
-            const originalPdf = currentState.pdfs.find(p => p.id === newPdfData.id);
-            return {
-                ...newPdfData,
-                pdfDoc: originalPdf ? originalPdf.pdfDoc : null,
-                file: originalPdf ? originalPdf.file : null,
-            };
-        });
-        
-        // Don't overwrite the event log from deltas, it's handled separately
-        const { eventLog, ...stateFromDelta } = newSerializableState;
-
-        const finalState = {
-            ...stateFromDelta,
-            pdfs: finalPdfs,
-        };
-        
-        // 4. Actualizar el estado de la aplicación
-        dispatch({ type: 'SET_STATE', payload: finalState });
-    };
-    // --- FIN DE LA FUNCIÓN CORREGIDA ---
-    
     // 'layers-updated' is handled solely by App.jsx's listener — this hook's
     // older version decoded the payload through a different (client-worker
     // 'inflate') path than the one the server/sender actually produces,
@@ -194,7 +160,6 @@ export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
     // joining clients while duplicating it for the uploading host.
     socketService.on('player-joined', handlePlayerJoined);
     socketService.on('player-left', handlePlayerLeft);
-    socketService.on('game-state-delta', handleGameStateDelta);
     socketService.on('event-logged', handleEventLogged);
     socketService.on('page-navigated', handlePageNavigated);
     socketService.on('pointer-event', handlePointerEvent);
@@ -202,7 +167,6 @@ export const useMultiplayer = ({ state, dispatch, usePrevious }) => {
     return () => {
       socketService.off('player-joined', handlePlayerJoined);
       socketService.off('player-left', handlePlayerLeft);
-      socketService.off('game-state-delta', handleGameStateDelta);
       socketService.off('event-logged', handleEventLogged);
       socketService.off('page-navigated', handlePageNavigated);
       socketService.off('pointer-event', handlePointerEvent);

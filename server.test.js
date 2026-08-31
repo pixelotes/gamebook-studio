@@ -19,6 +19,10 @@ import { fileURLToPath } from 'url';
 import { io as ioClient } from 'socket.io-client';
 import * as pako from 'pako';
 
+function decompressGameState(compressed) {
+  return JSON.parse(new TextDecoder().decode(pako.inflate(compressed)));
+}
+
 // ---------------------------------------------------------------------------
 // In-memory ioredis mock
 // ---------------------------------------------------------------------------
@@ -287,7 +291,7 @@ describe('Socket.IO — session lifecycle', () => {
     expect(resp.isHost).toBe(true);
     expect(resp.clientCount).toBe(1);
     expect(resp.version).toBe(0);
-    expect(resp.gameState).toMatchObject({
+    expect(decompressGameState(resp.gameState)).toMatchObject({
       pdfs: [],
       characters: [],
       counters: [],
@@ -310,7 +314,7 @@ describe('Socket.IO — session lifecycle', () => {
     expect(resp.success).toBe(true);
     expect(resp.isHost).toBe(false);
     expect(resp.clientCount).toBe(2);
-    expect(resp.gameState).toEqual(created.gameState);
+    expect(decompressGameState(resp.gameState)).toEqual(decompressGameState(created.gameState));
     expect(broadcast.clientCount).toBe(2);
     expect(typeof broadcast.socketId).toBe('string');
   });
@@ -421,6 +425,7 @@ describe('Socket.IO — state synchronization', () => {
     });
     expect(resp.success).toBe(true);
     expect(resp.fullState).toBeDefined();
+    expect(decompressGameState(resp.fullState)).toMatchObject({ notes: 'only edit' });
     expect(resp.version).toBe(1);
     expect(resp.deltas).toBeUndefined();
   });

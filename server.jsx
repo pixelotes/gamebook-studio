@@ -6,10 +6,16 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crc = require('crc');
+const pako = require('pako');
 const Redis = require('ioredis');
 const { nanoid } = require('nanoid');
 const { runWorkerTask } = require('./src/server/workerClient');
 const { GameSession } = require('./src/server/GameSession');
+
+// Full game-state snapshots (session create/join, and the full-resync
+// fallback in request-missing-updates) can grow large with many drawn
+// layers — compress them, unlike the much smaller per-change deltas.
+const compressGameState = (gameState) => pako.deflate(JSON.stringify(gameState));
 
 const app = express();
 const server = http.createServer(app);
@@ -236,7 +242,7 @@ io.on('connection', (socket) => {
 
     callback({
       success: true,
-      gameState: session.gameState,
+      gameState: compressGameState(session.gameState),
       isHost: session.hostSocketId === socket.id,
       clientCount: session.clients.size,
       version: session.stateVersion,
@@ -272,7 +278,7 @@ io.on('connection', (socket) => {
     callback({
       success: true,
       sessionId,
-      gameState: session.gameState,
+      gameState: compressGameState(session.gameState),
       isHost: true,
       clientCount: 1,
       version: session.stateVersion,
@@ -327,7 +333,7 @@ io.on('connection', (socket) => {
     if (relevantUpdates.length > 0 && relevantUpdates[0].version === fromVersion + 1) {
         callback({ success: true, deltas: relevantUpdates });
     } else {
-        callback({ success: true, fullState: session.gameState, version: session.stateVersion });
+        callback({ success: true, fullState: compressGameState(session.gameState), version: session.stateVersion });
     }
   });
 
