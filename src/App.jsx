@@ -24,6 +24,22 @@ import eventLogService from './services/EventLogService';
 import { create } from 'jsondiffpatch';
 
 const diffpatcher = create();
+
+// Mirrors server.jsx's stableStringify — recursively sorts object keys so
+// two structurally identical objects hash the same regardless of property
+// insertion order (session.gameState accumulates keys across many separate
+// updateGameState() calls over a session's life, in whatever order those
+// happened to arrive).
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return '[' + value.map(v => stableStringify(v) ?? 'null').join(',') + ']';
+  }
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).filter(k => value[k] !== undefined).sort();
+    return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(value[k])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
 import ResizeHandle from './components/ResizeHandle';
 import * as pako from 'pako'
 import { crc32 } from 'crc';
@@ -176,6 +192,11 @@ const GamebookApp = () => {
       const newState = diffpatcher.patch({ ...stateRef.current }, data.delta);
 
       const serverCrc = data.crc;
+      // session.gameState.pageLayers lives at the top level on the server
+      // (pdfId -> pageNum -> layers, kept live by the separate layers-updated
+      // path), not nested per-pdf — pdfs[i].pageLayers is only ever a stale
+      // snapshot from whichever updateGameState() call last replaced the
+      // pdfs array wholesale, so it's excluded below rather than compared.
       const pageLayersForCrc = {};
       newState.pdfs.forEach(p => {
         if (p.pageLayers && Object.keys(p.pageLayers).length > 0) {
@@ -183,26 +204,29 @@ const GamebookApp = () => {
         }
       });
 
-      const pdfsForCrc = newState.pdfs.map(p => ({
-        id: p.id,
-        fileName: p.fileName,
-        totalPages: p.totalPages,
-        currentPage: p.currentPage,
-        scale: p.scale,
-        bookmarks: p.bookmarks || [],
-        pageLayers: p.pageLayers || {},
-      }));
-
+      // Keep this shape in sync with server.jsx's buildCrcState():
+      // - pdfs' currentPage/scale and activePdfId are never actually synced
+      //   via update-game-state (page navigation and active-pdf selection go
+      //   through their own separate socket events).
+      // - eventLog isn't part of this either — it's synced via its own
+      //   'event-logged' broadcast into eventLogService, never through
+      //   dispatch/state at all.
       const finalClientStateForCrc = {
-        pdfs: pdfsForCrc,
-        activePdfId: newState.activePdfId,
-        characters: newState.characters,
-        notes: newState.notes,
-        counters: newState.counters,
-        pageLayers: pageLayersForCrc
+        pdfs: newState.pdfs.map(p => ({
+          id: p.id,
+          fileName: p.fileName,
+          totalPages: p.totalPages,
+          bookmarks: p.bookmarks || [],
+          filePath: p.filePath,
+        })),
+        characters: newState.characters || [],
+        notes: newState.notes || '',
+        counters: newState.counters || [],
+        pdfViewState: newState.pdfViewState || {},
+        pageLayers: pageLayersForCrc,
       };
 
-      const clientCrc = crc32(JSON.stringify(finalClientStateForCrc)).toString(16);
+      const clientCrc = crc32(stableStringify(finalClientStateForCrc)).toString(16);
 
       if (clientCrc === serverCrc) {
         console.log('%cCRC Match!', 'color: green; font-weight: bold;');

@@ -17,6 +17,48 @@ const { GameSession } = require('./src/server/GameSession');
 // layers — compress them, unlike the much smaller per-change deltas.
 const compressGameState = (gameState) => pako.deflate(JSON.stringify(gameState));
 
+// Recursively sorts object keys before stringifying, so two structurally
+// identical objects hash the same regardless of property insertion order —
+// session.gameState accumulates keys across many separate updateGameState()
+// calls over a session's life, in whatever order those happened to arrive.
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return '[' + value.map(v => stableStringify(v) ?? 'null').join(',') + ']';
+  }
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).filter(k => value[k] !== undefined).sort();
+    return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(value[k])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
+// The client only ever mirrors this subset of session.gameState:
+// - pdfs' currentPage/scale (from addPdf's initial values) and activePdfId
+//   are never actually kept in sync via update-game-state (page navigation
+//   and active-pdf selection go through their own separate socket events).
+// - eventLog is mutated directly by addEvent()/'log-event', entirely
+//   outside the diff/patch system this delta belongs to, and synced to
+//   clients via its own separate 'event-logged' broadcast — it was never
+//   meant to round-trip through updateGameState()'s delta at all.
+// Keeping this shape in sync with the equivalent client-side builder in
+// App.jsx's handleGameStateDelta.
+function buildCrcState(gameState) {
+  return {
+    pdfs: (gameState.pdfs || []).map(p => ({
+      id: p.id,
+      fileName: p.fileName,
+      totalPages: p.totalPages,
+      bookmarks: p.bookmarks || [],
+      filePath: p.filePath,
+    })),
+    characters: gameState.characters || [],
+    notes: gameState.notes || '',
+    counters: gameState.counters || [],
+    pdfViewState: gameState.pdfViewState || {},
+    pageLayers: gameState.pageLayers || {},
+  };
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -299,7 +341,7 @@ io.on('connection', (socket) => {
           await saveSession(session); // Save changes
 
           const { delta, version } = result;
-          const gameStateCrc = crc.crc32(JSON.stringify(session.gameState)).toString(16);
+          const gameStateCrc = crc.crc32(stableStringify(buildCrcState(session.gameState))).toString(16);
           console.log(`Game state updated version ${version} in session ${socket.sessionId} CRC: ${gameStateCrc}`);
           
           socket.to(socket.sessionId).emit('game-state-delta', {
