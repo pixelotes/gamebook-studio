@@ -1,5 +1,4 @@
 import { io } from 'socket.io-client';
-import * as pako from 'pako'
 import { runClientWorkerTask } from '../workers/workerClient';
 
 // Use different debounce times for different operations
@@ -179,14 +178,6 @@ class SocketService {
     }
   }
 
-  // Send real-time updates (while drawing/dragging)
-  async sendRealTimeUpdate(updateType, data) {
-    if (this.socket && this.isConnected && this.sessionId) {
-        const compressedData = await runClientWorkerTask('deflate', { data: { type: updateType, data } }); // Compress via worker
-        this.socket.emit('real-time-update', compressedData);
-    }
-  }
-
   // Add this new method to send pointer events
   sendPointer(data) {
     if (this.socket && this.isConnected && this.sessionId) {
@@ -270,28 +261,11 @@ class SocketService {
   setupEventListeners() {
     if (!this.socket) return;
 
-    // Decompress incoming real-time updates
-    this.socket.on('real-time-update', (data) => {
-        try {
-            // pako v3 dropped `{ to: 'string' }` — inflate() always returns bytes now.
-            const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
-            const decompressedData = JSON.parse(new TextDecoder().decode(pako.inflate(bytes)));
-            
-            if (this.listeners.has('real-time-update')) {
-                this.listeners.get('real-time-update').forEach(callback => callback(decompressedData));
-            }
-        } catch (error) {
-            console.error('Error decompressing real-time update:', error);
-        }
-    });
-
     // Set up all stored listeners
     this.listeners.forEach((callbacks, event) => {
-        if(event !== 'real-time-update') { // The real-time-update is handled already
-            callbacks.forEach(callback => {
-                this.socket.on(event, callback);
-            });
-        }
+        callbacks.forEach(callback => {
+            this.socket.on(event, callback);
+        });
     });
   }
 

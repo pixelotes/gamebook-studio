@@ -378,14 +378,6 @@ io.on('connection', (socket) => {
       socket.to(socket.sessionId).emit('pointer-event', data);
     }
   });
-  
-  socket.on('real-time-update', (data) => {
-    if (!socket.sessionId) return;
-    socket.to(socket.sessionId).emit('real-time-update', {
-      ...data,
-      fromSocket: socket.id
-    });
-  });
 
   socket.on('dice-roll', (rollData) => {
     if (!socket.sessionId) return;

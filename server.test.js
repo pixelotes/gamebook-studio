@@ -534,20 +534,6 @@ describe('Socket.IO — events', () => {
       expect(typeof msg.timestamp).toBe('number');
     }
   });
-
-  it('real-time-update is forwarded with a fromSocket field', async () => {
-    const host = await connect();
-    const created = await emitWithAck(host, 'create-session');
-    const peer = await connect();
-    await emitWithAck(peer, 'join-session', created.sessionId);
-
-    const fwd = once(peer, 'real-time-update');
-    host.emit('real-time-update', { kind: 'cursor', x: 1 });
-    const msg = await fwd;
-    expect(msg.kind).toBe('cursor');
-    expect(msg.x).toBe(1);
-    expect(msg.fromSocket).toBe(host.id);
-  });
 });
 
 // ---------------------------------------------------------------------------
