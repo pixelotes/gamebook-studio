@@ -19,8 +19,16 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('pdfjs-dist')) return 'pdfjs';
-          if (id.includes('node_modules')) return 'vendor';
+          if (!id.includes('node_modules')) return;
+          const pkg = id.split('node_modules/').pop().split('/')[0];
+          if (pkg === 'pdfjs-dist') return 'pdfjs';
+          if (['konva', 'react-konva', 'its-fine', 'use-image'].includes(pkg)) return 'konva';
+          if (['react', 'react-dom', 'scheduler'].includes(pkg)) return 'react';
+          if (['socket.io-client', 'engine.io-client', '@socket.io', 'pako', 'jsondiffpatch', 'crc'].includes(pkg)) return 'sync';
+          // jszip is imported dynamically, so it gets its own on-demand chunk.
+          // (Do not pull its 'buffer' dependency in here: 'crc' also needs it, which would force an eager import.)
+          if (pkg === 'jszip') return 'jszip';
+          return 'vendor';
         }
       }
     }

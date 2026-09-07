@@ -1,5 +1,3 @@
-import JSZip from 'jszip';
-
 /**
  * Loads a .gbtk file (which is a zip containing pack.json and assets)
  * @param {File} file 
@@ -7,6 +5,7 @@ import JSZip from 'jszip';
  */
 export const loadGBTKPack = async (file) => {
     try {
+        const { default: JSZip } = await import('jszip');
         const zip = await JSZip.loadAsync(file);
 
         // 1. Read pack.json

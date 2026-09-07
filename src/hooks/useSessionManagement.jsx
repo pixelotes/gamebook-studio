@@ -1,6 +1,5 @@
 import { useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-import JSZip from 'jszip';
 import { initialState } from '../state/appState';
 import socketService from '../services/SocketService';
 
@@ -47,6 +46,7 @@ export const useSessionManagement = ({
   };
 
   const handleExportGBS = async (metadata) => {
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
     zip.file('game.json', JSON.stringify(metadata, null, 2));
     const sessionData = {
@@ -92,6 +92,7 @@ export const useSessionManagement = ({
 
   const handleLoadGBS = async (file) => {
     try {
+      const { default: JSZip } = await import('jszip');
       const zip = await JSZip.loadAsync(file);
       const gameJsonFile = zip.file('game.json');
       let gameMetadata = {};
