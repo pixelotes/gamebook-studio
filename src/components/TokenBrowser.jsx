@@ -1,8 +1,19 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { CorePack } from '../data/CorePack';
+import { TOKEN_SHAPES } from '../data/Shapes';
 import { AppContext } from '../state/appState';
 import { X, Upload, Search, Package } from 'lucide-react';
 import { loadGBTKPack } from '../services/GBTKLoader';
+
+// Glyph-based markers (✘, ✔, ●, ★ …) rendered by GameCanvas without any SVG asset.
+// Exposed as a virtual internal pack so one-click stamps are reachable from the library.
+const BASIC_SHAPES_PACK = {
+    name: 'Basic Shapes & Markers',
+    isInternal: true,
+    tokens: Object.entries(TOKEN_SHAPES)
+        .filter(([, shape]) => shape.type === 'text')
+        .map(([id, shape]) => ({ id, name: shape.name, glyph: shape.icon })),
+};
 
 const TokenBrowser = ({ onClose }) => {
     const { state, dispatch, addNotification } = useContext(AppContext);
@@ -11,9 +22,11 @@ const TokenBrowser = ({ onClose }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    // Combine Internal Core Pack + Loaded External Packs
+    // Combine Internal Core Pack + Loaded External Packs. App registers CorePack
+    // into tokenPacks on startup, so only prepend it if it isn't there yet.
     const libraryPacks = useMemo(() => {
-        return [CorePack, ...tokenPacks];
+        const packs = tokenPacks.some(p => p.name === CorePack.name) ? tokenPacks : [CorePack, ...tokenPacks];
+        return [BASIC_SHAPES_PACK, ...packs];
     }, [tokenPacks]);
 
     const handleImportPack = async (e) => {
@@ -157,10 +170,14 @@ const TokenBrowser = ({ onClose }) => {
                                                     `}
                                                     title={token.name}
                                                 >
-                                                    <div
-                                                        className="w-full h-full text-gray-800 dark:text-gray-200"
-                                                        dangerouslySetInnerHTML={{ __html: token.svgContent }}
-                                                    />
+                                                    {token.svgContent ? (
+                                                        <div
+                                                            className="w-full h-full text-gray-800 dark:text-gray-200"
+                                                            dangerouslySetInnerHTML={{ __html: token.svgContent }}
+                                                        />
+                                                    ) : (
+                                                        <span className="text-2xl leading-none text-gray-800 dark:text-gray-200">{token.glyph}</span>
+                                                    )}
                                                 </button>
                                             ))}
                                         </div>

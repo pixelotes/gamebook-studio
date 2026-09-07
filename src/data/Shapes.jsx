@@ -47,8 +47,9 @@ export const TOKEN_SHAPES = {
   target: { name: 'Target', type: 'text', icon: '🎯' },
   shield: { name: 'Shield', type: 'text', icon: '🛡️' },
   swords: { name: 'Swords', type: 'text', icon: '⚔️' },
-  check: { name: 'Check', type: 'text', icon: '✔' },
-  cross: { name: 'Cross', type: 'text', icon: '✘' },
+  // `bare` markers are drawn as a plain glyph in the token color, no backing disc.
+  check: { name: 'Check', type: 'text', icon: '✔', bare: true },
+  cross: { name: 'Cross', type: 'text', icon: '✘', bare: true },
   monster: { name: 'Monster', type: 'text', icon: '🦇' },
   
   // --- Treasure & Items ---

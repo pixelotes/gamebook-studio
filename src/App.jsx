@@ -41,6 +41,7 @@ function stableStringify(value) {
   return JSON.stringify(value);
 }
 import ResizeHandle from './components/ResizeHandle';
+import SidebarHoverTrigger from './components/SidebarHoverTrigger';
 import * as pako from 'pako'
 import { crc32 } from 'crc';
 import DebugModal from './components/DebugModal';
@@ -48,6 +49,7 @@ import GameMetadataModal from './components/GameMetadataModal';
 import { Settings, Menu, Wifi, Columns, Moon, Sun, FilePlus, Upload, Save, RotateCcw } from 'lucide-react';
 import { CorePack } from './data/CorePack';
 import { LAYER_TOKENS, LAYER_DRAWINGS, LAYER_TEXT } from './data/LayerIds';
+import { TOOL_SHORTCUTS } from './data/ToolShortcuts';
 
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -430,14 +432,7 @@ const GamebookApp = () => {
       dispatch({ type: 'SET_STATE', payload: { selectedTool: toolId } });
     };
 
-    const SHORTCUTS = {
-      v: 'select',
-      h: 'pan',
-      t: 'text',
-      r: 'rectangle',
-      p: 'draw',
-      e: 'eraser',
-    };
+    const SHORTCUTS = TOOL_SHORTCUTS;
 
     const handleKeyDown = (ev) => {
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
@@ -601,87 +596,6 @@ const GamebookApp = () => {
           }
         }
       }
-    }
-  };
-
-  
-
-  
-
-  const handleLoadGBS = async (event) => {
-    const file = event.target.files[0];
-    if (!file || !file.name.endsWith('.gbs')) {
-      addNotification('Please select a valid .gbs file', 'error');
-      return;
-    }
-
-    try {
-      const zip = await JSZip.loadAsync(file);
-
-      // Read game metadata
-      let gameMetadata = {
-        name: '',
-        year: '',
-        author: '',
-        description: '',
-        players: '',
-        length: ''
-      };
-
-      const gameJsonFile = zip.file('game.json');
-      if (gameJsonFile) {
-        const gameJson = await gameJsonFile.async('string');
-        gameMetadata = JSON.parse(gameJson);
-      }
-
-      // Read session.json
-      const sessionJson = await zip.file('session.json').async('string');
-      const sessionData = JSON.parse(sessionJson);
-
-      // Load PDFs
-      const pdfFolder = zip.folder('pdfs');
-      const loadedPdfs = [];
-
-      for (const pdfInfo of sessionData.pdfs) {
-        const pdfFile = pdfFolder.file(pdfInfo.fileName);
-        if (pdfFile) {
-          const pdfBlob = await pdfFile.async('blob');
-          const pdfUrl = URL.createObjectURL(pdfBlob);
-          const pdfDoc = await pdfjsLib.getDocument({ url: pdfUrl }).promise;
-
-          loadedPdfs.push({
-            ...pdfInfo,
-            pdfDoc,
-            file: new File([pdfBlob], pdfInfo.fileName, { type: 'application/pdf' })
-          });
-        } else {
-          console.warn(`PDF not found in archive: ${pdfInfo.fileName}`);
-        }
-      }
-
-      // Restore full state including metadata
-      dispatch({
-        type: 'SET_STATE',
-        payload: {
-          pdfs: loadedPdfs,
-          activePdfId: sessionData.activePdfId,
-          secondaryPdfId: sessionData.secondaryPdfId,
-          isDualPaneMode: sessionData.isDualPaneMode,
-          characters: sessionData.characters,
-          notes: sessionData.notes,
-          counters: sessionData.counters,
-          gameMetadata: gameMetadata
-        }
-      });
-
-      setGameStateVersion(sessionData.version || 0);
-
-      const gameName = gameMetadata.name ? ` "${gameMetadata.name}"` : '';
-      addNotification(`Game${gameName} loaded successfully`, 'success');
-
-    } catch (error) {
-      console.error('Error loading .gbs file:', error);
-      addNotification('Failed to load .gbs file. It may be corrupt or invalid.', 'error');
     }
   };
 

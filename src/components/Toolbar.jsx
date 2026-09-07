@@ -5,6 +5,7 @@ import {
   Move, Stamp, Square, Type, Pen, Eraser, Circle, MousePointerClick, Ruler, Signal, Package, Hand
 } from 'lucide-react';
 import { TOKEN_SHAPES } from '../data/Shapes';
+import { SHORTCUT_FOR_TOOL } from '../data/ToolShortcuts';
 import { TOKEN_COLORS } from '../data/Colors';
 import TokenBrowser from './TokenBrowser';
 
@@ -145,7 +146,12 @@ const Toolbar = () => {
                       className="w-full text-left flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                     >
                       <tool.icon size={16} />
-                      {tool.label}
+                      <span className="flex-1">{tool.label}</span>
+                      {SHORTCUT_FOR_TOOL[tool.id] && (
+                        <kbd className="px-1.5 py-0.5 text-xs rounded border border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                          {SHORTCUT_FOR_TOOL[tool.id]}
+                        </kbd>
+                      )}
                     </button>
                   ))}
                 </div>

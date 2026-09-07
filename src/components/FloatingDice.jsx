@@ -85,6 +85,25 @@ const FloatingDice = () => {
   const dragStartPosRef = useRef(null);
   const offsetRef = useRef({ x: 0, y: 0 });
 
+  // Keep the button inside the viewport: the initial position is computed from
+  // window size at mount (which can be 0 in embedded/preview panes) and the
+  // window may later shrink below the button's position.
+  useEffect(() => {
+    const clamp = () => {
+      const size = 60;
+      const maxX = Math.max(0, window.innerWidth - size - 20);
+      const maxY = Math.max(0, window.innerHeight - size - 20);
+      setPosition(prev => {
+        const x = Math.min(Math.max(prev.x, 0), maxX);
+        const y = Math.min(Math.max(prev.y, 0), maxY);
+        return (x === prev.x && y === prev.y) ? prev : { x, y };
+      });
+    };
+    clamp();
+    window.addEventListener('resize', clamp);
+    return () => window.removeEventListener('resize', clamp);
+  }, []);
+
   useEffect(() => {
     if (isSelectorVisible && nodeRef.current) {
       const iconRect = nodeRef.current.getBoundingClientRect();
@@ -307,10 +326,8 @@ const FloatingDice = () => {
             {quickDice.map(dice => (
               <button
                 key={dice}
-                onClick={() => {
-                  setDiceExpression(dice);
-                  handleRoll(dice);
-                }}
+                onClick={() => handleRoll(dice)}
+                title={`Roll ${dice} (keeps your custom expression)`}
                 className="py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-xs font-medium"
               >
                 {dice}

@@ -675,8 +675,28 @@ const GameCanvas = memo(({
         if (shape === 'circle') return <Circle {...commonProps} />;
         if (shape === 'square') return <Rect {...commonProps} />;
 
+        // Glyph markers (✘, ✔): plain glyph in the token color, no backing disc.
+        const legacyShape = TOKEN_SHAPES[shape];
+        if (legacyShape?.bare) {
+            return (
+                <Text
+                    text={legacyShape.icon}
+                    fontSize={size * 2.2}
+                    fontStyle="bold"
+                    fill={color}
+                    align="center"
+                    verticalAlign="middle"
+                    offsetX={size * 1.2}
+                    offsetY={size * 1.2}
+                    width={size * 2.4}
+                    height={size * 2.4}
+                    opacity={opacity}
+                />
+            );
+        }
+
         // Legacy Icon fallback
-        const icon = TOKEN_SHAPES[shape]?.icon;
+        const icon = legacyShape?.icon;
         if (icon) {
             return (
                 <Group>
